@@ -1,0 +1,14 @@
+.navbar-default {
+    background-color: #00a33b ;
+    font-size: 16px ;
+}
+
+.navbar-nav > li > a, .navbar-brand {
+                   color: black !important;
+                   padding-top:4px !important; 
+                   padding-bottom:4px !important;
+                   height: 50px;
+                 }
+                 .navbar {min-height:30px !important;}
+                 
+                  
