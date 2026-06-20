@@ -1,4 +1,10 @@
+# RStudio local files
 .Rproj.user/
 .Rhistory
 .RData
-.Ruserdata
+
+# Runtime-generated flow data in repository root
+/[0-9]*.csv
+
+# Runtime-generated imputation plots
+/*_Imputed_Values.png
