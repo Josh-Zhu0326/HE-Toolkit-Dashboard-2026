@@ -35,6 +35,7 @@ library(hetoolkit)
 library(rnrfa)
 
 addResourcePath("prefix", "www")
+source(file.path("R", "site_mapping_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
