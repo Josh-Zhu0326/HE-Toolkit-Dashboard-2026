@@ -31,7 +31,13 @@ parse_site_metadata <- function(text) {
     warnings <- "The legacy rhs_site_id column was interpreted as rhs_survey_id. RHS imports use survey IDs."
   }
 
-  if ("biol_site_id" %in% names(data) && anyDuplicated(data$biol_site_id)) {
+  biol_ids <- if ("biol_site_id" %in% names(data)) {
+    values <- trimws(as.character(data$biol_site_id))
+    values[!is.na(values) & nzchar(values) & toupper(values) != "TBC"]
+  } else {
+    character(0)
+  }
+  if (anyDuplicated(biol_ids)) {
     return(list(
       data = NULL,
       error = "Each biol_site_id must appear once in the main metadata table. Use a separate mapping table for multiple WQ sites or RHS surveys.",
@@ -40,6 +46,48 @@ parse_site_metadata <- function(text) {
   }
 
   list(data = data, error = NULL, warnings = warnings)
+}
+
+read_site_metadata_csv <- function(path) {
+  if (is.null(path) || !file.exists(path)) {
+    return(list(data = NULL, error = "The selected site metadata CSV could not be found.", warnings = character(0)))
+  }
+
+  data <- tryCatch(
+    data.table::fread(path, colClasses = "character", data.table = FALSE, encoding = "UTF-8"),
+    error = function(e) NULL
+  )
+
+  if (is.null(data)) {
+    return(list(data = NULL, error = "The selected file could not be read as CSV.", warnings = character(0)))
+  }
+
+  parse_site_metadata(readr::format_csv(data))
+}
+
+validate_dashboard_site_metadata <- function(metadata) {
+  id_columns <- c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id")
+  if (!any(id_columns %in% names(metadata))) {
+    return(paste0("Include at least one supported site ID column: ", paste(id_columns, collapse = ", "), "."))
+  }
+
+  if ("flow_site_id" %in% names(metadata) && !"flow_input" %in% names(metadata)) {
+    return("A CSV containing flow_site_id must also include flow_input.")
+  }
+
+  if ("flow_input" %in% names(metadata) && !"flow_site_id" %in% names(metadata)) {
+    return("flow_input cannot be used without flow_site_id.")
+  }
+
+  if ("flow_input" %in% names(metadata)) {
+    flow_inputs <- toupper(trimws(as.character(metadata$flow_input)))
+    invalid_inputs <- unique(flow_inputs[!is.na(flow_inputs) & nzchar(flow_inputs) & !flow_inputs %in% c("NRFA", "HDE")])
+    if (length(invalid_inputs) > 0) {
+      return("flow_input values must be NRFA or HDE for this dashboard workflow.")
+    }
+  }
+
+  NULL
 }
 
 usable_mapping_ids <- function(metadata, column) {
@@ -60,7 +108,8 @@ map_wq_records_to_biology <- function(wq_data, metadata) {
   bridge <- metadata[, required, drop = FALSE]
   bridge <- bridge[bridge$wq_site_id %in% usable_mapping_ids(metadata, "wq_site_id"), , drop = FALSE]
   bridge <- unique(bridge)
-  dplyr::inner_join(bridge, wq_data, by = "wq_site_id")
+  dplyr::left_join(wq_data, bridge, by = "wq_site_id") |>
+    dplyr::relocate(biol_site_id, .before = wq_site_id)
 }
 
 normalise_rhs_records <- function(rhs_data) {
@@ -84,7 +133,8 @@ map_rhs_records_to_biology <- function(rhs_data, metadata) {
   bridge <- metadata[, required, drop = FALSE]
   bridge <- bridge[bridge$rhs_survey_id %in% usable_mapping_ids(metadata, "rhs_survey_id"), , drop = FALSE]
   bridge <- unique(bridge)
-  dplyr::inner_join(bridge, rhs_data, by = "rhs_survey_id")
+  dplyr::left_join(rhs_data, bridge, by = "rhs_survey_id") |>
+    dplyr::relocate(biol_site_id, .before = rhs_survey_id)
 }
 
 import_rhs_in_temp_directory <- function(surveys, importer = hetoolkit::import_rhs) {

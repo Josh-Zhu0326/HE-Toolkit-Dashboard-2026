@@ -233,6 +233,49 @@ function(input, output, session){
   # DATA IMPORTING ----
   ## Metadata ----
   ### loading ----
+  site_metadata_upload_result <- reactiveVal(list(
+    status = "info",
+    messages = "Choose a site metadata CSV to parse and load it automatically."
+  ))
+
+  observeEvent(input$site_metadata_csv, {
+    parsed <- read_site_metadata_csv(input$site_metadata_csv$datapath)
+    if (!is.null(parsed$error)) {
+      site_metadata_upload_result(list(status = "error", messages = parsed$error))
+      showNotification(parsed$error, type = "error")
+      return()
+    }
+
+    validation_error <- validate_dashboard_site_metadata(parsed$data)
+    if (!is.null(validation_error)) {
+      site_metadata_upload_result(list(status = "error", messages = validation_error))
+      showNotification(validation_error, type = "error")
+      return()
+    }
+
+    updateTextAreaInput(session, "meta_paste", value = readr::format_csv(parsed$data))
+    messages <- c(
+      paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
+      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
+      "The compatible dataset import buttons below now use these site IDs.",
+      parsed$warnings
+    )
+    site_metadata_upload_result(list(status = "success", messages = messages[nzchar(messages)]))
+    showNotification("Site metadata CSV imported successfully.", type = "message")
+  })
+
+  output$site_metadata_upload_status <- renderUI({
+    format_validation_message(site_metadata_upload_result())
+  })
+
+  output$download_demo_site_metadata <- downloadHandler(
+    filename = function() "demo_site_metadata.csv",
+    content = function(file) {
+      file.copy("demo_site_metadata.csv", file, overwrite = TRUE)
+    },
+    contentType = "text/csv"
+  )
+
   metadata <- reactive({
     parsed <- parse_site_metadata(input$meta_paste)
     validate(need(is.null(parsed$error), parsed$error))
@@ -261,7 +304,7 @@ function(input, output, session){
 
     site_metadata <- parsed$data
     usable_wq_ids <- usable_mapping_ids(site_metadata, "wq_site_id")
-    if (!"biol_site_id" %in% names(site_metadata) || length(usable_wq_ids) == 0) {
+    if (length(usable_wq_ids) == 0) {
       message <- "No confirmed WQ site IDs are available yet. Please provide WQ site IDs before importing WQ data."
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "warning", messages = message))
@@ -297,12 +340,19 @@ function(input, output, session){
       return()
     }
 
-    mapped <- map_wq_records_to_biology(imported, site_metadata)
-    wq_site_import_data(mapped)
-    message <- paste0(
-      "Imported ", nrow(mapped), " mapped WQ records for ",
-      length(unique(mapped$biol_site_id)), " biology site(s)."
-    )
+    has_biology_mapping <- all(c("biol_site_id", "wq_site_id") %in% names(site_metadata))
+    output_data <- if (has_biology_mapping) map_wq_records_to_biology(imported, site_metadata) else imported
+    mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
+      length(unique(stats::na.omit(output_data$biol_site_id)))
+    } else {
+      0
+    }
+    wq_site_import_data(output_data)
+    message <- if (mapped_biology_count > 0) {
+      paste0("Imported ", nrow(output_data), " WQ records mapped to ", mapped_biology_count, " biology site(s).")
+    } else {
+      paste0("Imported ", nrow(output_data), " WQ records. No biology mapping was supplied.")
+    }
     wq_site_import_result(list(status = "success", messages = c(
       message,
       "WQ records are mapped through wq_site_id; no ID equality with biology or flow sites is assumed."
@@ -321,7 +371,7 @@ function(input, output, session){
 
     site_metadata <- parsed$data
     usable_rhs_ids <- usable_mapping_ids(site_metadata, "rhs_survey_id")
-    if (!"biol_site_id" %in% names(site_metadata) || length(usable_rhs_ids) == 0) {
+    if (length(usable_rhs_ids) == 0) {
       message <- "No confirmed RHS survey IDs are available yet. Please provide rhs_survey_id values before importing RHS data."
       rhs_site_import_data(NULL)
       rhs_site_import_result(list(status = "warning", messages = message))
@@ -342,12 +392,19 @@ function(input, output, session){
       return()
     }
 
-    mapped <- map_rhs_records_to_biology(imported, site_metadata)
-    rhs_site_import_data(mapped)
-    message <- paste0(
-      "Imported ", nrow(mapped), " mapped RHS survey records for ",
-      length(unique(mapped$biol_site_id)), " biology site(s)."
-    )
+    has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
+    output_data <- if (has_biology_mapping) map_rhs_records_to_biology(imported, site_metadata) else imported
+    mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
+      length(unique(stats::na.omit(output_data$biol_site_id)))
+    } else {
+      0
+    }
+    rhs_site_import_data(output_data)
+    message <- if (mapped_biology_count > 0) {
+      paste0("Imported ", nrow(output_data), " RHS records mapped to ", mapped_biology_count, " biology site(s).")
+    } else {
+      paste0("Imported ", nrow(output_data), " RHS records. No biology mapping was supplied.")
+    }
     rhs_site_import_result(list(status = "success", messages = c(
       message,
       "RHS records are mapped through rhs_survey_id; RHS site IDs are not used as survey IDs."
@@ -375,27 +432,11 @@ function(input, output, session){
   
   ### displaying ----
   output$table1 <- function() {
-    
-  #### error messages for incorrect data formats ----
-    metadata_req_col_biol <- 'biol_site_id'
-    metadata_req_col_flow <- 'flow_site_id'
-    metadata_req_col_flow_input <- 'flow_input'
-    metadata_req_flow_input_types <- c('HDE', 'NRFA')
-    
-    metadata_col_names <- colnames(metadata())
-    flow_input <- metadata()$flow_input
-    
-    match <- flow_input %in% metadata_req_flow_input_types
-    
-    validate(
-      need(metadata_req_col_biol %in% metadata_col_names, "You don't have a correctly named list of biology site IDs"),
-      need(metadata_req_col_flow %in% metadata_col_names, "You don't have a correctly named list of flow site IDs"),
-      need(metadata_req_col_flow_input %in% metadata_col_names, "You don't have a correctly named list of flow inputs"),
-      need(!str_contains(match, "FALSE"), "Please ensure all your flow inputs are listed as either 'HDE' or 'NRFA'")
-      
-    )
-    
-    metadata() %>% kable("html") %>% kable_styling("striped", full_width = F) %>% 
+    metadata_data <- metadata()
+    validation_error <- validate_dashboard_site_metadata(metadata_data)
+    validate(need(is.null(validation_error), validation_error))
+
+    metadata_data %>% kable("html") %>% kable_styling("striped", full_width = F) %>%
       scroll_box(height = "250px")
   }
   

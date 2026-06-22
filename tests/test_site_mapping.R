@@ -11,6 +11,28 @@ stopifnot(identical(parsed$data$rhs_survey_id, "TBC"))
 stopifnot(identical(usable_mapping_ids(parsed$data, "wq_site_id"), "SW-A4070115"))
 stopifnot(length(usable_mapping_ids(parsed$data, "rhs_survey_id")) == 0)
 
+uploaded <- read_site_metadata_csv("demo_site_metadata.csv")
+stopifnot(is.null(uploaded$error))
+stopifnot(is.null(validate_dashboard_site_metadata(uploaded$data)))
+stopifnot(identical(uploaded$data$rhs_survey_id, "6145"))
+
+stopifnot(is.null(validate_dashboard_site_metadata(data.frame(biol_site_id = "00291"))))
+stopifnot(is.null(validate_dashboard_site_metadata(data.frame(wq_site_id = "SW-A4070115"))))
+stopifnot(is.null(validate_dashboard_site_metadata(data.frame(rhs_survey_id = "6145"))))
+stopifnot(is.null(validate_dashboard_site_metadata(data.frame(flow_site_id = "027090", flow_input = "NRFA"))))
+stopifnot(!is.null(validate_dashboard_site_metadata(data.frame(site_id = "unknown"))))
+stopifnot(!is.null(validate_dashboard_site_metadata(data.frame(flow_site_id = "027090"))))
+
+invalid_flow <- uploaded$data
+invalid_flow$flow_input <- "LOCAL"
+stopifnot(!is.null(validate_dashboard_site_metadata(invalid_flow)))
+
+leading_zero_file <- tempfile(fileext = ".csv")
+writeLines("flow_site_id,flow_input\n027090,NRFA", leading_zero_file)
+leading_zero <- read_site_metadata_csv(leading_zero_file)
+unlink(leading_zero_file)
+stopifnot(identical(leading_zero$data$flow_site_id, "027090"))
+
 legacy <- parse_site_metadata("biol_site_id,rhs_site_id\n291,6145")
 stopifnot(is.null(legacy$error))
 stopifnot("rhs_survey_id" %in% names(legacy$data))

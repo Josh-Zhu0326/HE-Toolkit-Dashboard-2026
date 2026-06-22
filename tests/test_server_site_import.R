@@ -11,6 +11,16 @@ artifact_pattern <- "^(WQ_DATA_METRICS\\.rds|RHS_survey_summary_.*\\.rds|River_H
 artifacts_before <- list.files(pattern = artifact_pattern)
 
 shiny::testServer(dashboard_server, {
+  upload_path <- normalizePath("demo_site_metadata.csv", winslash = "/", mustWork = TRUE)
+  session$setInputs(site_metadata_csv = list(
+    name = "demo_site_metadata.csv",
+    size = file.info(upload_path)$size,
+    type = "text/csv",
+    datapath = upload_path
+  ))
+  session$flushReact()
+  stopifnot(identical(site_metadata_upload_result()$status, "success"))
+
   session$setInputs(
     meta_paste = metadata_text,
     date_range_wq = as.Date(c("2024-01-01", "2025-01-01"))

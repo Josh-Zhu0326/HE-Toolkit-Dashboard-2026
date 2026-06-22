@@ -92,6 +92,23 @@ page_navbar(
         background-color: #d4d4d4 !important;
         border-color: #666 !important;
       }
+      .site-metadata-upload .btn-file,
+      .site-metadata-upload .btn-default,
+      .site-metadata-upload .btn-secondary {
+        color: #333 !important;
+        background: linear-gradient(to bottom, #fff 0%, #e9e9e9 100%) !important;
+        background-color: #e9e9e9 !important;
+        border: 1px solid #999 !important;
+        border-radius: 2px !important;
+        box-shadow: none !important;
+      }
+      .site-metadata-upload .btn-file:hover,
+      .site-metadata-upload .btn-default:hover,
+      .site-metadata-upload .btn-secondary:hover {
+        color: #111 !important;
+        background: linear-gradient(to bottom, #f5f5f5 0%, #dcdcdc 100%) !important;
+        border-color: #777 !important;
+      }
       .shiny-output-error-validation {
         color: #ff9933;
         font-weight: bold;
@@ -124,6 +141,26 @@ page_navbar(
               div(style="text-align: center;", actionButton("clear_all", "CLEAR ALL", style="color: #DD6B55; background-color: #FFF; border-color: #008938", icon = shiny::icon("eraser", verify_fa = FALSE))),
               br(),
               textAreaInput("meta_paste", "Paste site metadata here"),
+              div(
+                class = "site-metadata-upload",
+                fileInput(
+                  "site_metadata_csv",
+                  "Or upload site metadata CSV",
+                  accept = c(".csv", "text/csv"),
+                  buttonLabel = "Choose site IDs CSV",
+                  placeholder = "No CSV selected"
+                )
+              ),
+              div(
+                class = "hint-text",
+                "Supported IDs: biol_site_id, flow_site_id, wq_site_id, rhs_survey_id. Each type can be uploaded alone or together; flow_site_id also requires flow_input. Use TBC for an unconfirmed mapping."
+              ),
+              uiOutput("site_metadata_upload_status"),
+              downloadButton(
+                "download_demo_site_metadata",
+                "Download demo site metadata CSV",
+                class = "wq-rhs-action-button"
+              ),
               nav_item("Site Metadata",
                          tableOutput("table1")),
               br(),
