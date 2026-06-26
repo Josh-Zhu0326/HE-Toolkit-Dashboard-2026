@@ -5,50 +5,438 @@ function(input, output, session){
   # INTRO PAGE ----
   
   output$intro_page <- renderUI({
-    tags$iframe(seamless="seamless", 
-                src= "prefix/intro_page.html",
-                style="border:0; position:relative; top:0; left:0; right:0; bottom:0; width:100%; height:1000px")
+    tags$iframe(
+      id = "intro-page-frame",
+      seamless = "seamless",
+      scrolling = "no",
+      src = "prefix/intro_page.html",
+      style = "border:0; display:block; width:100%; height:1000px; overflow:hidden;",
+      onload = paste(
+        "var frame = this;",
+        "var resizeFrame = function() {",
+        "frame.style.height = frame.contentWindow.document.documentElement.scrollHeight + 'px';",
+        "};",
+        "resizeFrame();",
+        "setTimeout(resizeFrame, 250);",
+        "setTimeout(resizeFrame, 1000);"
+      )
+    )
   })
+
+  wq_rhs_mapping_example <- data.frame(
+    biol_site_id = "291",
+    flow_site_id = "27090",
+    flow_input = "NRFA",
+    wq_site_id = "SW-A4070115",
+    rhs_survey_id = "6145",
+    stringsAsFactors = FALSE
+  )
+
+  output$wq_rhs_mapping_example <- DT::renderDataTable({
+    DT::datatable(
+      wq_rhs_mapping_example,
+      extensions = "Buttons",
+      rownames = FALSE,
+      options = list(
+        columnDefs = list(list(className = "dt-center", targets = 0:4)),
+        searching = FALSE,
+        pageLength = 5,
+        dom = "Bfrtip",
+        buttons = list("copy"),
+        order = list(),
+        autoWidth = FALSE,
+        orderClasses = FALSE,
+        lengthMenu = list(c(5, 10, 25, 50, 100), c(5, 10, 25, 50, 100))
+      )
+    )
+  })
+
+  # WQ/RHS UPLOAD DEMO ----
+  read_uploaded_csv_safely <- function(upload, label) {
+    if (is.null(upload)) {
+      return(list(
+        data = NULL,
+        status = "info",
+        messages = paste0("No ", label, " file uploaded yet.")
+      ))
+    }
+
+    if (is.null(upload$datapath) || !file.exists(upload$datapath)) {
+      return(list(
+        data = NULL,
+        status = "error",
+        messages = paste0("Your ", label, " file could not be found after upload. Please try uploading it again.")
+      ))
+    }
+
+    data <- tryCatch(
+      data.table::fread(upload$datapath, data.table = FALSE, encoding = "UTF-8"),
+      error = function(e) e
+    )
+
+    if (inherits(data, "error")) {
+      return(list(
+        data = NULL,
+        status = "error",
+        messages = paste0("Your ", label, " file could not be read as CSV. Please check that it is a valid comma-separated file.")
+      ))
+    }
+
+    list(data = data, status = "ok", messages = character(0))
+  }
+
+  validate_wq_upload <- function(df) {
+    if (is.null(df)) {
+      return(list(status = "info", messages = "No WQ file uploaded yet."))
+    }
+
+    if (nrow(df) == 0 || ncol(df) == 0) {
+      return(list(
+        status = "error",
+        messages = "Your WQ file appears to be empty. Please upload a CSV file with at least one data row."
+      ))
+    }
+
+    names_lower <- tolower(names(df))
+    messages <- "Your WQ file was uploaded successfully."
+    status <- "success"
+
+    site_cols <- c("biol_site_id", "wq_site_id", "site_id", "monitoring_site_id")
+    if (!any(site_cols %in% names_lower)) {
+      status <- "warning"
+      messages <- c(
+        messages,
+        "Your WQ file is missing a site identifier column. Please include one of: biol_site_id, wq_site_id, site_id, monitoring_site_id."
+      )
+    }
+
+    date_like <- stringr::str_detect(names_lower, "date|time|sample")
+    measurement_like <- stringr::str_detect(names_lower, "result|value|measure|determin|parameter|concentration|unit|qualifier|observation")
+    numeric_like <- purrr::map_lgl(df, is.numeric)
+
+    if (!any(date_like) && !any(measurement_like) && !any(numeric_like)) {
+      status <- "warning"
+      messages <- c(
+        messages,
+        "Your WQ file does not clearly contain a date-like or measurement-like column. Please add sample dates and measured results where possible."
+      )
+    }
+
+    messages <- c(
+      messages,
+      "This preview shows the first rows of your uploaded file. No modelling has been run yet."
+    )
+
+    list(status = status, messages = messages)
+  }
+
+  validate_rhs_upload <- function(df) {
+    if (is.null(df)) {
+      return(list(status = "info", messages = "No RHS file uploaded yet."))
+    }
+
+    if (nrow(df) == 0 || ncol(df) == 0) {
+      return(list(
+        status = "error",
+        messages = "Your RHS file appears to be empty. Please upload a CSV file with at least one data row."
+      ))
+    }
+
+    names_lower <- tolower(names(df))
+    messages <- "Your RHS file was uploaded successfully."
+    status <- "success"
+
+    id_cols <- c("biol_site_id", "rhs_survey_id", "rhs_site_id", "site_id", "survey_id")
+    if (!any(id_cols %in% names_lower)) {
+      status <- "warning"
+      messages <- c(
+        messages,
+        "Your RHS file is missing a survey identifier column. Please include rhs_survey_id where possible, or one of: biol_site_id, rhs_site_id, site_id, survey_id."
+      )
+    }
+
+    rhs_metric_like <- stringr::str_detect(
+      names_lower,
+      "rhs|hms|hqa|score|class|metric|descriptor|habitat|channel|bank|substrate|vegetation|flow|poach|berm|bridge|ford"
+    )
+    non_identifier_cols <- setdiff(names_lower, id_cols)
+
+    if (!any(rhs_metric_like) && length(non_identifier_cols) == 0) {
+      status <- "warning"
+      messages <- c(
+        messages,
+        "Your RHS file does not clearly contain an RHS metric or descriptor column. Please add habitat metrics or descriptors such as HMS, HQA, channel, bank, substrate, or vegetation fields."
+      )
+    }
+
+    messages <- c(
+      messages,
+      "This preview shows the first rows of your uploaded file. No modelling has been run yet."
+    )
+
+    list(status = status, messages = messages)
+  }
+
+  format_validation_message <- function(result) {
+    status <- result$status
+    if (isTRUE(status == "ok")) {
+      status <- "success"
+    }
+
+    class_name <- paste("upload-status", paste0("upload-status-", status))
+    tags$div(
+      class = class_name,
+      tags$ul(lapply(result$messages, tags$li))
+    )
+  }
+
+  wq_upload <- reactive({
+    read_result <- read_uploaded_csv_safely(input$wq_csv, "WQ")
+    validation <- validate_wq_upload(read_result$data)
+
+    if (read_result$status == "error") {
+      validation <- list(status = "error", messages = read_result$messages)
+    }
+
+    list(data = read_result$data, validation = validation)
+  })
+
+  rhs_upload <- reactive({
+    read_result <- read_uploaded_csv_safely(input$rhs_csv, "RHS")
+    validation <- validate_rhs_upload(read_result$data)
+
+    if (read_result$status == "error") {
+      validation <- list(status = "error", messages = read_result$messages)
+    }
+
+    list(data = read_result$data, validation = validation)
+  })
+
+  output$wq_validation_status <- renderUI({
+    format_validation_message(wq_upload()$validation)
+  })
+
+  output$rhs_validation_status <- renderUI({
+    format_validation_message(rhs_upload()$validation)
+  })
+
+  output$wq_preview <- DT::renderDataTable({
+    req(wq_upload()$data)
+    head(wq_upload()$data, 10)
+  }, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$rhs_preview <- DT::renderDataTable({
+    req(rhs_upload()$data)
+    head(rhs_upload()$data, 10)
+  }, options = list(scrollX = TRUE, pageLength = 10))
   
   # DATA IMPORTING ----
   ## Metadata ----
   ### loading ----
-  metadata <- reactive({ 
-    
-  #### error message for absent metadata ----
-    validate(
-      need(input$meta_paste != "", "Please add metadata")
-    )
-    
-    if (input$meta_paste != '') {
-      metadata <- fread(paste(input$meta_paste, collapse = "\n"), colClasses = "character")
-      metadata <-as.data.frame(metadata)
+  site_metadata_upload_result <- reactiveVal(list(
+    status = "info",
+    messages = "Choose a site metadata CSV to parse and load it automatically."
+  ))
+
+  observeEvent(input$site_metadata_csv, {
+    parsed <- read_site_metadata_csv(input$site_metadata_csv$datapath)
+    if (!is.null(parsed$error)) {
+      site_metadata_upload_result(list(status = "error", messages = parsed$error))
+      showNotification(parsed$error, type = "error")
+      return()
     }
+
+    validation_error <- validate_dashboard_site_metadata(parsed$data)
+    if (!is.null(validation_error)) {
+      site_metadata_upload_result(list(status = "error", messages = validation_error))
+      showNotification(validation_error, type = "error")
+      return()
+    }
+
+    updateTextAreaInput(session, "meta_paste", value = readr::format_csv(parsed$data))
+    messages <- c(
+      paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
+      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
+      "The compatible dataset import buttons below now use these site IDs.",
+      parsed$warnings
+    )
+    site_metadata_upload_result(list(status = "success", messages = messages[nzchar(messages)]))
+    showNotification("Site metadata CSV imported successfully.", type = "message")
   })
+
+  output$site_metadata_upload_status <- renderUI({
+    format_validation_message(site_metadata_upload_result())
+  })
+
+  output$download_demo_site_metadata <- downloadHandler(
+    filename = function() "demo_site_metadata.csv",
+    content = function(file) {
+      file.copy("demo_site_metadata.csv", file, overwrite = TRUE)
+    },
+    contentType = "text/csv"
+  )
+
+  metadata <- reactive({
+    parsed <- parse_site_metadata(input$meta_paste)
+    validate(need(is.null(parsed$error), parsed$error))
+    parsed$data
+  })
+
+  wq_site_import_result <- reactiveVal(list(
+    status = "info",
+    messages = "Paste extended site metadata, choose a WQ date range, then click 'Import WQ using site IDs'."
+  ))
+  rhs_site_import_result <- reactiveVal(list(
+    status = "info",
+    messages = "Paste extended site metadata, then click 'Import RHS using site IDs'."
+  ))
+  wq_site_import_data <- reactiveVal(NULL)
+  rhs_site_import_data <- reactiveVal(NULL)
+
+  observeEvent(input$import_wq_site_ids, {
+    parsed <- parse_site_metadata(input$meta_paste)
+    if (!is.null(parsed$error)) {
+      wq_site_import_data(NULL)
+      wq_site_import_result(list(status = "error", messages = parsed$error))
+      showNotification(parsed$error, type = "error")
+      return()
+    }
+
+    site_metadata <- parsed$data
+    usable_wq_ids <- usable_mapping_ids(site_metadata, "wq_site_id")
+    if (length(usable_wq_ids) == 0) {
+      message <- "No confirmed WQ site IDs are available yet. Please provide WQ site IDs before importing WQ data."
+      wq_site_import_data(NULL)
+      wq_site_import_result(list(status = "warning", messages = message))
+      showNotification(message, type = "warning")
+      return()
+    }
+
+    start_date <- max(as.Date(input$date_range_wq[[1]]), as.Date("2000-01-01"))
+    end_date <- as.Date(input$date_range_wq[[2]])
+    if (end_date <= start_date) {
+      message <- "The WQ end date must be later than the start date. Water Quality Explorer data are available from 2000 onwards."
+      wq_site_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error")
+      return()
+    }
+
+    imported <- tryCatch(
+      hetoolkit::import_wq(
+        sites = usable_wq_ids,
+        dets = "default",
+        start_date = format(start_date, "%Y-%m-%d"),
+        end_date = format(end_date, "%Y-%m-%d"),
+        save = FALSE
+      ),
+      error = function(e) NULL
+    )
+
+    if (is.null(imported) || nrow(imported) == 0) {
+      message <- "WQ data could not be imported for the supplied site IDs and date range. Check the IDs, dates, and network connection."
+      wq_site_import_data(NULL)
+      wq_site_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error")
+      return()
+    }
+
+    has_biology_mapping <- all(c("biol_site_id", "wq_site_id") %in% names(site_metadata))
+    output_data <- if (has_biology_mapping) map_wq_records_to_biology(imported, site_metadata) else imported
+    mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
+      length(unique(stats::na.omit(output_data$biol_site_id)))
+    } else {
+      0
+    }
+    wq_site_import_data(output_data)
+    message <- if (mapped_biology_count > 0) {
+      paste0("Imported ", nrow(output_data), " WQ records mapped to ", mapped_biology_count, " biology site(s).")
+    } else {
+      paste0("Imported ", nrow(output_data), " WQ records. No biology mapping was supplied.")
+    }
+    wq_site_import_result(list(status = "success", messages = c(
+      message,
+      "WQ records are mapped through wq_site_id; no ID equality with biology or flow sites is assumed."
+    )))
+    showNotification(message, type = "message")
+  })
+
+  observeEvent(input$import_rhs_site_ids, {
+    parsed <- parse_site_metadata(input$meta_paste)
+    if (!is.null(parsed$error)) {
+      rhs_site_import_data(NULL)
+      rhs_site_import_result(list(status = "error", messages = parsed$error))
+      showNotification(parsed$error, type = "error")
+      return()
+    }
+
+    site_metadata <- parsed$data
+    usable_rhs_ids <- usable_mapping_ids(site_metadata, "rhs_survey_id")
+    if (length(usable_rhs_ids) == 0) {
+      message <- "No confirmed RHS survey IDs are available yet. Please provide rhs_survey_id values before importing RHS data."
+      rhs_site_import_data(NULL)
+      rhs_site_import_result(list(status = "warning", messages = message))
+      showNotification(message, type = "warning")
+      return()
+    }
+
+    imported <- tryCatch(
+      import_rhs_in_temp_directory(usable_rhs_ids),
+      error = function(e) NULL
+    )
+
+    if (is.null(imported) || nrow(imported) == 0) {
+      message <- "RHS data could not be imported for the supplied survey IDs. Check the IDs and network connection."
+      rhs_site_import_data(NULL)
+      rhs_site_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error")
+      return()
+    }
+
+    has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
+    output_data <- if (has_biology_mapping) map_rhs_records_to_biology(imported, site_metadata) else imported
+    mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
+      length(unique(stats::na.omit(output_data$biol_site_id)))
+    } else {
+      0
+    }
+    rhs_site_import_data(output_data)
+    message <- if (mapped_biology_count > 0) {
+      paste0("Imported ", nrow(output_data), " RHS records mapped to ", mapped_biology_count, " biology site(s).")
+    } else {
+      paste0("Imported ", nrow(output_data), " RHS records. No biology mapping was supplied.")
+    }
+    rhs_site_import_result(list(status = "success", messages = c(
+      message,
+      "RHS records are mapped through rhs_survey_id; RHS site IDs are not used as survey IDs."
+    )))
+    showNotification(message, type = "message")
+  })
+
+  output$wq_site_import_status <- renderUI({
+    format_validation_message(wq_site_import_result())
+  })
+
+  output$rhs_site_import_status <- renderUI({
+    format_validation_message(rhs_site_import_result())
+  })
+
+  output$wq_site_import_preview <- DT::renderDataTable({
+    req(wq_site_import_data())
+    wq_site_import_data()
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$rhs_site_import_preview <- DT::renderDataTable({
+    req(rhs_site_import_data())
+    rhs_site_import_data()
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
   
   ### displaying ----
   output$table1 <- function() {
-    
-  #### error messages for incorrect data formats ----
-    metadata_req_col_biol <- 'biol_site_id'
-    metadata_req_col_flow <- 'flow_site_id'
-    metadata_req_col_flow_input <- 'flow_input'
-    metadata_req_flow_input_types <- c('HDE', 'NRFA')
-    
-    metadata_col_names <- colnames(metadata())
-    flow_input <- metadata()$flow_input
-    
-    match <- flow_input %in% metadata_req_flow_input_types
-    
-    validate(
-      need(metadata_req_col_biol %in% metadata_col_names, "You don't have a correctly named list of biology site IDs"),
-      need(metadata_req_col_flow %in% metadata_col_names, "You don't have a correctly named list of flow site IDs"),
-      need(metadata_req_col_flow_input %in% metadata_col_names, "You don't have a correctly named list of flow inputs"),
-      need(!str_contains(match, "FALSE"), "Please ensure all your flow inputs are listed as either 'HDE' or 'NRFA'")
-      
-    )
-    
-    metadata() %>% kable("html") %>% kable_styling("striped", full_width = F) %>% 
+    metadata_data <- metadata()
+    validation_error <- validate_dashboard_site_metadata(metadata_data)
+    validate(need(is.null(validation_error), validation_error))
+
+    metadata_data %>% kable("html") %>% kable_styling("striped", full_width = F) %>%
       scroll_box(height = "250px")
   }
   
