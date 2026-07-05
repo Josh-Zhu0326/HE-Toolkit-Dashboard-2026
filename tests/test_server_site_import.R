@@ -2,7 +2,7 @@ source("global.R")
 dashboard_server <- source("server.R")$value
 
 metadata_text <- paste(
-  "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_survey_id",
+  "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_site_id",
   "291,27090,NRFA,SW-A4070115,TBC",
   sep = "\n"
 )

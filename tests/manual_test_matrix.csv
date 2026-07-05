@@ -1,0 +1,24 @@
+test_id,area,priority,test_data,expected_result
+TC-001,Home,High,,Home page loads and states WQ/RHS are supporting mapped datasets not used in O:E
+TC-002,Mapping,High,tests/fixtures/mapping.csv,Valid mapping uploads with warning for RHS TBC and no crash
+TC-003,Mapping,High,custom missing-column CSV,Missing required mapping columns show a clear error
+TC-004,Mapping,Medium,custom duplicate biol_site_id CSV,Duplicate biol_site_id shows warning and app remains connected
+TC-005,WQ validation,High,tests/fixtures/wq.csv,WQ CSV validates and previews without triggering modelling or O:E
+TC-006,RHS validation,High,tests/fixtures/rhs.csv,RHS CSV validates and previews without triggering modelling or O:E
+TC-007,WQ plots,High,tests/fixtures/mapping.csv; tests/fixtures/wq.csv,WQ time series boxplot and mean bar chart render when suitable data exist
+TC-008,WQ downloads,High,mapped WQ data,Mapped WQ CSV and current WQ plot PNG download when data exist
+TC-009,RHS plots,High,tests/fixtures/mapping.csv; tests/fixtures/rhs.csv,RHS numeric categorical and record-count plots render when suitable data exist
+TC-010,RHS downloads,High,mapped RHS data,Mapped RHS CSV and current RHS plot PNG download when data exist
+TC-011,Local invertebrate import,High,tests/fixtures/local_invertebrate.csv,Local invertebrate CSV validates and previews separately from O:E
+TC-012,Local flow import,High,tests/fixtures/local_flow.csv,Local flow CSV validates and previews with valid NRFA flow_input
+TC-013,Local flow validation,High,custom invalid flow_input CSV,Invalid or blank flow_input shows clear error and app remains connected
+TC-014,O:E regression,Critical,existing workflow data,Existing O:E workflow renders and does not require WQ/RHS
+TC-015,Flow regression,Critical,existing workflow data,Existing flow import plots and statistics render as before
+TC-016,HEV single plot,High,completed HE workflow,Existing single HEV plot renders and download remains available
+TC-017,HEV all plots,Medium,completed HE workflow,All four HEV plots render when data are available
+TC-018,HEV high-low overlay,Medium,completed HE workflow,Low-flow and high-flow stats plot together when matching columns exist
+TC-019,HEV status message,Medium,,Boundary/class warning is shown when confirmed class data are unavailable
+TC-020,Basic model,High,joined HE data,Basic model summary and scatter plot render for valid numeric variables
+TC-021,Basic model validation,High,too few rows or no joined data,Clear error shown and app remains connected
+TC-022,Downloads,Medium,,Existing and new downloads are visible in relevant sections
+TC-023,Navigation,Medium,,All pages load with clear titles and help text
