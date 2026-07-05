@@ -20,15 +20,21 @@ parse_site_metadata <- function(text) {
   warnings <- character(0)
   if ("rhs_site_id" %in% names(data)) {
     if ("rhs_survey_id" %in% names(data)) {
-      return(list(
-        data = NULL,
-        error = "Use rhs_survey_id only. Remove the legacy rhs_site_id column.",
-        warnings = character(0)
-      ))
+      rhs_site_values <- trimws(as.character(data$rhs_site_id))
+      rhs_survey_values <- trimws(as.character(data$rhs_survey_id))
+      both_known <- nzchar(rhs_site_values) & nzchar(rhs_survey_values) &
+        toupper(rhs_site_values) != "TBC" & toupper(rhs_survey_values) != "TBC"
+      if (any(both_known & rhs_site_values != rhs_survey_values)) {
+        return(list(
+          data = NULL,
+          error = "rhs_site_id and rhs_survey_id contain conflicting values. Use one confirmed RHS identifier per row.",
+          warnings = character(0)
+        ))
+      }
+    } else {
+      data$rhs_survey_id <- data$rhs_site_id
+      warnings <- "The rhs_site_id column was also made available internally as rhs_survey_id for existing RHS import code."
     }
-
-    names(data)[names(data) == "rhs_site_id"] <- "rhs_survey_id"
-    warnings <- "The legacy rhs_site_id column was interpreted as rhs_survey_id. RHS imports use survey IDs."
   }
 
   biol_ids <- if ("biol_site_id" %in% names(data)) {
@@ -38,11 +44,10 @@ parse_site_metadata <- function(text) {
     character(0)
   }
   if (anyDuplicated(biol_ids)) {
-    return(list(
-      data = NULL,
-      error = "Each biol_site_id must appear once in the main metadata table. Use a separate mapping table for multiple WQ sites or RHS surveys.",
-      warnings = warnings
-    ))
+    warnings <- c(
+      warnings,
+      "Duplicated biol_site_id values were found. This is allowed for preview, but main biology/flow imports may require one row per biology site."
+    )
   }
 
   list(data = data, error = NULL, warnings = warnings)
@@ -66,7 +71,7 @@ read_site_metadata_csv <- function(path) {
 }
 
 validate_dashboard_site_metadata <- function(metadata) {
-  id_columns <- c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id")
+  id_columns <- c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_site_id", "rhs_survey_id")
   if (!any(id_columns %in% names(metadata))) {
     return(paste0("Include at least one supported site ID column: ", paste(id_columns, collapse = ", "), "."))
   }
@@ -113,13 +118,16 @@ map_wq_records_to_biology <- function(wq_data, metadata) {
 }
 
 normalise_rhs_records <- function(rhs_data) {
-  id_columns <- intersect(c("rhs_survey_id", "Survey.ID", "SURVEY_ID"), names(rhs_data))
+  id_columns <- intersect(c("rhs_survey_id", "rhs_site_id", "Survey.ID", "SURVEY_ID"), names(rhs_data))
   if (length(id_columns) == 0) {
     stop("RHS data does not contain a survey identifier column.")
   }
 
   names(rhs_data)[names(rhs_data) == id_columns[[1]]] <- "rhs_survey_id"
   rhs_data$rhs_survey_id <- as.character(rhs_data$rhs_survey_id)
+  if (!"rhs_site_id" %in% names(rhs_data)) {
+    rhs_data$rhs_site_id <- rhs_data$rhs_survey_id
+  }
   rhs_data
 }
 

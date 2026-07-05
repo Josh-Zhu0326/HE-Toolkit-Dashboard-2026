@@ -1,13 +1,14 @@
 source(file.path("R", "site_mapping_helpers.R"))
 
 metadata_text <- paste(
-  "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_survey_id",
+  "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_site_id",
   "291,27090,NRFA,SW-A4070115,TBC",
   sep = "\n"
 )
 parsed <- parse_site_metadata(metadata_text)
 stopifnot(is.null(parsed$error))
 stopifnot(identical(parsed$data$rhs_survey_id, "TBC"))
+stopifnot(identical(parsed$data$rhs_site_id, "TBC"))
 stopifnot(identical(usable_mapping_ids(parsed$data, "wq_site_id"), "SW-A4070115"))
 stopifnot(length(usable_mapping_ids(parsed$data, "rhs_survey_id")) == 0)
 
@@ -36,10 +37,11 @@ stopifnot(identical(leading_zero$data$flow_site_id, "027090"))
 legacy <- parse_site_metadata("biol_site_id,rhs_site_id\n291,6145")
 stopifnot(is.null(legacy$error))
 stopifnot("rhs_survey_id" %in% names(legacy$data))
-stopifnot(length(legacy$warnings) == 1)
+stopifnot("rhs_site_id" %in% names(legacy$data))
 
 duplicate <- parse_site_metadata("biol_site_id,wq_site_id\n291,A\n291,B")
-stopifnot(!is.null(duplicate$error))
+stopifnot(is.null(duplicate$error))
+stopifnot(length(duplicate$warnings) > 0)
 
 shared_metadata <- data.frame(
   biol_site_id = c("A", "B"),

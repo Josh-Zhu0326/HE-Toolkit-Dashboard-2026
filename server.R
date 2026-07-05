@@ -28,7 +28,7 @@ function(input, output, session){
     flow_site_id = "27090",
     flow_input = "NRFA",
     wq_site_id = "SW-A4070115",
-    rhs_survey_id = "6145",
+    rhs_site_id = "6145",
     stringsAsFactors = FALSE
   )
 
@@ -246,6 +246,13 @@ function(input, output, session){
       return()
     }
 
+    supporting_validation <- validate_supporting_mapping(parsed$data)
+    if (identical(supporting_validation$status, "error")) {
+      site_metadata_upload_result(supporting_validation)
+      showNotification(paste(supporting_validation$messages, collapse = " "), type = "error")
+      return()
+    }
+
     validation_error <- validate_dashboard_site_metadata(parsed$data)
     if (!is.null(validation_error)) {
       site_metadata_upload_result(list(status = "error", messages = validation_error))
@@ -256,11 +263,12 @@ function(input, output, session){
     updateTextAreaInput(session, "meta_paste", value = readr::format_csv(parsed$data))
     messages <- c(
       paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
-      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
+      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
       "The compatible dataset import buttons below now use these site IDs.",
+      supporting_validation$messages,
       parsed$warnings
     )
-    site_metadata_upload_result(list(status = "success", messages = messages[nzchar(messages)]))
+    site_metadata_upload_result(list(status = supporting_validation$status, messages = messages[nzchar(messages)]))
     showNotification("Site metadata CSV imported successfully.", type = "message")
   })
 
@@ -429,6 +437,214 @@ function(input, output, session){
     req(rhs_site_import_data())
     rhs_site_import_data()
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$download_mapped_wq_csv <- downloadHandler(
+    filename = function() "mapped_wq_data.csv",
+    content = function(file) {
+      data <- mapped_wq_plot_data()
+      validate(need(!is.null(data) && nrow(data) > 0, "No mapped WQ data are available to download."))
+      readr::write_csv(data, file)
+    },
+    contentType = "text/csv"
+  )
+
+  output$download_mapped_rhs_csv <- downloadHandler(
+    filename = function() "mapped_rhs_data.csv",
+    content = function(file) {
+      data <- mapped_rhs_plot_data()
+      validate(need(!is.null(data) && nrow(data) > 0, "No mapped RHS data are available to download."))
+      readr::write_csv(data, file)
+    },
+    contentType = "text/csv"
+  )
+
+  mapped_wq_plot_data <- reactive({
+    imported <- wq_site_import_data()
+    if (!is.null(imported) && nrow(imported) > 0) {
+      return(imported)
+    }
+
+    uploaded <- wq_upload()$data
+    if (is.null(uploaded) || nrow(uploaded) == 0) {
+      return(NULL)
+    }
+
+    parsed <- parse_site_metadata(input$meta_paste)
+    if (is.null(parsed$error) && !is.null(parsed$data) && all(c("biol_site_id", "wq_site_id") %in% names(parsed$data)) && "wq_site_id" %in% names(uploaded)) {
+      mapped <- map_wq_records_to_biology(uploaded, parsed$data)
+      if (!is.null(mapped) && nrow(mapped) > 0) {
+        return(mapped)
+      }
+    }
+
+    if (all(c("biol_site_id", "wq_site_id") %in% names(uploaded))) {
+      return(uploaded)
+    }
+
+    NULL
+  })
+
+  mapped_rhs_plot_data <- reactive({
+    imported <- rhs_site_import_data()
+    if (!is.null(imported) && nrow(imported) > 0) {
+      return(imported)
+    }
+
+    uploaded <- rhs_upload()$data
+    if (is.null(uploaded) || nrow(uploaded) == 0) {
+      return(NULL)
+    }
+
+    uploaded <- tryCatch(
+      normalise_rhs_records(uploaded),
+      error = function(e) uploaded
+    )
+
+    parsed <- parse_site_metadata(input$meta_paste)
+    if (is.null(parsed$error) && !is.null(parsed$data) && all(c("biol_site_id", "rhs_survey_id") %in% names(parsed$data)) && "rhs_survey_id" %in% names(uploaded)) {
+      mapped <- map_rhs_records_to_biology(uploaded, parsed$data)
+      if (!is.null(mapped) && nrow(mapped) > 0) {
+        return(mapped)
+      }
+    }
+
+    if (("biol_site_id" %in% names(uploaded)) && any(c("rhs_site_id", "rhs_survey_id") %in% names(uploaded))) {
+      return(uploaded)
+    }
+
+    NULL
+  })
+
+  output$wq_plot_controls <- renderUI({
+    data <- mapped_wq_plot_data()
+    numeric_cols <- wq_rhs_numeric_columns(data)
+    date_cols <- wq_rhs_date_columns(data)
+    group_cols <- if (is.null(data)) character(0) else names(data)
+    default_group <- if ("biol_site_id" %in% group_cols) "biol_site_id" else wq_rhs_default_group(data)
+    default_numeric <- if (length(numeric_cols) > 0) numeric_cols[[1]] else character(0)
+    default_date <- if (length(date_cols) > 0) date_cols[[1]] else character(0)
+
+    tagList(
+      selectInput("wq_numeric_var", "WQ numeric variable", choices = numeric_cols, selected = default_numeric),
+      selectInput("wq_date_col", "WQ date column", choices = date_cols, selected = default_date),
+      selectInput("wq_group_col", "WQ grouping column", choices = group_cols, selected = default_group)
+    )
+  })
+
+  output$rhs_plot_controls <- renderUI({
+    data <- mapped_rhs_plot_data()
+    numeric_cols <- wq_rhs_numeric_columns(data)
+    categorical_cols <- wq_rhs_categorical_columns(data)
+    variable_cols <- if (identical(input$rhs_plot_type, "Categorical count/bar plot")) categorical_cols else numeric_cols
+    if (identical(input$rhs_plot_type, "Record count by biological site ID")) {
+      variable_cols <- character(0)
+    }
+    group_cols <- if (is.null(data)) character(0) else names(data)
+    default_group <- if ("biol_site_id" %in% group_cols) "biol_site_id" else wq_rhs_default_group(data)
+    default_variable <- if (length(variable_cols) > 0) variable_cols[[1]] else character(0)
+
+    tagList(
+      if (!identical(input$rhs_plot_type, "Record count by biological site ID")) {
+        selectInput("rhs_variable", "RHS variable", choices = variable_cols, selected = default_variable)
+      },
+      selectInput("rhs_group_col", "RHS grouping column", choices = group_cols, selected = default_group)
+    )
+  })
+
+  current_wq_plot <- reactive({
+    result <- build_wq_plot(
+      data = mapped_wq_plot_data(),
+      plot_type = input$wq_plot_type,
+      numeric_var = input$wq_numeric_var,
+      date_col = input$wq_date_col,
+      group_col = input$wq_group_col
+    )
+    validate(need(!is.null(result$plot), result$message))
+    result$plot
+  })
+
+  current_rhs_plot <- reactive({
+    result <- build_rhs_plot(
+      data = mapped_rhs_plot_data(),
+      plot_type = input$rhs_plot_type,
+      variable = input$rhs_variable,
+      group_col = input$rhs_group_col
+    )
+    validate(need(!is.null(result$plot), result$message))
+    result$plot
+  })
+
+  output$wq_mapped_plot <- renderPlot({
+    current_wq_plot()
+  })
+
+  output$rhs_mapped_plot <- renderPlot({
+    current_rhs_plot()
+  })
+
+  output$download_wq_plot <- downloadHandler(
+    filename = function() "mapped_wq_plot.png",
+    content = function(file) {
+      ggplot2::ggsave(file, plot = current_wq_plot(), width = 10, height = 5, dpi = 150)
+    },
+    contentType = "image/png"
+  )
+
+  output$download_rhs_plot <- downloadHandler(
+    filename = function() "mapped_rhs_plot.png",
+    content = function(file) {
+      ggplot2::ggsave(file, plot = current_rhs_plot(), width = 10, height = 5, dpi = 150)
+    },
+    contentType = "image/png"
+  )
+
+  local_inv_upload <- reactive({
+    if (is.null(input$local_inv_csv)) {
+      return(list(data = NULL, validation = list(status = "info", messages = "No local invertebrate CSV uploaded yet.")))
+    }
+
+    read_result <- read_dashboard_csv(input$local_inv_csv$datapath, "Local invertebrate")
+    validation <- if (identical(read_result$status, "success")) {
+      validate_local_invertebrate(read_result$data)
+    } else {
+      list(status = read_result$status, messages = read_result$messages)
+    }
+
+    list(data = read_result$data, validation = validation)
+  })
+
+  local_flow_upload <- reactive({
+    if (is.null(input$local_flow_csv)) {
+      return(list(data = NULL, validation = list(status = "info", messages = "No local flow CSV uploaded yet.")))
+    }
+
+    read_result <- read_dashboard_csv(input$local_flow_csv$datapath, "Local flow")
+    validation <- if (identical(read_result$status, "success")) {
+      validate_local_flow(read_result$data)
+    } else {
+      list(status = read_result$status, messages = read_result$messages)
+    }
+
+    list(data = read_result$data, validation = validation)
+  })
+
+  output$local_inv_status <- renderUI({
+    format_validation_message(local_inv_upload()$validation)
+  })
+
+  output$local_flow_status <- renderUI({
+    format_validation_message(local_flow_upload()$validation)
+  })
+
+  output$local_inv_preview <- DT::renderDataTable({
+    req(local_inv_upload()$data)
+    head(local_inv_upload()$data, 20)
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$local_flow_preview <- DT::renderDataTable({
+    req(local_flow_upload()$data)
+    head(local_flow_upload()$data, 20)
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
   
   ### displaying ----
   output$table1 <- function() {
@@ -442,9 +658,7 @@ function(input, output, session){
   
   ## Biology data ----
   ### importing ----
-  biol_data <- reactive({
-    req(input$import_inv)
-    
+  biol_data <- eventReactive(input$import_inv, {
     biol_sites <- as.character(metadata()$biol_site_id)
     
     import_inv(source = "parquet", sites = biol_sites, start_date = input$date_range_biol[1],
@@ -474,9 +688,7 @@ function(input, output, session){
   
   ## Environmental data ----
   ### importing ----
-  env_data <- reactive({
-    req(input$import_env)
-    
+  env_data <- eventReactive(input$import_env, {
     biol_sites <- as.character(metadata()$biol_site_id)
     
     import_env(sites = biol_sites) %>% mutate(across(BOULDERS_COBBLES: SILT_CLAY, ~tidyr::replace_na(.,0)))
@@ -529,9 +741,7 @@ function(input, output, session){
   
   ## Flow data ----
   ### importing ----
-  flow_data <- reactive({
-    req(input$import_flow)
-    
+  flow_data <- eventReactive(input$import_flow, {
     flow_sites <- as.character(metadata()$flow_site_id)
     flow_inputs <- as.character(metadata()$flow_input)
     
@@ -564,7 +774,7 @@ function(input, output, session){
   
   output$flow_heatmap <- renderUI({
     if (showHeatmap()){
-      plotOutput("flow_fig")
+      plotOutput("flow_fig", width = "920px", height = "560px")
     }
     else{
       tableOutput("flow_table")
@@ -611,9 +821,7 @@ function(input, output, session){
   
   ## RICT predictions ----
   ### calculating ----
-  predict_data <- reactive({
-    req(input$run_rict)
-    
+  predict_data <- eventReactive(input$run_rict, {
     env_data <- env_data()
     
     keeps <- c("biol_site_id", "SEASON", "TL2_WHPT_ASPT_AbW_DistFam", "TL2_WHPT_NTAXA_AbW_DistFam",
@@ -955,7 +1163,7 @@ function(input, output, session){
   
   output$flow_heatmap_imp <- renderUI({
     if (showHeatmapimp()){
-      plotOutput("flow_fig_imp")
+      plotOutput("flow_fig_imp", width = "920px", height = "560px")
     }
     else{
       tableOutput("flow_table_imp")
@@ -1000,9 +1208,7 @@ function(input, output, session){
     
   })
   
-  flow_stats <- reactive({
-    req(input$calc_flow_stats)
-    
+  flow_stats <- eventReactive(input$calc_flow_stats, {
     flow_data_final <- flow_data_final()
     
     flow_data_final$flow[flow_data_final$flow <= 0] <- NA
@@ -1076,9 +1282,7 @@ function(input, output, session){
   ## Run join calculations ----
   ### default join type for modelling ----
   
-  join_data <- reactive({
-    req(input$join_he)
-    
+  join_data <- eventReactive(input$join_he, {
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
     mapping$biol_site_id <- as.character(mapping$biol_site_id)
     mapping$flow_site_id <- as.character(mapping$flow_site_id)
@@ -1092,9 +1296,7 @@ function(input, output, session){
   
   ### join type for plotting ----
   
-  join_data_addbiol <- reactive({
-    req(input$join_he)
-    
+  join_data_addbiol <- eventReactive(input$join_he, {
     all.combinations <- expand.grid(biol_site_id = unique(biol_data()$biol_site_id), 
                                     Year = min(biol_data()$Year):max(biol_data()$Year), 
                                     Season = c("Spring", "Autumn"), stringsAsFactors = FALSE)
@@ -1233,13 +1435,61 @@ function(input, output, session){
       theme(text = element_text(size = 16))
     
   })
+
+  output$basic_model_controls <- renderUI({
+    data <- tryCatch(join_data(), error = function(e) NULL)
+    numeric_cols <- wq_rhs_numeric_columns(data)
+    flow_cols <- numeric_cols[stringr::str_detect(tolower(numeric_cols), "^q|flow")]
+    ecology_cols <- numeric_cols[stringr::str_detect(tolower(numeric_cols), "oe$|life|whpt|psi|ntaxa|aspt")]
+    if (length(flow_cols) == 0) {
+      flow_cols <- numeric_cols
+    }
+    if (length(ecology_cols) == 0) {
+      ecology_cols <- numeric_cols
+    }
+
+    tagList(
+      selectInput("basic_model_flow_var", "Flow variable", choices = flow_cols, selected = if (length(flow_cols) > 0) flow_cols[[1]] else character(0)),
+      selectInput("basic_model_ecology_var", "Ecology response variable", choices = ecology_cols, selected = if (length(ecology_cols) > 0) ecology_cols[[1]] else character(0))
+    )
+  })
+
+  basic_model_result <- reactiveVal(list(
+    status = "info",
+    messages = "Pair biology and flow data, choose variables, then run the optional basic model.",
+    plot = NULL,
+    summary = NULL
+  ))
+
+  observeEvent(input$run_basic_model, {
+    data <- tryCatch(join_data(), error = function(e) NULL)
+    result <- build_basic_flow_ecology_model(
+      data = data,
+      flow_var = input$basic_model_flow_var,
+      ecology_var = input$basic_model_ecology_var
+    )
+    basic_model_result(result)
+  })
+
+  output$basic_model_status <- renderUI({
+    result <- basic_model_result()
+    format_validation_message(list(status = result$status, messages = result$messages))
+  })
+
+  output$basic_model_summary <- DT::renderDataTable({
+    req(basic_model_result()$summary)
+    basic_model_result()$summary
+  }, rownames = FALSE, options = list(scrollX = TRUE, searching = FALSE, paging = FALSE))
+
+  output$basic_model_plot <- renderPlot({
+    req(basic_model_result()$plot)
+    basic_model_result()$plot
+  })
   
   # HEV ----
   ## Create HEV dataset ----
   
-  HEV_data <- reactive({
-    req(input$join_he)
-    
+  HEV_data <- eventReactive(input$join_he, {
     flowstats_1 <- flow_stats() %>% pluck(1)
     
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
@@ -1316,13 +1566,36 @@ function(input, output, session){
   
   ### render HEV plot with download option ----
   
+  output$hev_status_message <- renderUI({
+    if (isTRUE(input$HEV_show_status)) {
+      format_validation_message(list(
+        status = "warning",
+        messages = "Status class boundaries require confirmed boundary/class data. None are currently available in the dashboard data, so no boundary lines are drawn."
+      ))
+    }
+  })
+
   HEV_plot <- reactive({
-    plot_hev_dash(data = HEV_go() %>% filter(Year >= input$HEV_date_range[1] & Year <= input$HEV_date_range[2]),
-                                      date_col = "date", 
-                                      flow_stat = input$flow_metric_selector,
-                                      biol_metric = input$biol_metric_selector,
-                                      multiplot = FALSE,
-                                      clr_by = "Season")
+    hev_data <- HEV_go() %>% filter(Year >= input$HEV_date_range[1] & Year <= input$HEV_date_range[2])
+    biol_metrics <- if (isTRUE(input$HEV_show_all_metrics)) {
+      c("WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE")
+    } else {
+      input$biol_metric_selector
+    }
+    flow_metrics <- if (isTRUE(input$HEV_show_high_low)) {
+      selected <- input$flow_metric_selector
+      high_low <- if (stringr::str_detect(selected, "z$")) c("Q95z", "Q10z") else c("Q95", "Q10")
+      if (all(high_low %in% names(hev_data))) high_low else selected
+    } else {
+      input$flow_metric_selector
+    }
+
+    plot_hev_dash(data = hev_data,
+                  date_col = "date",
+                  flow_stat = flow_metrics,
+                  biol_metric = biol_metrics,
+                  multiplot = isTRUE(input$HEV_show_all_metrics),
+                  clr_by = "Season")
   })
 
   output$HEV_plot <- renderPlot({

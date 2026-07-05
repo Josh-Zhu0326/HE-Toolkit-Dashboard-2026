@@ -36,6 +36,8 @@ library(rnrfa)
 
 addResourcePath("prefix", "www")
 source(file.path("R", "site_mapping_helpers.R"))
+source(file.path("R", "wq_rhs_plot_helpers.R"))
+source(file.path("R", "dashboard_backlog_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
