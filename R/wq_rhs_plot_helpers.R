@@ -110,7 +110,7 @@ wq_rhs_default_group <- function(data) {
     return(character(0))
   }
 
-  preferred <- c("biol_site_id", "wq_site_id", "rhs_site_id", "rhs_survey_id")
+  preferred <- c("biol_site_id", "wq_site_id", "rhs_survey_id")
   existing <- intersect(preferred, names(data))
   if (length(existing) > 0) {
     existing[[1]]

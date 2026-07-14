@@ -30,6 +30,7 @@ This document freezes only system-level invariants that an individual module mus
 - `rhs_survey_id` is the Dashboard's sole canonical RHS identifier.
 - RHS is treated as site-level enrichment data.
 - `site_mapping`, RHS import, `joined_enriched`, model inputs, provenance, and downloads all use `rhs_survey_id`.
+- Internal data, mappings, model inputs, provenance, and downloads must retain only `rhs_survey_id`; neither `rhs_site_id` nor an external source field may persist as an internal alias.
 
 **Prohibited behaviour**
 
@@ -39,8 +40,16 @@ This document freezes only system-level invariants that an individual module mus
 
 **Invalid-input behaviour**
 
+- When only `rhs_survey_id` is supplied, schema validation passes the RHS identifier check.
 - When only `rhs_site_id` is supplied, schema validation must block RHS mapping/enrichment and instruct the user to provide `rhs_survey_id`.
+- When both `rhs_survey_id` and `rhs_site_id` are supplied, schema validation must block RHS mapping/enrichment and instruct the user to remove `rhs_site_id`, regardless of whether the values match.
 - Missing RHS data must not block the biology-and-flow core path.
+
+**External-interface boundary**
+
+- An external RHS interface field named `Survey.ID` may be explicitly renamed to `rhs_survey_id` by the RHS ingestion adapter.
+- The rename must occur once at the ingestion boundary. After conversion, `Survey.ID` must not persist as an internal field or alias.
+- This explicit source-to-canonical rename does not permit `rhs_site_id` to be accepted or converted.
 
 **Traceability**
 

@@ -20,12 +20,21 @@ read_dashboard_csv <- function(path, label) {
 }
 
 validate_supporting_mapping <- function(mapping) {
-  required <- c("biol_site_id", "flow_site_id", "flow_input", "wq_site_id", "rhs_site_id")
+  required <- c("biol_site_id", "flow_site_id", "flow_input", "wq_site_id", "rhs_survey_id")
   if (is.null(mapping) || nrow(mapping) == 0) {
     return(list(status = "error", messages = "Mapping data are missing."))
   }
 
   names_lower <- tolower(names(mapping))
+  if ("rhs_site_id" %in% names_lower) {
+    message <- if ("rhs_survey_id" %in% names_lower) {
+      "Mapping CSV must not contain both rhs_survey_id and rhs_site_id. Remove rhs_site_id."
+    } else {
+      "Mapping CSV contains unsupported rhs_site_id. Replace it with rhs_survey_id."
+    }
+    return(list(status = "error", messages = message))
+  }
+
   missing_columns <- setdiff(required, names_lower)
   messages <- character(0)
   status <- "success"
@@ -57,9 +66,9 @@ validate_supporting_mapping <- function(mapping) {
     messages <- c(messages, "Some rows have missing or TBC wq_site_id values. WQ mapping will be incomplete for those rows.")
   }
 
-  if (any(!nzchar(normalised$rhs_site_id) | is.na(normalised$rhs_site_id) | toupper(normalised$rhs_site_id) == "TBC")) {
+  if (any(!nzchar(normalised$rhs_survey_id) | is.na(normalised$rhs_survey_id) | toupper(normalised$rhs_survey_id) == "TBC")) {
     status <- "warning"
-    messages <- c(messages, "Some rows have missing or TBC rhs_site_id values. RHS import and mapping will skip those rows safely.")
+    messages <- c(messages, "Some rows have missing or TBC rhs_survey_id values. RHS import and mapping will skip those rows safely.")
   }
 
   flow_inputs <- toupper(normalised$flow_input)
