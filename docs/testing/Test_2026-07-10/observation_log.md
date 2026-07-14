@@ -399,7 +399,7 @@ Possible causes include:
 - **Severity:** Low
 - **Blocking:** No
 - **Existing in Previous Version:** To be confirmed
-- **Regression:** To be confirmed
+- **Regression:** Inconclusive
 
 ### Steps to Reproduce
 
@@ -419,6 +419,8 @@ The Flow Statistics results were generated and displayed successfully.
 
 However, the progress indicator repeatedly moved through the calculation stages and remained at `99%` after the results had already appeared.
 
+The issue does not occur consistently. In a later 20-site retest, the progress indicator reached 100%, while the 10-site retest produced valid Flow Statistics output but remained at 99%. This suggests that the issue may relate to progress-state reporting rather than the underlying calculation itself.
+
 ### Expected Behaviour
 
 Once the Flow Statistics results have been generated successfully, the progress indicator should complete, close, or clearly show that processing has finished.
@@ -429,11 +431,17 @@ The issue did not prevent the Flow Statistics output from being generated or dis
 
 However, leaving the progress indicator at `99%` may cause users to believe that the calculation is still running or has become stuck.
 
-### Initial Assessment
+### Updated Assessment
 
-This appears to be a non-blocking UI feedback issue rather than a processing failure.
+This appears to be a non-blocking and intermittent UI feedback issue rather than a processing failure.
 
-The calculation itself completed successfully, but the progress state was not finalised correctly after the output became available.
+The calculation itself can complete successfully, but the progress state is not always finalised consistently after the output becomes available.
+
+The issue was reproduced in the original smoke test and again in a later 10-site retest, where valid Flow Statistics output was generated while the progress indicator remained at `99%`.
+
+However, in a 20-site retest, the progress indicator reached `100%`.
+
+This suggests that the issue affects progress-state reporting intermittently rather than the underlying Flow Statistics calculation.
 
 ### Evidence
 
@@ -443,6 +451,7 @@ The calculation itself completed successfully, but the progress state was not fi
 
 ## OBS-008: RHS Metadata Validation and Import Use Inconsistent Identifier Requirements
 
+- **Status:** Upgraded to `BUG-002` following customer confirmation that `rhs_survey_id` should be sufficient for the RHS workflow.
 - **Related Test IDs:** FT-01D, FT-05A
 - **Branch:** main
 - **Commit ID:** 7cf242f
@@ -474,11 +483,18 @@ The current validation rule prevents the customer-provided metadata from being u
 
 This blocks direct testing of the intended customer data structure and may cause valid `rhs_survey_id` values to be excluded from the RHS workflow.
 
-### Initial Assessment
+### Updated Assessment
 
-The customer should confirm whether both RHS identifiers are required and represent distinct site-level and survey-level identifiers.
+The customer confirmed that `rhs_survey_id` should be sufficient for the RHS workflow because RHS is being treated as site-level data.
 
-If both are valid and required, the current metadata validation should be updated to allow them to coexist.
+The current Dashboard behaviour therefore conflicts with the confirmed requirement:
+
+- `rhs_site_id` is currently treated as required by metadata validation.
+- Metadata containing only `rhs_survey_id` is rejected.
+- Different values in `rhs_site_id` and `rhs_survey_id` are treated as a conflict.
+- The RHS workflow itself indicates that records are mapped through `rhs_survey_id`.
+
+This observation has therefore been upgraded to `BUG-002`.
 
 ### Evidence
 
