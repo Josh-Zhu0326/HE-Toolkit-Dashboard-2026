@@ -54,7 +54,7 @@ The warning indicates that ordinary UI content may have been placed directly ins
 
 ## OBS-002: Duplicate Site-Input Combinations Removed During Flow Import
 
-- **Related Test ID:** ST-03C
+- **Related Test IDs:** ST-03C, FT-03A
 - **Branch:** main
 - **Commit ID:** 7cf242f
 - **Type:** Data Validation Warning
@@ -78,19 +78,56 @@ The warning indicates that ordinary UI content may have been placed directly ins
 
 ### Actual Behaviour
 
-Flow data was imported successfully. During the import process, two duplicate site-input combinations were identified and automatically removed.
+Flow data were imported successfully.
+
+During the import process, two duplicate site-input combinations were identified and automatically removed.
+
+The same warning was observed during both the initial smoke test and the later customer HDE Flow import.
 
 ### Expected Behaviour
 
-Flow data should be imported successfully. Any duplicated site-input combinations should be handled without causing the import to fail.
+Flow data should be imported successfully.
+
+Any duplicated site-input combinations should be handled without causing the import to fail.
+
+Where duplicate combinations are removed automatically, the Dashboard should report the behaviour clearly.
 
 ### Impact
 
-The warning did not block the flow-data import. However, two duplicated mappings from the uploaded metadata were excluded from processing.
+The warning did not block the Flow data import.
 
-### Initial Assessment
+However, two duplicated site-input combinations were excluded from processing.
 
-This appears to be a non-blocking data-validation warning. The result should remain classified as `Pass with Warning`, provided that the uploaded metadata actually contains the duplicated site-input combinations reported by the system.
+The current evidence does not confirm whether the duplicated combinations originate from the uploaded metadata or are introduced during Flow import processing.
+
+### Updated Assessment
+
+This is a reproducible, non-blocking data-validation warning.
+
+The warning was observed during:
+
+- the initial smoke test (`ST-03C`);
+- the customer HDE Flow import (`FT-03A`).
+
+In both cases, Flow data were imported successfully and the duplicated site-input combinations were automatically removed.
+
+The affected tests should remain classified as `Pass with Warning`.
+
+Further investigation may be required to determine whether the duplicate combinations originate from the input metadata or are introduced during the Flow import process.
+
+### Functional Retest Result
+
+The same warning was reproduced during the customer HDE Flow import in `FT-03A`.
+
+The R Console reported:
+
+```text
+2 duplicate sites-inputs combination(s) identified and dropped
+```
+
+The HDE Flow import completed successfully and the imported Flow data were displayed with completeness statistics.
+
+This confirms that the warning is reproducible beyond the original smoke-test execution.
 
 ### Evidence
 
@@ -449,56 +486,79 @@ This suggests that the issue affects progress-state reporting intermittently rat
 
 ---
 
-## OBS-008: RHS Metadata Validation and Import Use Inconsistent Identifier Requirements
+## OBS-008: Legacy RHS Identifier Aliasing Conflicts with the Canonical Metadata Contract
 
-- **Status:** Upgraded to `BUG-002` following customer confirmation that `rhs_survey_id` should be sufficient for the RHS workflow.
-- **Related Test IDs:** FT-01D, FT-05A
+- **Status:** Upgraded to `BUG-002`
+- **Related Test IDs:** FT-01B, FT-01C, FT-01D, FT-05A
 - **Branch:** main
-- **Commit ID:** 7cf242f
-- **Type:** RHS Identifier Mapping / Validation Inconsistency
+- **Initial Commit ID:** 7cf242f
+- **Current Retest Baseline:** 08b595a
+- **Type:** RHS Identifier Validation / Canonicalisation
 - **Severity:** Medium
 - **Blocking:** Partially
 
 ### Actual Behaviour
 
-The customer-provided metadata contains both `rhs_site_id` and `rhs_survey_id` with different values in the same rows.
+The current Dashboard does not consistently enforce `rhs_survey_id` as the canonical RHS identifier.
 
-The metadata validation rejects this input and reports that the two fields contain conflicting values.
+Observed behaviour includes:
 
-However, the RHS results page explicitly states:
+- metadata containing only `rhs_survey_id` being reported as missing `rhs_site_id`;
+- metadata containing only `rhs_site_id` being accepted as an RHS mapping identifier;
+- `rhs_site_id` being made available internally as `rhs_survey_id`;
+- metadata containing both fields with different values being rejected as conflicting;
+- metadata containing both fields with identical values being accepted.
 
-`RHS records are mapped through rhs_survey_id; RHS site IDs are not used as survey IDs.`
+During testing, a temporary workaround duplicated `rhs_survey_id` values into `rhs_site_id`.
 
-When testing with only `rhs_site_id`, the RHS import completed partially and mapped 9 records to 9 biology sites.
+The workaround passed metadata validation and allowed 49 RHS entries to be displayed.
+
+However, this workaround uses a non-canonical RHS alias and does not represent the confirmed metadata contract.
 
 ### Expected Behaviour
 
-The metadata validation rules and the RHS import workflow should use a consistent RHS identifier model.
+The Dashboard metadata contract should use `rhs_survey_id` as the canonical RHS identifier.
 
-If `rhs_site_id` and `rhs_survey_id` represent different identifier levels, the Dashboard should allow both fields to be provided and use the correct one for RHS mapping.
+The expected behaviour is:
+
+- metadata containing only `rhs_survey_id` is accepted;
+- metadata containing `rhs_site_id` is rejected;
+- metadata containing both RHS identifier columns is rejected, whether the values are identical or different;
+- the user is clearly instructed to remove `rhs_site_id` and retain `rhs_survey_id`;
+- `rhs_site_id` is not silently copied or aliased into `rhs_survey_id`;
+- normalised internal and output data do not retain or generate `rhs_site_id`.
+
+External RHS source fields may be explicitly mapped or renamed to `rhs_survey_id` at the import boundary where required.
 
 ### Impact
 
-The current validation rule prevents the customer-provided metadata from being used with both RHS identifiers present.
+The current behaviour may:
 
-This blocks direct testing of the intended customer data structure and may cause valid `rhs_survey_id` values to be excluded from the RHS workflow.
+- reject valid canonical metadata;
+- accept non-canonical metadata;
+- force users to modify valid source data to satisfy an obsolete field requirement;
+- hide identifier-contract problems through silent aliasing;
+- preserve obsolete schema behaviour in test fixtures and regression tests.
 
 ### Updated Assessment
 
-The customer confirmed that `rhs_survey_id` should be sufficient for the RHS workflow because RHS is being treated as site-level data.
+The customer confirmed that `rhs_survey_id` should be sufficient for the RHS workflow.
 
-The current Dashboard behaviour therefore conflicts with the confirmed requirement:
+The RHS metadata contract has therefore been clarified: `rhs_survey_id` is the supported canonical identifier, while `rhs_site_id` should not be accepted or generated by the Dashboard metadata workflow.
 
-- `rhs_site_id` is currently treated as required by metadata validation.
-- Metadata containing only `rhs_survey_id` is rejected.
-- Different values in `rhs_site_id` and `rhs_survey_id` are treated as a conflict.
-- The RHS workflow itself indicates that records are mapped through `rhs_survey_id`.
+The current behaviour directly conflicts with this confirmed contract.
 
 This observation has therefore been upgraded to `BUG-002`.
 
 ### Evidence
 
 - `FT-05A_rhs_identifier_mapping_inconsistency.png`
+- FT-01B
+- FT-01C
+- FT-01D
+- FT-05A
+
+The 49-entry RHS import achieved through the temporary duplicated-ID workaround is retained only as evidence of the current compatibility behaviour and should not be treated as a valid expected workflow.
 
 ---
 
@@ -547,40 +607,52 @@ Possible improvements could include optional label display, hover tooltips, sele
 
 ---
 
-## OBS-010: WQ Import Took Approximately 20 Minutes for 49 Sites
+## OBS-010: WQ Import Performance Baseline for 49 Sites
 
 - **Related Test ID:** FT-04A
 - **Branch:** main
-- **Commit ID:** 7cf242f
-- **Type:** Performance / Usability Observation
-- **Severity:** To be confirmed
+- **Initial Commit ID:** 7cf242f
+- **Current Retest Baseline:** 08b595a
+- **Type:** Performance Baseline
+- **Severity:** N/A
 - **Blocking:** No
+- **Status:** Customer-confirmed expected behaviour
 
 ### Actual Behaviour
 
-WQ data were imported successfully for the 49 customer-provided WQ site IDs.
+The WQ import for 49 customer sites completed successfully and retrieved 47,290 unique records.
 
-The import retrieved data site by site and took approximately 20 minutes to complete.
+The complete import took approximately 20 minutes.
 
-### Expected Behaviour
+### Customer Confirmation
 
-The import should complete within a time that is acceptable for the expected customer workload.
+The customer confirmed that approximately 20 minutes for 49 WQ sites is reasonable under the current WQ Data Explorer behaviour.
 
-### Impact
+The customer also indicated that:
 
-The import completed successfully and did not block the workflow.
+- fewer than 10 WQ sites is expected for most typical Dashboard users;
+- very few Dashboard users are expected to process more than 20 WQ sites;
+- 49 sites represents a realistic larger modelling-study workload.
 
-However, the acceptability of a 20-minute import time cannot currently be determined because no performance acceptance criterion has been defined.
+### Assessment
 
-### Initial Assessment
+The observed 20-minute duration is treated as a customer-confirmed large-batch performance baseline rather than a confirmed performance defect.
 
-Customer clarification is required to confirm:
+The result should therefore not be classified as a performance bug.
 
-- whether importing approximately 49 WQ sites at once is representative of normal use;
-- whether this is considered a small, typical, or large batch;
-- what import duration would be acceptable;
-- whether additional progress feedback or performance optimisation is expected for long-running imports.
+Future performance testing should prioritise fixed site subsets representing:
+
+- 5 sites;
+- 10 sites;
+- 20 sites;
+- 49 sites.
+
+These datasets should be used to compare typical and high-load Dashboard scenarios.
 
 ### Evidence
 
-- No screenshot required unless a timing screenshot or log is available.
+The timing was recorded during FT-04A.
+
+No additional screenshot was required because the import completed successfully and the customer subsequently confirmed the observed duration as reasonable for the tested workload.
+
+---
