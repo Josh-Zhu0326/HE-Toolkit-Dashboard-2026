@@ -18,23 +18,21 @@ parse_site_metadata <- function(text) {
   }
 
   warnings <- character(0)
-  if ("rhs_site_id" %in% names(data)) {
-    if ("rhs_survey_id" %in% names(data)) {
-      rhs_site_values <- trimws(as.character(data$rhs_site_id))
-      rhs_survey_values <- trimws(as.character(data$rhs_survey_id))
-      both_known <- nzchar(rhs_site_values) & nzchar(rhs_survey_values) &
-        toupper(rhs_site_values) != "TBC" & toupper(rhs_survey_values) != "TBC"
-      if (any(both_known & rhs_site_values != rhs_survey_values)) {
-        return(list(
-          data = NULL,
-          error = "rhs_site_id and rhs_survey_id contain conflicting values. Use one confirmed RHS identifier per row.",
-          warnings = character(0)
-        ))
-      }
-    } else {
-      data$rhs_survey_id <- data$rhs_site_id
-      warnings <- "The rhs_site_id column was also made available internally as rhs_survey_id for existing RHS import code."
-    }
+  has_rhs_site_id <- "rhs_site_id" %in% names(data)
+  has_rhs_survey_id <- "rhs_survey_id" %in% names(data)
+  if (has_rhs_site_id && has_rhs_survey_id) {
+    return(list(
+      data = NULL,
+      error = "Site metadata must not contain both rhs_survey_id and rhs_site_id. Remove rhs_site_id and use rhs_survey_id only.",
+      warnings = character(0)
+    ))
+  }
+  if (has_rhs_site_id) {
+    return(list(
+      data = NULL,
+      error = "rhs_site_id is not supported. Replace it with rhs_survey_id.",
+      warnings = character(0)
+    ))
   }
 
   biol_ids <- if ("biol_site_id" %in% names(data)) {
@@ -71,7 +69,16 @@ read_site_metadata_csv <- function(path) {
 }
 
 validate_dashboard_site_metadata <- function(metadata) {
-  id_columns <- c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_site_id", "rhs_survey_id")
+  has_rhs_site_id <- "rhs_site_id" %in% names(metadata)
+  has_rhs_survey_id <- "rhs_survey_id" %in% names(metadata)
+  if (has_rhs_site_id && has_rhs_survey_id) {
+    return("Site metadata must not contain both rhs_survey_id and rhs_site_id. Remove rhs_site_id and use rhs_survey_id only.")
+  }
+  if (has_rhs_site_id) {
+    return("rhs_site_id is not supported. Replace it with rhs_survey_id.")
+  }
+
+  id_columns <- c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id")
   if (!any(id_columns %in% names(metadata))) {
     return(paste0("Include at least one supported site ID column: ", paste(id_columns, collapse = ", "), "."))
   }
@@ -117,17 +124,27 @@ map_wq_records_to_biology <- function(wq_data, metadata) {
     dplyr::relocate(biol_site_id, .before = wq_site_id)
 }
 
-normalise_rhs_records <- function(rhs_data) {
-  id_columns <- intersect(c("rhs_survey_id", "rhs_site_id", "Survey.ID", "SURVEY_ID"), names(rhs_data))
-  if (length(id_columns) == 0) {
-    stop("RHS data does not contain a survey identifier column.")
+normalise_rhs_records <- function(rhs_data, allow_external_survey_id = FALSE) {
+  if ("rhs_site_id" %in% names(rhs_data)) {
+    stop("rhs_site_id is not supported. Use rhs_survey_id.")
   }
 
-  names(rhs_data)[names(rhs_data) == id_columns[[1]]] <- "rhs_survey_id"
-  rhs_data$rhs_survey_id <- as.character(rhs_data$rhs_survey_id)
-  if (!"rhs_site_id" %in% names(rhs_data)) {
-    rhs_data$rhs_site_id <- rhs_data$rhs_survey_id
+  has_rhs_survey_id <- "rhs_survey_id" %in% names(rhs_data)
+  has_external_survey_id <- "Survey.ID" %in% names(rhs_data)
+  if (has_rhs_survey_id && has_external_survey_id) {
+    stop("RHS data must not contain both rhs_survey_id and Survey.ID.")
   }
+  if (has_external_survey_id && !allow_external_survey_id) {
+    stop("Survey.ID is accepted only from the external RHS interface. Local RHS data must use rhs_survey_id.")
+  }
+  if (!has_rhs_survey_id && !has_external_survey_id) {
+    stop("RHS data does not contain the required rhs_survey_id column.")
+  }
+  if (has_external_survey_id) {
+    names(rhs_data)[names(rhs_data) == "Survey.ID"] <- "rhs_survey_id"
+  }
+
+  rhs_data$rhs_survey_id <- as.character(rhs_data$rhs_survey_id)
   rhs_data
 }
 
@@ -162,5 +179,5 @@ import_rhs_in_temp_directory <- function(surveys, importer = hetoolkit::import_r
     save_dir = import_dir
   )
 
-  normalise_rhs_records(rhs_data)
+  normalise_rhs_records(rhs_data, allow_external_survey_id = TRUE)
 }

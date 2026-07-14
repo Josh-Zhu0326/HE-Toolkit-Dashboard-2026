@@ -34,14 +34,14 @@ Steps:
 
 Expected result:
 - Mapping CSV is accepted.
-- Required columns are recognised: `biol_site_id`, `flow_site_id`, `flow_input`, `wq_site_id`, `rhs_site_id`.
-- A warning may appear for `rhs_site_id = TBC`.
+- Required columns are recognised: `biol_site_id`, `flow_site_id`, `flow_input`, `wq_site_id`, `rhs_survey_id`.
+- A warning may appear for `rhs_survey_id = TBC`.
 - The app does not crash.
 
 ## TC-003 Mapping CSV Missing Required Columns
 
 Steps:
-1. Create or upload a CSV missing `wq_site_id` or `rhs_site_id`.
+1. Create or upload a CSV missing `wq_site_id` or `rhs_survey_id`.
 2. Upload it in the Mapping sidebar.
 
 Expected result:
