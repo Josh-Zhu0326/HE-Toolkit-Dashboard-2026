@@ -2,7 +2,7 @@ source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
 
 mapping_text <- paste(
-  "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_site_id",
+  "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_survey_id",
   "291,27090,NRFA,SW-A4070115,TBC",
   "292,27091,NRFA,SW-A4070116,RHS001",
   sep = "\n"
@@ -18,7 +18,7 @@ wq_data <- data.frame(
 )
 
 rhs_data <- data.frame(
-  rhs_site_id = c("RHS001", "RHS001"),
+  rhs_survey_id = c("RHS001", "RHS001"),
   habitat_score = c(55, 58),
   channel_type = c("natural", "natural"),
   stringsAsFactors = FALSE
@@ -61,7 +61,8 @@ stopifnot(grepl("numeric variable", wq_missing_numeric$message))
 mapped_rhs <- map_rhs_records_to_biology(rhs_data, mapping$data)
 stopifnot(nrow(mapped_rhs) == 2)
 stopifnot(all(mapped_rhs$biol_site_id == "292"))
-stopifnot("rhs_site_id" %in% names(mapped_rhs))
+stopifnot("rhs_survey_id" %in% names(mapped_rhs))
+stopifnot(!"rhs_site_id" %in% names(mapped_rhs))
 
 rhs_numeric <- build_rhs_plot(mapped_rhs, "Numeric variable by biological site ID", "habitat_score", "biol_site_id")
 stopifnot(inherits(rhs_numeric$plot, "ggplot"))
@@ -72,16 +73,16 @@ stopifnot(inherits(rhs_category$plot, "ggplot"))
 rhs_count <- build_rhs_plot(mapped_rhs, "Record count by biological site ID", NULL, "biol_site_id")
 stopifnot(inherits(rhs_count$plot, "ggplot"))
 
-rhs_tbc_only_mapping <- parse_site_metadata("biol_site_id,rhs_site_id\n291,TBC")
+rhs_tbc_only_mapping <- parse_site_metadata("biol_site_id,rhs_survey_id\n291,TBC")
 stopifnot(is.null(rhs_tbc_only_mapping$error))
 rhs_tbc_mapped <- map_rhs_records_to_biology(rhs_data, rhs_tbc_only_mapping$data)
 stopifnot(nrow(rhs_tbc_mapped) == 2)
-rhs_tbc_plot <- build_rhs_plot(rhs_tbc_mapped, "Record count by biological site ID", NULL, "rhs_site_id")
+rhs_tbc_plot <- build_rhs_plot(rhs_tbc_mapped, "Record count by biological site ID", NULL, "rhs_survey_id")
 stopifnot(inherits(rhs_tbc_plot$plot, "ggplot"))
 
 rhs_without_numeric <- data.frame(
   biol_site_id = "292",
-  rhs_site_id = "RHS001",
+  rhs_survey_id = "RHS001",
   channel_type = "natural",
   stringsAsFactors = FALSE
 )

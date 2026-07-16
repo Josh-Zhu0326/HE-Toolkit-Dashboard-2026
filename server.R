@@ -103,7 +103,7 @@ function(input, output, session){
     flow_site_id = "27090",
     flow_input = "NRFA",
     wq_site_id = "SW-A4070115",
-    rhs_site_id = "6145",
+    rhs_survey_id = "6145",
     stringsAsFactors = FALSE
   )
 
@@ -221,12 +221,12 @@ function(input, output, session){
     messages <- "Your RHS file was uploaded successfully."
     status <- "success"
 
-    id_cols <- c("biol_site_id", "rhs_survey_id", "rhs_site_id", "site_id", "survey_id")
+    id_cols <- "rhs_survey_id"
     if (!any(id_cols %in% names_lower)) {
       status <- "warning"
       messages <- c(
         messages,
-        "Your RHS file is missing a survey identifier column. Please include rhs_survey_id where possible, or one of: biol_site_id, rhs_site_id, site_id, survey_id."
+        "Your RHS file is missing the required rhs_survey_id column."
       )
     }
 
@@ -339,7 +339,7 @@ function(input, output, session){
     updateTextAreaInput(session, "meta_paste", value = readr::format_csv(parsed$data))
     messages <- c(
       paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
-      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
+      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
       "The compatible dataset import buttons below now use these site IDs.",
       supporting_validation$messages,
       parsed$warnings
@@ -584,7 +584,7 @@ function(input, output, session){
       }
     }
 
-    if (("biol_site_id" %in% names(uploaded)) && any(c("rhs_site_id", "rhs_survey_id") %in% names(uploaded))) {
+    if (all(c("biol_site_id", "rhs_survey_id") %in% names(uploaded))) {
       return(uploaded)
     }
 

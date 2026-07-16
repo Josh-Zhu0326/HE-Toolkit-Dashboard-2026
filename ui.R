@@ -371,7 +371,7 @@ page_navbar(
                 ),
                 div(
                   class = "hint-text",
-                  "Required mapping columns: biol_site_id, flow_site_id, flow_input, wq_site_id, rhs_site_id. Use TBC for unconfirmed WQ/RHS mappings."
+                  "Required mapping columns: biol_site_id, flow_site_id, flow_input, wq_site_id, rhs_survey_id. Use TBC for unconfirmed WQ/RHS mappings."
                 ),
                 uiOutput("site_metadata_upload_status"),
                 div(class = "download-row",
@@ -475,7 +475,7 @@ page_navbar(
                           ),
                           card(class = "dashboard-card",
                             card_header("RHS plots"),
-                            div(class = "hint-text", "Plots use mapped RHS data only. RHS data are mapped through rhs_survey_id/rhs_site_id when a site metadata mapping is available."),
+                            div(class = "hint-text", "Plots use mapped RHS data only. RHS data are mapped through rhs_survey_id when a site metadata mapping is available."),
                             selectInput(
                               "rhs_plot_type",
                               "RHS plot type",
@@ -757,7 +757,7 @@ page_navbar(
           card_header("Upload RHS CSV"),
           p("River Habitat Survey data usually contains survey identifiers plus habitat metrics or descriptors such as HMS, HQA, channel, bank, substrate, vegetation, and flow-type fields."),
           div(class = "hint-text",
-              "Expected columns are flexible for this first demo. rhs_site_id is the expected local identifier column. Other helpful identifier columns include: biol_site_id, site_id, survey_id."),
+              "Local RHS CSV files must use rhs_survey_id as the identifier column."),
           fileInput("rhs_csv", "Choose RHS CSV file", accept = c(".csv", "text/csv")),
           h5("RHS validation status"),
           uiOutput("rhs_validation_status"),
