@@ -896,3 +896,26 @@ link_web <- tags$a(
   href = "https://apem-ltd.github.io/hetoolkit/index.html",
   target = "_blank"
 )
+
+# 5-stage ----
+wf_progress_bar <- function(active_step) {
+  steps <- c("Import Data", "RICT / O:E", "Flow Statistics", "Join & Analyse", "HEV Plot")
+  step_els <- lapply(seq_along(steps), function(i) {
+    cls  <- if (i < active_step) "wf-step done" else if (i == active_step) "wf-step active" else "wf-step"
+    icon <- if (i < active_step) "\u2713" else as.character(i)
+    div(class = cls,
+        div(class = "wf-circle", icon),
+        div(class = "wf-label", steps[i])
+    )
+  })
+  div(class = "wf-bar", step_els)
+}
+
+# Checkpoint ----
+cp_card <- function(status, message) {
+  icon <- switch(status, pass = "\u2713", warn = "!", fail = "\u00D7")
+  div(class = paste("cp-card", status),
+      div(class = "cp-icon", icon),
+      div(message)
+  )
+}

@@ -4,6 +4,7 @@
 tagList(
   add_busy_spinner(spin = "fading-circle", color="#00a33b", position="bottom-left"),
 page_navbar(
+  id = "main_nav",
   theme = bs_theme(navbar_bg = "#008938", bg = "#f6f8f7", fg = "#17231d", version = 5, bootswatch = "minty"),
   title = "HE Toolkit Dashboard",
   tags$head(
@@ -190,8 +191,43 @@ page_navbar(
         color: #ff9933;
         font-weight: bold;
       }
-      "))
-  ),
+      
+      .wf-bar {
+        display:flex; align-items:center; gap:0;
+        margin:0 0 1.5rem 0; padding:1rem 1.25rem;
+        background:#f6f8f7; border:1px solid #dfe8e2; border-radius:8px;
+      }
+      .wf-step { display:flex; align-items:center; flex:1; position:relative; }
+      .wf-step:not(:last-child)::after {
+        content:''; flex:1; height:2px; background:#dfe8e2; margin:0 0.5rem;
+      }
+      .wf-step.done:not(:last-child)::after { background:#008938; }
+      .wf-circle {
+        width:28px; height:28px; border-radius:50%;
+        border:2px solid #dfe8e2; background:white;
+        display:flex; align-items:center; justify-content:center;
+        font-size:0.8rem; font-weight:600; color:#5c6770; flex-shrink:0;
+      }
+      .wf-step.done  .wf-circle { background:#008938; border-color:#008938; color:white; }
+      .wf-step.active .wf-circle { background:white;  border-color:#008938; color:#008938; }
+      .wf-label { font-size:0.78rem; color:#5c6770; margin-left:0.4rem; white-space:nowrap; }
+      .wf-step.active .wf-label { color:#008938; font-weight:600; }
+      .wf-step.done   .wf-label { color:#17231d; }
+
+      .cp-card {
+        display:flex; align-items:flex-start; gap:0.6rem;
+        padding:0.55rem 0.8rem; border-radius:6px;
+        margin-bottom:0.4rem; font-size:0.88rem;
+      }
+      .cp-card.pass { background:#eef8f2; border-left:3px solid #008938; }
+      .cp-card.warn { background:#fff8ee; border-left:3px solid #ff9933; }
+      .cp-card.fail { background:#fff1f1; border-left:3px solid #d9534f; }
+      .cp-icon { font-weight:bold; flex-shrink:0; margin-top:1px; }
+      .cp-card.pass .cp-icon { color:#008938; }
+      .cp-card.warn .cp-icon { color:#b87000; }
+      .cp-card.fail .cp-icon { color:#d9534f; }
+            "))
+        ),
   
   # INTRO PAGE ----
     nav_panel(
@@ -200,6 +236,88 @@ page_navbar(
         class = "introduction-page",
         div(
           class = "home-summary",
+          
+      # cards ----
+          h2(class = "section-title", style = "font-size:1.5rem; margin-bottom:0.3rem;",
+             "What would you like to do?"),
+          p(class = "page-lead", style = "margin-bottom:1.2rem;",
+            "Select a task to jump to the relevant page."),
+          div(
+            class = "workflow-note",
+            tags$strong("Note: "),
+            "HEV Plot automatically chains Flow Statistics, O:E, and data joining steps. ",
+            "WQ and RHS are supporting evidence only — not used in O:E calculations."
+          ),
+          
+          layout_columns(
+            col_widths = c(4, 4, 4),
+            card(
+              class = "dashboard-card",
+              card_header(tags$strong("HEV Plot")),
+              p(class = "hint-text", "Full hydroecological evaluation — flow statistics, O:E ratios, and HEV visualisation."),
+              p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
+                "Needs: biology + environmental + flow data"),
+              div(style = "margin-top:auto;",
+                  actionButton("goto_hev", "Go to HEV Plots \u2192",
+                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+            ),
+            card(
+              class = "dashboard-card",
+              card_header(tags$strong("O:E Ratio")),
+              p(class = "hint-text", "Calculate observed vs expected ecological scores using RICT predictions."),
+              p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
+                "Needs: biology + environmental data only"),
+              div(style = "margin-top:auto;",
+                  actionButton("goto_oe", "Go to Process Biology \u2192",
+                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+            ),
+            card(
+              class = "dashboard-card",
+              card_header(tags$strong("Flow Statistics")),
+              p(class = "hint-text", "Impute missing flow data and calculate windowed flow statistics."),
+              p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
+                "Needs: flow data"),
+              div(style = "margin-top:auto;",
+                  actionButton("goto_flow", "Go to Process Flow \u2192",
+                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+            )
+          ),
+          layout_columns(
+            col_widths = c(4, 4, 4),
+            card(
+              class = "dashboard-card",
+              card_header(tags$strong("Import Data")),
+              p(class = "hint-text", "Import biology, environmental, flow, WQ, and RHS datasets."),
+              p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
+                "Start here before running any workflow"),
+              div(style = "margin-top:auto;",
+                  actionButton("goto_import", "Go to Data Import \u2192",
+                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+            ),
+            card(
+              class = "dashboard-card",
+              card_header(tags$strong("WQ / RHS Review")),
+              p(class = "hint-text", "Review mapped Water Quality and River Habitat Survey supporting data."),
+              p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
+                "Supporting evidence — not part of O:E"),
+              div(style = "margin-top:auto;",
+                  actionButton("goto_wqrhs", "Go to WQ/RHS Data \u2192",
+                               style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
+            ),
+            card(
+              class = "dashboard-card",
+              card_header(tags$strong("Analysis")),
+              p(class = "hint-text", "Pair biology and flow, explore correlations and flow-ecology models."),
+              p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
+                "Exploratory — does not alter O:E"),
+              div(style = "margin-top:auto;",
+                  actionButton("goto_analysis", "Go to Analysis \u2192",
+                               style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
+            )
+          ),
+          
+          tags$hr(style = "margin: 2rem 0;"
+                  ),
           card(
             class = "dashboard-card",
             card_header("Dashboard review guide"),
@@ -411,6 +529,10 @@ page_navbar(
               
   ## Sidebar ----  
            sidebar = sidebar("", position = "right",
+               div(class = "sidebar-section",
+                   h5("Readiness check"),
+                   uiOutput("cp_biology")
+                   ),
               div(class = "sidebar-section action-stack",
                 h5("Biology processing"),
                 actionButton("run_rict", "Run RICT predictions", class = "client-action-button", icon = shiny::icon("calculator", verify_fa = FALSE)),
@@ -421,6 +543,7 @@ page_navbar(
   ## Main body ----  
    nav_panel("RICT Predictions",
              div(class = "dashboard-page",
+                 wf_progress_bar(active_step = 2),
                card(class = "dashboard-card",
                  card_header("RICT predictions"),
                  p(class = "hint-text", "Predicted biological index values used by the existing O:E workflow."),
@@ -446,6 +569,10 @@ page_navbar(
   ## Sidebar ----  
             
             sidebar = sidebar("", width = 300, position = "right",
+              div(class = "sidebar-section",
+                  h5("Readiness check"),
+                  uiOutput("cp_flow")
+              ),
               div(class = "sidebar-section control-stack",
                 h5("Donor flow setup"),
                 textAreaInput("donor_mapping_paste", "Paste donor mapping here"),
@@ -475,6 +602,7 @@ page_navbar(
             
             nav_panel("Imputed Flow Data",
                       div(class = "dashboard-page",
+                          wf_progress_bar(active_step = 3),
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imputed flow data"),
                           radioButtons(inputId = "imp_flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
@@ -484,6 +612,7 @@ page_navbar(
             ),
             nav_panel("Flow Statistics",
                       div(class = "dashboard-page",
+                          wf_progress_bar(active_step = 3),
                         card(class = "dashboard-card",
                           card_header("Calculated flow statistics"),
                           radioButtons(inputId = "flow_stats_display", "Display:", choices = c("Time-varying", "Long-term")),
@@ -509,6 +638,7 @@ page_navbar(
           ),
           nav_panel("Joined Data",
                     div(class = "dashboard-page",
+                        wf_progress_bar(active_step = 4),
                       card(class = "dashboard-card",
                         card_header("Paired biology-flow data"),
                         dataTableOutput("join_he_table")
@@ -574,11 +704,16 @@ page_navbar(
               checkboxInput("HEV_show_high_low", "Overlay low-flow and high-flow statistics", value = FALSE),
               checkboxInput("HEV_show_status", "Show available status class boundaries", value = FALSE)
             ),
+            div(class = "sidebar-section",
+                h5("Readiness check"),
+                uiOutput("cp_hev")
+            ),
             div(class = "sidebar-section action-stack",
               actionButton("renderHEV", "Create HEV plot", class = "client-action-button", icon = shiny::icon("chart-simple", verify_fa = FALSE))
             )
           ),
           div(class = "dashboard-page",
+              wf_progress_bar(active_step = 5),
             h3(class = "section-title", "Hydro-ecological variation plot"),
             p(class = "page-lead", "Review HEV plots for selected biological and flow metrics. Existing HEV download behaviour is preserved."),
             card(class = "dashboard-card",
