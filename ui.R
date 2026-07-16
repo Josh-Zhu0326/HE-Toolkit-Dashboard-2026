@@ -249,72 +249,72 @@ page_navbar(
             "WQ and RHS are supporting evidence only — not used in O:E calculations."
           ),
           
-          layout_columns(
-            col_widths = c(4, 4, 4),
-            card(
-              class = "dashboard-card",
-              card_header(tags$strong("HEV Plot")),
-              p(class = "hint-text", "Full hydroecological evaluation — flow statistics, O:E ratios, and HEV visualisation."),
-              p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
-                "Needs: biology + environmental + flow data"),
-              div(style = "margin-top:auto;",
-                  actionButton("goto_hev", "Go to HEV Plots \u2192",
-                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-            ),
-            card(
-              class = "dashboard-card",
-              card_header(tags$strong("O:E Ratio")),
-              p(class = "hint-text", "Calculate observed vs expected ecological scores using RICT predictions."),
-              p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
-                "Needs: biology + environmental data only"),
-              div(style = "margin-top:auto;",
-                  actionButton("goto_oe", "Go to Process Biology \u2192",
-                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-            ),
-            card(
-              class = "dashboard-card",
-              card_header(tags$strong("Flow Statistics")),
-              p(class = "hint-text", "Impute missing flow data and calculate windowed flow statistics."),
-              p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
-                "Needs: flow data"),
-              div(style = "margin-top:auto;",
-                  actionButton("goto_flow", "Go to Process Flow \u2192",
-                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-            )
-          ),
-          layout_columns(
-            col_widths = c(4, 4, 4),
-            card(
-              class = "dashboard-card",
-              card_header(tags$strong("Import Data")),
-              p(class = "hint-text", "Import biology, environmental, flow, WQ, and RHS datasets."),
-              p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
-                "Start here before running any workflow"),
-              div(style = "margin-top:auto;",
-                  actionButton("goto_import", "Go to Data Import \u2192",
-                               style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-            ),
-            card(
-              class = "dashboard-card",
-              card_header(tags$strong("WQ / RHS Review")),
-              p(class = "hint-text", "Review mapped Water Quality and River Habitat Survey supporting data."),
-              p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
-                "Supporting evidence — not part of O:E"),
-              div(style = "margin-top:auto;",
-                  actionButton("goto_wqrhs", "Go to WQ/RHS Data \u2192",
-                               style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
-            ),
-            card(
-              class = "dashboard-card",
-              card_header(tags$strong("Analysis")),
-              p(class = "hint-text", "Pair biology and flow, explore correlations and flow-ecology models."),
-              p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
-                "Exploratory — does not alter O:E"),
-              div(style = "margin-top:auto;",
-                  actionButton("goto_analysis", "Go to Analysis \u2192",
-                               style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
-            )
-          ),
+      layout_columns(
+        col_widths = c(4, 4, 4),
+        card(
+          class = "dashboard-card",
+          card_header(tags$strong("Import Data")),
+          p(class = "hint-text", "Import biology, environmental, flow, WQ, and RHS datasets."),
+          p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
+            "Start here before running any workflow"),
+          div(style = "margin-top:auto;",
+              actionButton("goto_import", "Go to Data Import \u2192",
+                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+        ),
+        card(
+          class = "dashboard-card",
+          card_header(tags$strong("O:E Ratio")),
+          p(class = "hint-text", "Calculate observed vs expected ecological scores using RICT predictions."),
+          p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
+            "Needs: biology + environmental data only"),
+          div(style = "margin-top:auto;",
+              actionButton("goto_oe", "Go to Process Biology \u2192",
+                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+        ),
+        card(
+          class = "dashboard-card",
+          card_header(tags$strong("Flow Statistics")),
+          p(class = "hint-text", "Impute missing flow data and calculate windowed flow statistics."),
+          p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
+            "Needs: flow data"),
+          div(style = "margin-top:auto;",
+              actionButton("goto_flow", "Go to Process Flow \u2192",
+                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+        )
+      ),
+      layout_columns(
+        col_widths = c(4, 4, 4),
+        card(
+          class = "dashboard-card",
+          card_header(tags$strong("Analysis")),
+          p(class = "hint-text", "Pair biology and flow, explore correlations and flow-ecology models."),
+          p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
+            "Exploratory — does not alter O:E"),
+          div(style = "margin-top:auto;",
+              actionButton("goto_analysis", "Go to Analysis \u2192",
+                           style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
+        ),
+        card(
+          class = "dashboard-card",
+          card_header(tags$strong("HEV Plot")),
+          p(class = "hint-text", "Full hydroecological evaluation — flow statistics, O:E ratios, and HEV visualisation."),
+          p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
+            "Needs: biology + environmental + flow data"),
+          div(style = "margin-top:auto;",
+              actionButton("goto_hev", "Go to HEV Plots \u2192",
+                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
+        ),
+        card(
+          class = "dashboard-card",
+          card_header(tags$strong("WQ / RHS Review")),
+          p(class = "hint-text", "Review mapped Water Quality and River Habitat Survey supporting data."),
+          p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
+            "Supporting evidence — not part of O:E"),
+          div(style = "margin-top:auto;",
+              actionButton("goto_wqrhs", "Go to WQ/RHS Data \u2192",
+                           style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
+        )
+      ),
           
           tags$hr(style = "margin: 2rem 0;"
                   ),
