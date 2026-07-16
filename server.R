@@ -22,6 +22,81 @@ function(input, output, session){
       )
     )
   })
+  
+  #jump to cards
+  observeEvent(input$goto_hev,     {
+    updateNavbarPage(session, "main_nav", selected = "HEV Plots") 
+  })
+  
+  observeEvent(input$goto_oe,      {
+    updateNavbarPage(session, "main_nav", selected = "Process Biology")
+  })
+  
+  observeEvent(input$goto_flow,    {
+    updateNavbarPage(session, "main_nav", selected = "Process Flow")
+  })
+  
+  observeEvent(input$goto_import,  {
+    updateNavbarPage(session, "main_nav", selected = "Data Import")
+  })
+  
+  observeEvent(input$goto_wqrhs,   {
+    updateNavbarPage(session, "main_nav", selected = "Data Import")
+  })
+  
+  observeEvent(input$goto_analysis,{
+    updateNavbarPage(session, "main_nav", selected = "Analysis")
+  })
+  
+  #workflow state ----
+  wf <- reactiveValues(
+    biol_loaded     = FALSE,
+    env_loaded      = FALSE,
+    flow_loaded     = FALSE,
+    rict_done       = FALSE,
+    oe_done         = FALSE,
+    flow_stats_done = FALSE,
+    join_done       = FALSE
+  )
+  observeEvent(input$import_inv,      { wf$biol_loaded     <- TRUE })
+  observeEvent(input$import_env,      { wf$env_loaded      <- TRUE })
+  observeEvent(input$import_flow,     { wf$flow_loaded     <- TRUE })
+  observeEvent(input$run_rict,        { wf$rict_done       <- TRUE })
+  observeEvent(input$calc_OE,         { wf$oe_done         <- TRUE })
+  observeEvent(input$calc_flow_stats, { wf$flow_stats_done <- TRUE })
+  observeEvent(input$join_he,         { wf$join_done       <- TRUE })
+  
+  output$cp_biology <- renderUI({
+    tagList(
+      cp_card(if (wf$biol_loaded) "pass" else "fail",
+              if (wf$biol_loaded) "Biology data loaded" else "[Blocked] Biology data not imported"),
+      cp_card(if (wf$env_loaded)  "pass" else "fail",
+              if (wf$env_loaded)  "Environmental data loaded" else "[Blocked] Environmental data not imported"),
+      if (wf$rict_done) cp_card("pass", "RICT predictions complete"),
+      if (wf$oe_done)   cp_card("pass", "O:E ratios calculated")
+    )
+  })
+  
+  output$cp_flow <- renderUI({
+    tagList(
+      cp_card(if (wf$flow_loaded)     "pass" else "fail",
+              if (wf$flow_loaded)     "Flow data loaded" else "[Blocked] Flow data not imported"),
+      if (wf$flow_stats_done) cp_card("pass", "Flow statistics calculated")
+    )
+  })
+  
+  output$cp_hev <- renderUI({
+    tagList(
+      cp_card(if (wf$oe_done)         "pass" else "fail",
+              if (wf$oe_done)         "O:E ratios ready" else "[Blocked] O:E not yet calculated"),
+      cp_card(if (wf$flow_stats_done) "pass" else "fail",
+              if (wf$flow_stats_done) "Flow statistics ready" else "[Blocked] Flow stats not yet calculated"),
+      cp_card(if (wf$join_done)       "pass" else "fail",
+              if (wf$join_done)       "Biology and flow paired" else "[Blocked] Data not yet joined (Analysis page)"),
+      if (wf$oe_done && wf$flow_stats_done && wf$join_done)
+        cp_card("pass", "All prerequisites met — ready to generate HEV plot")
+    )
+  })
 
   wq_rhs_mapping_example <- data.frame(
     biol_site_id = "291",
@@ -245,7 +320,8 @@ function(input, output, session){
       showNotification(parsed$error, type = "error")
       return()
     }
-
+    
+ 
     supporting_validation <- validate_supporting_mapping(parsed$data)
     if (identical(supporting_validation$status, "error")) {
       site_metadata_upload_result(supporting_validation)
