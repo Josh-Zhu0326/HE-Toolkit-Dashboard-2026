@@ -38,9 +38,20 @@ testthat::test_that("header-only site metadata CSV is reported as empty", {
   )
 })
 
-testthat::test_that("unreadable site metadata CSV is reported as an error", {
+testthat::test_that("missing site metadata file is reported as an error", {
   result <- read_site_metadata_csv(metadata_fixture("does_not_exist.csv"))
 
   testthat::expect_null(result$data)
   testthat::expect_identical(result$error, "The selected site metadata CSV could not be found.")
+})
+
+testthat::test_that("existing non-CSV input is reported as unreadable", {
+  existing_directory <- tempfile("metadata-directory-")
+  dir.create(existing_directory)
+  on.exit(unlink(existing_directory, recursive = TRUE), add = TRUE)
+
+  result <- read_site_metadata_csv(existing_directory)
+
+  testthat::expect_null(result$data)
+  testthat::expect_identical(result$error, "The selected file could not be read as CSV.")
 })
