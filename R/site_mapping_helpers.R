@@ -68,6 +68,53 @@ read_site_metadata_csv <- function(path) {
   parse_site_metadata(readr::format_csv(data))
 }
 
+normalise_site_metadata_flow_input <- function(metadata) {
+  if (is.null(metadata)) {
+    stop("Site metadata are missing.", call. = FALSE)
+  }
+
+  has_flow_site_id <- "flow_site_id" %in% names(metadata)
+  has_flow_input <- "flow_input" %in% names(metadata)
+
+  if (has_flow_input && !has_flow_site_id) {
+    stop("flow_input cannot be used without flow_site_id.", call. = FALSE)
+  }
+
+  if (!has_flow_site_id) {
+    return(metadata)
+  }
+
+  if (!has_flow_input) {
+    metadata$flow_input <- "HDE"
+    return(metadata)
+  }
+
+  flow_inputs <- trimws(as.character(metadata$flow_input))
+  missing_inputs <- is.na(flow_inputs) | !nzchar(flow_inputs)
+  flow_inputs[missing_inputs] <- "HDE"
+  flow_inputs <- toupper(flow_inputs)
+
+  invalid_inputs <- unique(flow_inputs[!flow_inputs %in% c("NRFA", "HDE")])
+  if (length(invalid_inputs) > 0) {
+    stop(
+      paste0("Invalid flow_input value(s): ", paste(invalid_inputs, collapse = ", "), ". Use NRFA or HDE."),
+      call. = FALSE
+    )
+  }
+
+  metadata$flow_input <- flow_inputs
+  metadata
+}
+
+import_dashboard_flow <- function(sites, inputs, start_date, end_date) {
+  hetoolkit::import_flow(
+    sites = sites,
+    inputs = inputs,
+    start_date = start_date,
+    end_date = end_date
+  )
+}
+
 validate_dashboard_site_metadata <- function(metadata) {
   has_rhs_site_id <- "rhs_site_id" %in% names(metadata)
   has_rhs_survey_id <- "rhs_survey_id" %in% names(metadata)
@@ -83,20 +130,15 @@ validate_dashboard_site_metadata <- function(metadata) {
     return(paste0("Include at least one supported site ID column: ", paste(id_columns, collapse = ", "), "."))
   }
 
-  if ("flow_site_id" %in% names(metadata) && !"flow_input" %in% names(metadata)) {
-    return("A CSV containing flow_site_id must also include flow_input.")
-  }
-
-  if ("flow_input" %in% names(metadata) && !"flow_site_id" %in% names(metadata)) {
-    return("flow_input cannot be used without flow_site_id.")
-  }
-
-  if ("flow_input" %in% names(metadata)) {
-    flow_inputs <- toupper(trimws(as.character(metadata$flow_input)))
-    invalid_inputs <- unique(flow_inputs[!is.na(flow_inputs) & nzchar(flow_inputs) & !flow_inputs %in% c("NRFA", "HDE")])
-    if (length(invalid_inputs) > 0) {
+  flow_validation <- tryCatch(
+    normalise_site_metadata_flow_input(metadata),
+    error = function(e) e
+  )
+  if (inherits(flow_validation, "error")) {
+    if (grepl("Invalid flow_input value", conditionMessage(flow_validation), fixed = TRUE)) {
       return("flow_input values must be NRFA or HDE for this dashboard workflow.")
     }
+    return(conditionMessage(flow_validation))
   }
 
   NULL

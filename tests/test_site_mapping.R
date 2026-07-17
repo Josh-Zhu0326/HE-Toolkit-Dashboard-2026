@@ -22,14 +22,16 @@ stopifnot(is.null(validate_dashboard_site_metadata(data.frame(wq_site_id = "SW-A
 stopifnot(is.null(validate_dashboard_site_metadata(data.frame(rhs_survey_id = "6145"))))
 stopifnot(is.null(validate_dashboard_site_metadata(data.frame(flow_site_id = "027090", flow_input = "NRFA"))))
 stopifnot(!is.null(validate_dashboard_site_metadata(data.frame(site_id = "unknown"))))
-stopifnot(!is.null(validate_dashboard_site_metadata(data.frame(flow_site_id = "027090"))))
+missing_flow_input <- normalise_site_metadata_flow_input(data.frame(flow_site_id = "027090"))
+stopifnot(is.null(validate_dashboard_site_metadata(missing_flow_input)))
+stopifnot(identical(missing_flow_input$flow_input, "HDE"))
 
 invalid_flow <- uploaded$data
 invalid_flow$flow_input <- "LOCAL"
 stopifnot(!is.null(validate_dashboard_site_metadata(invalid_flow)))
 
 leading_zero_file <- tempfile(fileext = ".csv")
-writeLines("flow_site_id,flow_input\n027090,NRFA", leading_zero_file)
+writeLines("flow_site_id\n027090", leading_zero_file)
 leading_zero <- read_site_metadata_csv(leading_zero_file)
 unlink(leading_zero_file)
 stopifnot(identical(leading_zero$data$flow_site_id, "027090"))

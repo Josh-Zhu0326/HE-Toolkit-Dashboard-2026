@@ -10,8 +10,8 @@ TC-008,WQ downloads,High,mapped WQ data,Mapped WQ CSV and current WQ plot PNG do
 TC-009,RHS plots,High,tests/fixtures/mapping.csv; tests/fixtures/rhs.csv,RHS numeric categorical and record-count plots render when suitable data exist
 TC-010,RHS downloads,High,mapped RHS data,Mapped RHS CSV and current RHS plot PNG download when data exist
 TC-011,Local invertebrate import,High,tests/fixtures/local_invertebrate.csv,Local invertebrate CSV validates and previews separately from O:E
-TC-012,Local flow import,High,tests/fixtures/local_flow.csv,Local flow CSV validates and previews with valid NRFA flow_input
-TC-013,Local flow validation,High,custom invalid flow_input CSV,Invalid or blank flow_input shows clear error and app remains connected
+TC-012,Local flow import,High,tests/fixtures/local_flow.csv,"Local flow_site_id,date,flow CSV validates and becomes the operational Flow source"
+TC-013,Local flow validation,High,custom invalid local Flow CSV,Missing required fields blank site IDs or non-numeric flow values show a clear error
 TC-014,O:E regression,Critical,existing workflow data,Existing O:E workflow renders and does not require WQ/RHS
 TC-015,Flow regression,Critical,existing workflow data,Existing flow import plots and statistics render as before
 TC-016,HEV single plot,High,completed HE workflow,Existing single HEV plot renders and download remains available

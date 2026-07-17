@@ -371,7 +371,7 @@ page_navbar(
                 ),
                 div(
                   class = "hint-text",
-                  "Required mapping columns: biol_site_id, flow_site_id, flow_input, wq_site_id, rhs_survey_id. Use TBC for unconfirmed WQ/RHS mappings."
+                  "Required mapping columns: biol_site_id, flow_site_id, wq_site_id, rhs_survey_id. Optional flow_input defaults to HDE. Use TBC for unconfirmed WQ/RHS mappings."
                 ),
                 uiOutput("site_metadata_upload_status"),
                 div(class = "download-row",
@@ -493,7 +493,7 @@ page_navbar(
             nav_panel("Local File Import",
                       div(class = "dashboard-page",
                         h3(class = "section-title", "Local CSV file import"),
-                        p(class = "page-lead", "Upload local files for validation and preview. Local files remain separate from the production O:E workflow unless a future explicit processing action is added."),
+                        p(class = "page-lead", "Upload local files for validation. A valid Local Flow upload is used as the Flow data source; local invertebrate data remain separate from O:E."),
                         layout_columns(
                           col_widths = c(6, 6),
                           card(class = "dashboard-card",
@@ -505,7 +505,7 @@ page_navbar(
                           ),
                           card(class = "dashboard-card",
                             card_header("Local flow CSV"),
-                            div(class = "hint-text", "Required columns: biol_site_id, date, flow, flow_input. flow_input must be NRFA or HDE."),
+                            div(class = "hint-text", "Required columns: flow_site_id, date, flow. A valid upload is used as the Flow data source."),
                             fileInput("local_flow_csv", "Choose local flow CSV", accept = c(".csv", "text/csv")),
                             uiOutput("local_flow_status"),
                             DT::dataTableOutput("local_flow_preview")

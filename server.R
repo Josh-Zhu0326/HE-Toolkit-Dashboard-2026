@@ -78,9 +78,10 @@ function(input, output, session){
   })
   
   output$cp_flow <- renderUI({
+    flow_loaded <- isTRUE(wf$flow_loaded) || identical(local_flow_upload()$validation$status, "success")
     tagList(
-      cp_card(if (wf$flow_loaded)     "pass" else "fail",
-              if (wf$flow_loaded)     "Flow data loaded" else "[Blocked] Flow data not imported"),
+      cp_card(if (flow_loaded)     "pass" else "fail",
+              if (flow_loaded)     "Flow data loaded" else "[Blocked] Flow data not imported"),
       if (wf$flow_stats_done) cp_card("pass", "Flow statistics calculated")
     )
   })
@@ -320,6 +321,17 @@ function(input, output, session){
       showNotification(parsed$error, type = "error")
       return()
     }
+
+    parsed$data <- tryCatch(
+      normalise_site_metadata_flow_input(parsed$data),
+      error = function(e) e
+    )
+    if (inherits(parsed$data, "error")) {
+      message <- conditionMessage(parsed$data)
+      site_metadata_upload_result(list(status = "error", messages = message))
+      showNotification(message, type = "error")
+      return()
+    }
     
  
     supporting_validation <- validate_supporting_mapping(parsed$data)
@@ -363,7 +375,14 @@ function(input, output, session){
   metadata <- reactive({
     parsed <- parse_site_metadata(input$meta_paste)
     validate(need(is.null(parsed$error), parsed$error))
-    parsed$data
+    normalised <- tryCatch(
+      normalise_site_metadata_flow_input(parsed$data),
+      error = function(e) e
+    )
+    validate(need(!inherits(normalised, "error"), if (inherits(normalised, "error")) conditionMessage(normalised) else ""))
+    validation_error <- validate_dashboard_site_metadata(normalised)
+    validate(need(is.null(validation_error), validation_error))
+    normalised
   })
 
   wq_site_import_result <- reactiveVal(list(
@@ -701,7 +720,8 @@ function(input, output, session){
       list(status = read_result$status, messages = read_result$messages)
     }
 
-    list(data = read_result$data, validation = validation)
+    data <- if (identical(validation$status, "success")) validation$data else read_result$data
+    list(data = data, validation = validation)
   })
 
   output$local_inv_status <- renderUI({
@@ -817,12 +837,21 @@ function(input, output, session){
   
   ## Flow data ----
   ### importing ----
-  flow_data <- eventReactive(input$import_flow, {
+  external_flow_data <- eventReactive(input$import_flow, {
     flow_sites <- as.character(metadata()$flow_site_id)
     flow_inputs <- as.character(metadata()$flow_input)
     
-    import_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
-                end_date = input$date_range_flow[2])
+    import_dashboard_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
+                          end_date = input$date_range_flow[2])
+  })
+
+  flow_data <- reactive({
+    local_flow <- local_flow_upload()
+    if (identical(local_flow$validation$status, "success")) {
+      return(local_flow$data)
+    }
+
+    external_flow_data()
   })
   
   
@@ -1116,6 +1145,12 @@ function(input, output, session){
     if (input$donor_list_paste != '') {
       donor_list <- fread(paste(input$donor_list_paste, collapse = "\n"), colClasses = "character")
       donor_list <-as.data.frame(donor_list)
+      donor_list <- tryCatch(
+        normalise_site_metadata_flow_input(donor_list),
+        error = function(e) e
+      )
+      validate(need(!inherits(donor_list, "error"), if (inherits(donor_list, "error")) conditionMessage(donor_list) else ""))
+      donor_list
     }
   })
   
@@ -1124,10 +1159,6 @@ function(input, output, session){
     
   ##### error messages for incorrect data formats ----
     donor_req_col_ID <- 'flow_site_id'
-    donor_req_col_input <- 'flow_input'
-    donor_req_col_flow_input <- 'flow_input'
-    donor_req_flow_input_types <- c('HDE', 'NRFA')
-    
     donor_sites_col_names <- colnames(donor_list())
     
     donor_mapping_sites <- donor_mapping()[,2]
@@ -1135,15 +1166,9 @@ function(input, output, session){
     donor_list_sites <- donor_list()$flow_site_id
     all_flow_sites <- c(metadata_sites, donor_list_sites)
     
-    flow_input <- donor_list()$flow_input
-    match <- flow_input %in% donor_req_flow_input_types
-    
     validate(
       need(donor_req_col_ID %in% donor_sites_col_names, "You don't have a correctly named list of flow site IDs"),
-      need(donor_req_col_input %in% donor_sites_col_names, "You don't have a correctly named list of flow inputs"),
-      need(all(donor_mapping_sites %in% all_flow_sites), "One or more named donor sites are absent from both original metadata and additional donor list"),
-      need(!str_contains(match, "FALSE"), "Please ensure all your flow inputs are listed as either 'HDE' or 'NRFA'")
-      
+      need(all(donor_mapping_sites %in% all_flow_sites), "One or more named donor sites are absent from both original metadata and additional donor list")
     )
     
     donor_list() %>% kable("html") %>% kable_styling("striped", full_width = F) %>% 
@@ -1158,8 +1183,8 @@ function(input, output, session){
     donor_sites <- as.character(donor_list()$flow_site_id)
     donor_inputs <- as.character(donor_list()$flow_input)
     
-    donor_data <- import_flow(sites = donor_sites, inputs = donor_inputs, start_date = input$date_range_flow[1],
-                              end_date = input$date_range_flow[2])
+    donor_data <- import_dashboard_flow(sites = donor_sites, inputs = donor_inputs, start_date = input$date_range_flow[1],
+                                        end_date = input$date_range_flow[2])
     
     bind_rows(flow_data(), donor_data)
     

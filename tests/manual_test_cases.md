@@ -34,7 +34,8 @@ Steps:
 
 Expected result:
 - Mapping CSV is accepted.
-- Required columns are recognised: `biol_site_id`, `flow_site_id`, `flow_input`, `wq_site_id`, `rhs_survey_id`.
+- Required columns are recognised: `biol_site_id`, `flow_site_id`, `wq_site_id`, `rhs_survey_id`.
+- An omitted or blank `flow_input` defaults to `HDE`; explicit `HDE` and `NRFA` values are accepted.
 - A warning may appear for `rhs_survey_id = TBC`.
 - The app does not crash.
 
@@ -155,13 +156,13 @@ Steps:
 Expected result:
 - File validates successfully.
 - Preview table shows local flow rows.
-- `flow_input` values are accepted because they are `NRFA`.
-- Local data do not automatically enter O:E.
+- Required input columns are `flow_site_id`, `date`, and `flow`; `biol_site_id` and `flow_input` are not required.
+- The uploaded data become the operational Flow data source.
 
-## TC-013 Invalid Local Flow Input
+## TC-013 Invalid Local Flow Schema or Values
 
 Steps:
-1. Upload a local flow CSV where `flow_input` is blank or not `NRFA`/`HDE`.
+1. Upload a local flow CSV missing `flow_site_id`, `date`, or `flow`, or containing blank site IDs or non-numeric flow values.
 
 Expected result:
 - A clear validation error is shown.
@@ -193,6 +194,7 @@ Steps:
 Expected result:
 - Existing flow outputs render as before.
 - Invalid `flow_input` values are not allowed.
+- Missing or blank metadata `flow_input` values use `HDE`.
 
 ## TC-016 HEV Single Plot
 
