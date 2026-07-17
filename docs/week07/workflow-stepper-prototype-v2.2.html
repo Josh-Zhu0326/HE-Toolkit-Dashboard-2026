@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HE Toolkit - Five-stage workflow prototype v2.2</title>
+  <style>
+    :root {
+      --ink: #1f2a24;
+      --muted: #637069;
+      --line: #d9e0dc;
+      --surface: #ffffff;
+      --canvas: #f4f6f4;
+      --green: #245f3b;
+      --green-dark: #19462b;
+      --green-soft: #e8f2eb;
+      --blue: #255f8f;
+      --blue-soft: #eaf2f8;
+      --amber: #8a5700;
+      --amber-soft: #fff4d9;
+      --red: #9d2f2f;
+      --red-soft: #faeaea;
+      --purple: #6a4aa1;
+      --purple-soft: #f0ebf8;
+      --grey-soft: #edf0ee;
+      --shadow: 0 1px 3px rgba(25, 42, 32, .08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, select, input { font: inherit; }
+    button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--surface);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 5px var(--blue);
+    }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      color: #fff;
+      background: var(--green);
+      box-shadow: 0 2px 8px rgba(10, 31, 19, .2);
+    }
+    .topbar-main {
+      min-height: 56px;
+      padding: 8px clamp(16px, 4vw, 44px);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .brand { font-weight: 700; letter-spacing: .01em; }
+    .prototype-mark { font-size: 12px; opacity: .72; margin-left: 6px; font-weight: 500; }
+    .topbar-context { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .goal-context { font-size: 12px; color: rgba(255,255,255,.76); text-align: right; }
+    .goal-context strong { color: #fff; display: block; font-size: 13px; }
+    .top-button {
+      min-height: 40px;
+      border: 1px solid rgba(255,255,255,.55);
+      border-radius: 6px;
+      padding: 7px 11px;
+      color: #fff;
+      background: transparent;
+    }
+    .top-button:hover { background: rgba(255,255,255,.12); }
+
+    .stagebar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 0 clamp(16px, 4vw, 44px);
+      overflow-x: auto;
+    }
+    .stages {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+    }
+    .stage-button {
+      min-height: 70px;
+      padding: 10px 12px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-bottom: 4px solid transparent;
+      text-align: left;
+      background: transparent;
+      color: var(--muted);
+    }
+    .stage-button:first-child { border-left: 1px solid var(--line); }
+    .stage-button:hover:not(:disabled) { background: #f8faf8; }
+    .stage-button.is-current { color: var(--green-dark); background: var(--green-soft); border-bottom-color: var(--green); }
+    .stage-button.is-required .stage-name { color: var(--ink); }
+    .stage-kicker { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .stage-name { display: block; margin-top: 3px; font-size: 13px; font-weight: 650; line-height: 1.25; }
+    .path-mark { display: inline-block; margin-top: 5px; font-size: 11px; font-weight: 700; }
+    .path-mark.required { color: var(--green); }
+    .path-mark.optional { color: var(--blue); }
+    .path-mark.outside { color: #8a948e; }
+
+    main { max-width: 1180px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 44px) 48px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: clamp(24px, 3.2vw, 34px); line-height: 1.2; text-wrap: balance; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 15px; }
+    .lead { max-width: 760px; color: var(--muted); font-size: 16px; }
+    .eyebrow { margin-bottom: 5px; color: var(--green); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+    .view[hidden] { display: none; }
+
+    .goal-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+    }
+    .goal-card {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      min-height: 176px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--ink);
+      background: var(--surface);
+      text-align: left;
+      box-shadow: var(--shadow);
+    }
+    .goal-card:hover { border-color: var(--green); transform: translateY(-1px); }
+    .goal-number { color: var(--green); font-size: 12px; font-weight: 700; }
+    .goal-card h2 { min-height: 75px; margin: 10px 0 7px; line-height: 1.25; }
+    .goal-card p { flex: 1; margin: 0 0 14px; color: var(--muted); }
+    .goal-output { display: block; margin-top: auto; padding-top: 11px; border-top: 1px solid var(--line); font-size: 12px; }
+    .goal-output strong { color: var(--green-dark); }
+
+    .workspace-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+    .workspace-head p { margin-bottom: 0; color: var(--muted); }
+    .path-summary { min-width: 255px; max-width: 420px; }
+    .path-summary span { display: block; color: var(--muted); font-size: 12px; }
+    .path-summary strong { display: block; margin-top: 3px; }
+
+    .recommendation {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border: 1px solid #dfc47b;
+      border-radius: 8px;
+      background: var(--amber-soft);
+    }
+    .recommendation-icon { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--amber); font-weight: 800; }
+    .recommendation p { margin: 2px 0 0; color: #5e450f; }
+
+    .workspace-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .85fr); gap: 18px; align-items: start; }
+    .panel { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+    .panel-head { padding: 17px 18px 13px; border-bottom: 1px solid var(--line); }
+    .panel-head h2 { margin-bottom: 3px; }
+    .panel-head p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .task-list { list-style: none; margin: 0; padding: 0; }
+    .task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; padding: 17px 18px; border-bottom: 1px solid var(--line); }
+    .task-row:last-child { border-bottom: 0; }
+    .task-title { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-bottom: 5px; font-weight: 700; }
+    .task-meta { color: var(--muted); font-size: 12px; }
+    .task-actions { display: flex; align-items: center; gap: 8px; }
+    .requirement { color: var(--red); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .requirement.optional { color: var(--blue); }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .state-complete { color: var(--green); background: var(--green-soft); }
+    .state-warning { color: var(--amber); background: var(--amber-soft); }
+    .state-error { color: var(--red); background: var(--red-soft); }
+    .state-stale { color: var(--purple); background: var(--purple-soft); }
+    .state-running { color: var(--blue); background: var(--blue-soft); }
+    .state-ready { color: var(--green-dark); background: #edf5ef; }
+    .state-not_ready { color: #626b66; background: var(--grey-soft); }
+    .status-help-wrap { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+    .status-help {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: help;
+    }
+    .status-help::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      border: 1px solid #aeb8b2;
+      border-radius: 50%;
+    }
+    .status-help:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+    .status-tooltip {
+      position: absolute;
+      z-index: 40;
+      top: calc(100% + 8px);
+      left: 50%;
+      width: max-content;
+      max-width: min(280px, 78vw);
+      padding: 9px 11px;
+      border-radius: 6px;
+      color: #fff;
+      background: #26312b;
+      box-shadow: 0 4px 14px rgba(20, 35, 27, .2);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      white-space: normal;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translate(-50%, -3px);
+      transition: opacity .12s ease, transform .12s ease, visibility .12s ease;
+    }
+    .status-help:hover + .status-tooltip,
+    .status-help:focus + .status-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, 0);
+    }
+
+    .btn { min-height: 40px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; color: var(--ink); background: var(--surface); font-weight: 650; }
+    .btn:hover:not(:disabled) { border-color: var(--green); color: var(--green-dark); background: #f8fbf9; }
+    .btn-primary { color: #fff; border-color: var(--green); background: var(--green); }
+    .btn-primary:hover:not(:disabled) { color: #fff; background: var(--green-dark); }
+    .btn-link { border-color: transparent; color: var(--green); background: transparent; }
+
+    .checkpoint { padding: 18px; }
+    .checkpoint h2 { margin-bottom: 14px; }
+    .checkpoint dl { margin: 0; }
+    .checkpoint-row { padding: 12px 0; border-top: 1px solid var(--line); }
+    .checkpoint-row:first-child { border-top: 0; padding-top: 0; }
+    .checkpoint dt { margin-bottom: 4px; color: var(--muted); font: 700 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .checkpoint dd { margin: 0; }
+    .checkpoint code { font-size: 12px; }
+    .block-reason { margin-top: 16px; padding: 13px; border: 1px solid #d9a2a2; border-radius: 8px; background: var(--red-soft); }
+    .block-reason strong { display: block; color: var(--red); }
+    .block-reason p { margin: 4px 0 0; }
+
+    .scope-note { display: flex; gap: 10px; margin-top: 16px; padding: 13px 15px; border: 1px solid #bdd2e2; border-radius: 8px; background: var(--blue-soft); }
+    .scope-note strong { color: var(--blue); }
+    .scope-note p { margin: 2px 0 0; color: #36576e; }
+
+    details { margin-top: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+    summary { padding: 14px 16px; cursor: pointer; font-weight: 700; }
+    .advanced-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 0 16px 16px; }
+    .field label { display: block; margin-bottom: 5px; color: var(--muted); font-size: 12px; font-weight: 650; }
+    .field select, .field input { width: 100%; min-height: 38px; border: 1px solid #b9c4bd; border-radius: 6px; padding: 7px 9px; color: var(--ink); background: var(--surface); }
+    .advanced-note { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 12px; }
+
+    .footnote { margin-top: 28px; color: var(--muted); font-size: 12px; text-align: right; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 840px) {
+      .workspace-grid { grid-template-columns: 1fr; }
+      .workspace-head { align-items: flex-start; flex-direction: column; }
+      .path-summary { min-width: 0; width: 100%; }
+      .goal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .topbar-main { align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
+      .topbar-context { width: 100%; margin-left: 0; justify-content: space-between; }
+      .goal-context { text-align: left; }
+      .goal-grid { grid-template-columns: 1fr; }
+      .goal-card { min-height: 0; }
+      .goal-card h2 { min-height: 0; }
+      .recommendation { grid-template-columns: auto 1fr; }
+      .recommendation .btn { grid-column: 1 / -1; }
+      .task-row { grid-template-columns: 1fr; }
+      .task-actions { justify-content: space-between; }
+      .advanced-body { grid-template-columns: 1fr; }
+      .advanced-note { grid-column: auto; }
+    }
+    @media (pointer: coarse) {
+      .status-help { width: 44px; height: 44px; }
+      .status-help::before { inset: 13px; }
+      .btn, .top-button { min-height: 44px; }
+      .field select, .field input { min-height: 44px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-main">
+      <div class="brand">HE Toolkit Dashboard <span class="prototype-mark">Workflow v2.2</span></div>
+      <div class="topbar-context">
+        <div class="goal-context">Current goal<strong id="current-goal-label">Not selected</strong></div>
+        <button class="top-button" id="change-goal" type="button">Change goal</button>
+      </div>
+    </div>
+    <nav class="stagebar" aria-label="Five-stage workflow">
+      <div class="stages" id="stage-nav"></div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="view" id="goal-view" aria-labelledby="goal-heading">
+      <p class="eyebrow">Choose an outcome</p>
+      <h1 id="goal-heading">What do you want to achieve?</h1>
+      <p class="lead">A goal highlights the required route through one shared five-stage workflow. It does not create a separate set of pages.</p>
+      <div class="goal-grid" id="goal-grid"></div>
+    </section>
+
+    <section class="view" id="workspace-view" aria-labelledby="stage-heading" hidden>
+      <div class="workspace-head">
+        <div>
+          <p class="eyebrow" id="stage-eyebrow">Current stage</p>
+          <h1 id="stage-heading">Build HE Dataset</h1>
+          <p id="stage-description"></p>
+        </div>
+        <div class="path-summary">
+          <span>Goal path</span>
+          <strong id="goal-path-summary"></strong>
+        </div>
+      </div>
+
+      <section class="recommendation" aria-labelledby="recommendation-heading" aria-live="polite">
+        <span class="recommendation-icon" aria-hidden="true">→</span>
+        <div>
+          <strong id="recommendation-heading">Next recommended action</strong>
+          <p id="recommendation-text"></p>
+        </div>
+        <button class="btn btn-primary" type="button" id="recommendation-action"></button>
+      </section>
+
+      <div class="workspace-grid">
+        <section class="panel" aria-labelledby="required-steps-heading">
+          <div class="panel-head">
+            <h2 id="required-steps-heading">Required steps for this goal</h2>
+            <p>Calculations start only after an explicit action.</p>
+          </div>
+          <ul class="task-list" id="task-list"></ul>
+        </section>
+
+        <aside class="panel checkpoint" aria-labelledby="checkpoint-heading">
+          <h2 id="checkpoint-heading">Checkpoint · <code id="checkpoint-node"></code></h2>
+          <dl id="checkpoint-fields"></dl>
+          <div class="block-reason" id="block-reason">
+            <strong>Why this cannot run</strong>
+            <p id="block-reason-text"></p>
+          </div>
+        </aside>
+      </div>
+
+      <section class="scope-note" id="core-only-scope" aria-label="Optional enrichment scope" hidden>
+        <span aria-hidden="true">ⓘ</span>
+        <div>
+          <strong>Core-only scope</strong>
+          <p>Water quality and RHS enrichment have not been selected. This is information, not a warning, and it does not block <code>joined_core</code>.</p>
+        </div>
+      </section>
+
+      <details id="join-controls" hidden>
+        <summary>Advanced Controls</summary>
+        <div class="advanced-body">
+          <div class="field">
+            <label for="join-method">Join method</label>
+            <select id="join-method">
+              <option selected>Nearest date within window</option>
+              <option>Same calendar month</option>
+              <option>Exact date</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="lag-window">Maximum lag window (days)</label>
+            <input id="lag-window" type="number" min="0" max="365" value="30">
+          </div>
+          <p class="advanced-note">Changing these controls does not run the join. It changes the target fingerprint and makes an existing join stale until you explicitly regenerate it.</p>
+        </div>
+      </details>
+
+      <p class="footnote">Prototype candidate · 16 July 2026 · Core, enriched and analysis layers remain separate</p>
+    </section>
+    <p class="sr-only" id="status-announcer" aria-live="polite" aria-atomic="true"></p>
+  </main>
+
+  <script>
+    const stages = [
+      { name: "Prepare Sites and Data", description: "Import source data, site metadata and mappings." },
+      { name: "Check and Process Data", description: "Validate inputs and explicitly generate processed biology and flow outputs." },
+      { name: "Build HE Dataset", description: "Build a versioned core join without overwriting source or enrichment layers." },
+      { name: "Explore and Refine Relationships", description: "Create the analysis dataset, explore it, and record filtering decisions." },
+      { name: "Model and Export", description: "Fit eligible models and export only current outputs with provenance." }
+    ];
+
+    const goals = [
+      { id: "ecological_condition", name: "Assess ecological condition", description: "Calculate RICT predictions and observed:expected ecological metrics.", output: "RICT and calculated O:E", path: ["R", "R", "-", "O", "O"] },
+      { id: "flow_regime", name: "Summarise the flow regime", description: "Review coverage and calculate Q10, Q50 and Q95 with source provenance.", output: "Flow statistics and coverage summary", path: ["R", "R", "-", "O", "O"] },
+      { id: "analysis_dataset", name: "Build an analysis-ready HE dataset", description: "Create separate core, enriched and filtered analysis layers.", output: "Versioned analysis_dataset", path: ["R", "R", "R", "R", "O"] },
+      { id: "hydroecological_change", name: "Visualise hydroecological change", description: "Generate an HEV view from a current, traceable analysis dataset.", output: "HEV plot, data and provenance", path: ["R", "R", "R", "R", "O"] },
+      { id: "flow_ecology_relationship", name: "Explore flow-ecology relationships", description: "Explore variables and fit an eligible multiple-predictor model.", output: "Model, diagnostics and provenance", path: ["R", "R", "R", "R", "R"] }
+    ];
+
+    const stateLabels = {
+      not_ready: "not_ready", ready: "ready", running: "running", complete: "complete",
+      warning: "warning", error: "error", stale: "stale"
+    };
+    const stateDescriptions = {
+      not_ready: "Required inputs or prerequisites are missing, so this action cannot run yet.",
+      ready: "All prerequisites are satisfied; this action can now be run.",
+      running: "The current action is still processing.",
+      complete: "The current output was generated successfully and can be used downstream.",
+      warning: "A usable output exists, but review the non-blocking issue before continuing.",
+      error: "The current action failed and must be fixed or retried.",
+      stale: "A previous output exists, but an input or setting changed; regenerate before continuing."
+    };
+    const requiredUserActions = {
+      not_ready: "Complete the missing current prerequisite.",
+      ready: "Run this action explicitly.",
+      running: "Wait for the current action to finish.",
+      complete: "No action is required.",
+      warning: "Review the evidence; continuing is allowed.",
+      error: "Fix the error, then retry the action.",
+      stale: "Regenerate from the earliest stale dependency."
+    };
+
+    const tasksByStage = [
+      [
+        { id: "biology_input", label: "Import biology and environmental data", state: "complete", detail: "47 sites · schema and associations validated", required: true },
+        { id: "flow_input", label: "Retrieve daily flow", state: "warning", detail: "HDE attempted first; NRFA fallback used for 3 sites with no HDE coverage", required: true },
+        { id: "optional_inputs", label: "Select WQ or RHS enrichment", state: "not_ready", detail: "Not selected · core-only scope remains available", required: false }
+      ],
+      [
+        { id: "oe_result", label: "Calculate O:E ratios", state: "complete", detail: "44 eligible sites · 3 proxy/exclusion warnings retained in provenance", required: true },
+        { id: "flow_statistics", label: "Calculate flow statistics", state: "stale", detail: "Previous Q10/Q50/Q95 retained; mapping fingerprint changed", required: true, action: "Regenerate" },
+        { id: "quality_review", label: "Review non-blocking evidence", state: "warning", detail: "NRFA fallback and incomplete coverage are usable with warning", required: true }
+      ],
+      [
+        { id: "oe_result", label: "Current O:E result", state: "complete", detail: "Output fingerprint matches current biology and environment inputs", required: true },
+        { id: "flow_statistics", label: "Current flow statistics", state: "stale", detail: "Viewable as previous evidence; cannot satisfy the join prerequisite", required: true, action: "Go to Stage 2" },
+        { id: "joined_core", label: "Build joined_core", state: "not_ready", detail: "Blocked until current flow statistics are available", required: true, action: "Run join", disabled: true },
+        { id: "joined_enriched", label: "Build joined_enriched", state: "not_ready", detail: "Optional branch not selected; no warning is raised", required: false }
+      ],
+      [
+        { id: "analysis_dataset", label: "Generate analysis_dataset", state: "stale", detail: "Previous version remains viewable; upstream core target changed", required: true },
+        { id: "relationship_exploration", label: "Explore relationships", state: "stale", detail: "Regenerate after the analysis dataset becomes current", required: true },
+        { id: "hev_result", label: "Generate HEV", state: "stale", detail: "Previous labelled HEV retained; current export is unavailable", required: true }
+      ],
+      [
+        { id: "model_result", label: "Fit model", state: "not_ready", detail: "Requires a current analysis_dataset and eligible variables", required: true },
+        { id: "current_export", label: "Export current outputs", state: "not_ready", detail: "Stale results may be exported only as labelled historical evidence", required: true }
+      ]
+    ];
+
+    let selectedGoal = null;
+    let currentStage = 2;
+    let flowRegenerated = false;
+    let joinHasOutput = false;
+    let joinStale = false;
+
+    const goalView = document.getElementById("goal-view");
+    const workspaceView = document.getElementById("workspace-view");
+    const stageNav = document.getElementById("stage-nav");
+    const taskList = document.getElementById("task-list");
+    const statusAnnouncer = document.getElementById("status-announcer");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let statusTooltipId = 0;
+
+    function announceStatus(message) {
+      statusAnnouncer.textContent = message;
+    }
+
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: reducedMotion.matches ? "auto" : "smooth" });
+    }
+
+    function stateBadge(state) {
+      const tooltipId = `status-tooltip-${++statusTooltipId}`;
+      return `<span class="status-help-wrap">
+        <span class="status state-${state}">${stateLabels[state]}</span>
+        <button class="status-help" type="button" aria-label="Explain ${stateLabels[state]} status" aria-describedby="${tooltipId}">?</button>
+        <span class="status-tooltip" id="${tooltipId}" role="tooltip">${stateDescriptions[state]}</span>
+      </span>`;
+    }
+
+    function updateRenderedState(row, state) {
+      const status = row.querySelector(".status");
+      status.className = `status state-${state}`;
+      status.textContent = stateLabels[state];
+      const help = row.querySelector(".status-help");
+      const tooltip = row.querySelector(".status-tooltip");
+      help.setAttribute("aria-label", `Explain ${stateLabels[state]} status`);
+      tooltip.textContent = stateDescriptions[state];
+      announceStatus(`${row.dataset.taskId} is now ${stateLabels[state]}.`);
+    }
+
+    function renderGoalCards() {
+      document.getElementById("goal-grid").innerHTML = goals.map((goal, index) => `
+        <button class="goal-card" type="button" data-goal="${goal.id}">
+          <span class="goal-number">Goal ${String(index + 1).padStart(2, "0")}</span>
+          <h2>${goal.name}</h2>
+          <p>${goal.description}</p>
+          <span class="goal-output"><strong>Primary output:</strong> ${goal.output}</span>
+        </button>`).join("");
+      document.querySelectorAll("[data-goal]").forEach(button => {
+        button.addEventListener("click", () => selectGoal(button.dataset.goal));
+      });
+    }
+
+    function renderStageNav() {
+      stageNav.innerHTML = stages.map((stage, index) => {
+        const isCurrent = Boolean(selectedGoal && currentStage === index);
+        const mark = selectedGoal ? selectedGoal.path[index] : "-";
+        const markClass = mark === "R" ? "required" : mark === "O" ? "optional" : "outside";
+        const markText = mark === "R" ? "Required" : mark === "O" ? "Optional" : "Outside path";
+        return `<button class="stage-button ${isCurrent ? "is-current" : ""} ${mark === "R" ? "is-required" : ""}" type="button" data-stage="${index}" ${isCurrent ? 'aria-current="step"' : ""} ${selectedGoal ? "" : "disabled"}>
+          <span class="stage-kicker">Stage ${index + 1}</span>
+          <span class="stage-name">${stage.name}</span>
+          <span class="path-mark ${markClass}">${selectedGoal ? markText : "Select a goal"}</span>
+        </button>`;
+      }).join("");
+      document.querySelectorAll("[data-stage]").forEach(button => {
+        button.addEventListener("click", () => {
+          currentStage = Number(button.dataset.stage);
+          renderWorkspace();
+        });
+      });
+    }
+
+    function selectGoal(id) {
+      selectedGoal = goals.find(goal => goal.id === id);
+      currentStage = selectedGoal.id === "ecological_condition" || selectedGoal.id === "flow_regime" ? 1 : 2;
+      goalView.hidden = true;
+      workspaceView.hidden = false;
+      document.getElementById("current-goal-label").textContent = selectedGoal.name;
+      renderWorkspace();
+      scrollToTop();
+    }
+
+    function adjustedTasks() {
+      let tasks;
+      if (selectedGoal.id === "ecological_condition") {
+        const ecologicalTasks = [
+          [
+            { id: "biology_input", label: "Import biology and environmental data", state: "complete", detail: "47 sites · schema and associations validated", required: true },
+            { id: "flow_input", label: "Add flow data", state: "not_ready", detail: "Not needed for this goal", required: false }
+          ],
+          [
+            { id: "oe_result", label: "Calculate O:E ratios", state: "complete", detail: "44 eligible sites · current result", required: true },
+            { id: "environment_review", label: "Review environmental evidence", state: "warning", detail: "3 sites use a documented proxy or exclusion", required: true }
+          ],
+          [{ id: "joined_core", label: "Build joined_core", state: "not_ready", detail: "Outside this goal path", required: false }],
+          [{ id: "environment_exploration", label: "Explore environmental patterns", state: "ready", detail: "Optional view available from the current O:E result", required: false }],
+          [{ id: "current_export", label: "Export O:E and provenance", state: "ready", detail: "Optional export is ready", required: false }]
+        ];
+        tasks = ecologicalTasks[currentStage];
+      } else if (selectedGoal.id === "flow_regime") {
+        const flowTasks = [
+          [
+            { id: "flow_input", label: "Retrieve or import daily flow", state: "warning", detail: "HDE attempted first; transparent NRFA fallback used for 3 sites", required: true },
+            { id: "biology_input", label: "Add biology data", state: "not_ready", detail: "Not needed for this goal", required: false }
+          ],
+          [
+            { id: "flow_statistics", label: "Calculate flow statistics", state: "stale", detail: "Previous Q10/Q50/Q95 retained; mapping fingerprint changed", required: true, action: "Regenerate" },
+            { id: "quality_review", label: "Review coverage evidence", state: "warning", detail: "Usable output with incomplete coverage recorded", required: true }
+          ],
+          [{ id: "joined_core", label: "Build joined_core", state: "not_ready", detail: "Outside this goal path", required: false }],
+          [{ id: "flow_exploration", label: "Explore range and completeness", state: "ready", detail: "Optional view available after regeneration", required: false }],
+          [{ id: "current_export", label: "Export flow statistics and provenance", state: "not_ready", detail: "Requires current, non-stale flow statistics", required: false }]
+        ];
+        tasks = flowTasks[currentStage];
+      } else {
+        tasks = tasksByStage[currentStage];
+      }
+      const stageIsRequired = selectedGoal.path[currentStage] === "R";
+      return tasks.map(task => ({ ...task, required: stageIsRequired ? task.required : false }));
+    }
+
+    function applyRuntimeState(tasks) {
+      tasks.forEach(task => {
+        if (task.id === "flow_statistics" && flowRegenerated) {
+          task.state = "warning";
+          task.detail = "Current Q10/Q50/Q95 generated; NRFA fallback evidence retained";
+          task.action = null;
+        }
+        if (task.id === "joined_core" && joinHasOutput && joinStale) {
+          task.state = "stale";
+          task.detail = "Previous joined_core retained; join settings changed the target fingerprint";
+          task.action = "Regenerate";
+          task.disabled = false;
+        } else if (task.id === "joined_core" && joinHasOutput) {
+          task.state = "complete";
+          task.detail = "44 sites · 88 matched records · current target fingerprint";
+          task.action = null;
+          task.disabled = false;
+        } else if (task.id === "joined_core" && flowRegenerated) {
+          task.state = "ready";
+          task.detail = "All current core prerequisites match the target fingerprint";
+          task.disabled = false;
+        }
+      });
+      return tasks;
+    }
+
+    function renderWorkspace() {
+      renderStageNav();
+      document.getElementById("stage-eyebrow").textContent = `Current stage · ${currentStage + 1} of 5`;
+      document.getElementById("stage-heading").textContent = stages[currentStage].name;
+      document.getElementById("stage-description").textContent = stages[currentStage].description;
+      const requiredStages = selectedGoal.path.map((mark, i) => mark === "R" ? i + 1 : null).filter(Boolean).join(" → ");
+      const optionalStages = selectedGoal.path.map((mark, i) => mark === "O" ? i + 1 : null).filter(Boolean).join(", ");
+      document.getElementById("goal-path-summary").textContent = `${selectedGoal.name} · Required ${requiredStages}${optionalStages ? ` · Optional ${optionalStages}` : ""}`;
+
+      const usesCoreDataset = ["analysis_dataset", "hydroecological_change", "flow_ecology_relationship"].includes(selectedGoal.id);
+      document.getElementById("core-only-scope").hidden = !usesCoreDataset;
+      document.getElementById("join-controls").hidden = !(usesCoreDataset && currentStage === 2 && selectedGoal.path[currentStage] !== "-");
+
+      const tasks = applyRuntimeState(adjustedTasks());
+      taskList.innerHTML = tasks.map(task => `
+        <li class="task-row" data-task-id="${task.id}">
+          <div>
+            <div class="task-title">${task.label} ${stateBadge(task.state)}</div>
+            <div class="task-meta"><span class="requirement ${task.required ? "" : "optional"}">${task.required ? "Required for goal" : "Optional"}</span> · ${task.detail}</div>
+          </div>
+          <div class="task-actions">
+            ${task.action ? `<button class="btn ${task.id === "joined_core" ? "btn-primary" : ""}" type="button" data-action="${task.id}" ${task.disabled ? "disabled" : ""}>${task.action}</button>` : ""}
+          </div>
+        </li>`).join("");
+
+      document.querySelectorAll("[data-action]").forEach(button => {
+        button.addEventListener("click", () => handleTaskAction(button.dataset.action, button));
+      });
+      renderCheckpoint(tasks);
+      renderRecommendation();
+    }
+
+    function renderCheckpoint(tasks) {
+      const requiredTasks = tasks.filter(task => task.required);
+      const node = requiredTasks.find(task => task.id === "joined_core")
+        || requiredTasks.find(task => ["error", "stale", "not_ready", "warning"].includes(task.state))
+        || requiredTasks[0]
+        || tasks[0];
+      const isRequiredNode = requiredTasks.includes(node);
+      const isCore = node.id === "joined_core";
+      let nextStep = !flowRegenerated
+        ? "Return to Stage 2 and regenerate flow_statistics."
+        : joinHasOutput && !joinStale
+          ? "Continue to Stage 4 and generate analysis_dataset."
+          : joinStale
+            ? "Regenerate joined_core explicitly from the changed settings."
+            : "Run joined_core explicitly.";
+      if (selectedGoal.id === "ecological_condition") nextStep = "Review the warning, then explore or export the current O:E result.";
+      if (selectedGoal.id === "flow_regime" && flowRegenerated) nextStep = "Review the current statistics, then explore completeness or export.";
+      const values = {
+        status: stateBadge(node.state),
+        evidence_summary: node.detail,
+        affected_output: isCore ? "joined_core → joined_enriched → analysis_dataset → HEV/model" : node.id,
+        required_user_action: isRequiredNode ? requiredUserActions[node.state] : "No action is required for this goal.",
+        next_recommended_step: nextStep
+      };
+      document.getElementById("checkpoint-node").textContent = node.id;
+      document.getElementById("checkpoint-fields").innerHTML = Object.entries(values).map(([key, value]) => `<div class="checkpoint-row"><dt>${key}</dt><dd>${value}</dd></div>`).join("");
+      const block = document.getElementById("block-reason");
+      const blocked = isRequiredNode && (node.state === "not_ready" || node.state === "stale" || node.state === "error");
+      block.hidden = !blocked;
+      document.getElementById("block-reason-text").textContent = isCore && !flowRegenerated
+        ? "flow_statistics is stale after the site mapping changed. The previous statistics remain viewable but cannot be used as a current join input."
+        : node.detail;
+    }
+
+    function renderRecommendation() {
+      const text = document.getElementById("recommendation-text");
+      const action = document.getElementById("recommendation-action");
+      if (selectedGoal.id === "ecological_condition") {
+        text.textContent = "Review the three non-blocking environmental warnings, then continue with the current O:E result.";
+        action.textContent = "Open optional exploration";
+        action.onclick = () => { currentStage = 3; renderWorkspace(); };
+      } else if (!flowRegenerated) {
+        text.textContent = "Regenerate flow statistics from the current mapping; prior statistics remain viewable as stale evidence.";
+        action.textContent = "Go to Stage 2";
+        action.onclick = () => { currentStage = 1; renderWorkspace(); };
+      } else if (selectedGoal.id === "flow_regime") {
+        text.textContent = "Flow statistics are current with fallback evidence. Continue to the optional completeness view or export.";
+        action.textContent = "Open optional exploration";
+        action.onclick = () => { currentStage = 3; renderWorkspace(); };
+      } else if (joinStale) {
+        text.textContent = "Join settings changed. The previous joined_core remains viewable as stale evidence until you regenerate it.";
+        action.textContent = "Go to Stage 3";
+        action.onclick = () => { currentStage = 2; renderWorkspace(); };
+      } else if (!joinHasOutput) {
+        text.textContent = "All core prerequisites are current. Run the core join explicitly.";
+        action.textContent = "Go to Stage 3";
+        action.onclick = () => { currentStage = 2; renderWorkspace(); };
+      } else {
+        text.textContent = "joined_core is current. Continue to Stage 4 to generate the analysis dataset.";
+        action.textContent = "Continue to Stage 4";
+        action.onclick = () => { currentStage = 3; renderWorkspace(); };
+      }
+    }
+
+    function handleTaskAction(id, button) {
+      if (id === "flow_statistics" && currentStage === 1) {
+        button.disabled = true;
+        const row = button.closest(".task-row");
+        updateRenderedState(row, "running");
+        setTimeout(() => {
+          flowRegenerated = true;
+          renderWorkspace();
+          announceStatus("Flow statistics regenerated with warnings.");
+        }, 900);
+      } else if (id === "joined_core") {
+        button.disabled = true;
+        const row = button.closest(".task-row");
+        updateRenderedState(row, "running");
+        setTimeout(() => {
+          joinHasOutput = true;
+          joinStale = false;
+          renderWorkspace();
+          announceStatus("joined_core completed and is current.");
+        }, 900);
+      } else if (id === "flow_statistics" || button.textContent.includes("Stage 2")) {
+        currentStage = 1;
+        renderWorkspace();
+      }
+    }
+
+    document.getElementById("change-goal").addEventListener("click", () => {
+      workspaceView.hidden = true;
+      goalView.hidden = false;
+      selectedGoal = null;
+      document.getElementById("current-goal-label").textContent = "Not selected";
+      renderStageNav();
+      scrollToTop();
+    });
+
+    document.getElementById("join-method").addEventListener("change", () => {
+      if (joinHasOutput) {
+        joinStale = true;
+        renderWorkspace();
+        announceStatus("Join settings changed. joined_core is now stale.");
+      }
+    });
+    document.getElementById("lag-window").addEventListener("change", () => {
+      if (joinHasOutput) {
+        joinStale = true;
+        renderWorkspace();
+        announceStatus("Lag window changed. joined_core is now stale.");
+      }
+    });
+
+    renderGoalCards();
+    renderStageNav();
+    const initialGoal = new URLSearchParams(window.location.search).get("goal");
+    if (goals.some(goal => goal.id === initialGoal)) selectGoal(initialGoal);
+  </script>
+</body>
+</html>
