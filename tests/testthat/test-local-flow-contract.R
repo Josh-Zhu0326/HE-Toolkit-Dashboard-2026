@@ -24,6 +24,17 @@ testthat::test_that("minimal Local Flow schema is accepted without biology or so
   testthat::expect_identical(names(result$data), c("flow_site_id", "date", "flow"))
 })
 
+testthat::test_that("extra Local Flow columns are warned about and excluded from operational data", {
+  input <- read_dashboard_csv(local_flow_fixture("local_flow_extra_columns.csv"), "Local flow")
+  result <- validate_local_flow(input$data)
+
+  testthat::expect_identical(input$status, "success")
+  testthat::expect_identical(result$status, "warning")
+  testthat::expect_true(any(grepl("Ignored extra Local flow column(s): flow_input, biol_site_id, note.", result$messages, fixed = TRUE)))
+  testthat::expect_identical(names(result$data), c("flow_site_id", "date", "flow"))
+  testthat::expect_identical(result$data$flow, 21.5)
+})
+
 testthat::test_that("missing required Local Flow columns are rejected", {
   for (column in c("flow_site_id", "date", "flow")) {
     input <- valid_local_flow()

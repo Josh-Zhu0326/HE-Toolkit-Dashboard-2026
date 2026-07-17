@@ -58,9 +58,50 @@ function(input, output, session){
     flow_stats_done = FALSE,
     join_done       = FALSE
   )
+  server_context <- environment()
+  flow_source_revision <- reactiveVal(0L)
+  external_flow_revision <- reactiveVal(NULL)
+  external_import_requested_revision <- reactiveVal(NULL)
+  flow_stats_revision <- reactiveVal(NULL)
+  join_revision <- reactiveVal(NULL)
+  hev_revision <- reactiveVal(NULL)
+
+  local_flow_is_operational <- function(upload) {
+    upload$validation$status %in% c("success", "warning")
+  }
+
+  invalidate_flow_derived_state <- function(reset_external = FALSE) {
+    flow_source_revision(isolate(flow_source_revision()) + 1L)
+    wf$flow_stats_done <- FALSE
+    wf$join_done <- FALSE
+    flow_stats_revision(NULL)
+    join_revision(NULL)
+    hev_revision(NULL)
+
+    if (reset_external) {
+      wf$flow_loaded <- FALSE
+      external_flow_revision(NULL)
+      external_import_requested_revision(NULL)
+    }
+
+    for (flag_name in c("flow_data_exist", "flow_stats_exist", "HEV_data_exist")) {
+      if (exists(flag_name, envir = server_context, inherits = FALSE)) {
+        get(flag_name, envir = server_context)(FALSE)
+      }
+    }
+
+    if (exists("basic_model_result", envir = server_context, inherits = FALSE)) {
+      get("basic_model_result", envir = server_context)(list(
+        status = "info",
+        messages = "Pair biology and flow data, choose variables, then run the optional basic model.",
+        plot = NULL,
+        summary = NULL
+      ))
+    }
+  }
+
   observeEvent(input$import_inv,      { wf$biol_loaded     <- TRUE })
   observeEvent(input$import_env,      { wf$env_loaded      <- TRUE })
-  observeEvent(input$import_flow,     { wf$flow_loaded     <- TRUE })
   observeEvent(input$run_rict,        { wf$rict_done       <- TRUE })
   observeEvent(input$calc_OE,         { wf$oe_done         <- TRUE })
   observeEvent(input$calc_flow_stats, { wf$flow_stats_done <- TRUE })
@@ -78,7 +119,10 @@ function(input, output, session){
   })
   
   output$cp_flow <- renderUI({
-    flow_loaded <- isTRUE(wf$flow_loaded) || identical(local_flow_upload()$validation$status, "success")
+    local_flow_loaded <- local_flow_is_operational(local_flow_upload())
+    external_flow_loaded <- isTRUE(wf$flow_loaded) &&
+      identical(external_flow_revision(), flow_source_revision())
+    flow_loaded <- local_flow_loaded || external_flow_loaded
     tagList(
       cp_card(if (flow_loaded)     "pass" else "fail",
               if (flow_loaded)     "Flow data loaded" else "[Blocked] Flow data not imported"),
@@ -313,8 +357,12 @@ function(input, output, session){
     status = "info",
     messages = "Choose a site metadata CSV to parse and load it automatically."
   ))
+  site_metadata_upload_text <- reactiveVal(NULL)
+  site_metadata_upload_flow_provenance <- reactiveVal(NULL)
 
   observeEvent(input$site_metadata_csv, {
+    site_metadata_upload_text(NULL)
+    site_metadata_upload_flow_provenance(NULL)
     parsed <- read_site_metadata_csv(input$site_metadata_csv$datapath)
     if (!is.null(parsed$error)) {
       site_metadata_upload_result(list(status = "error", messages = parsed$error))
@@ -348,7 +396,10 @@ function(input, output, session){
       return()
     }
 
-    updateTextAreaInput(session, "meta_paste", value = readr::format_csv(parsed$data))
+    normalised_text <- readr::format_csv(parsed$data)
+    site_metadata_upload_text(normalised_text)
+    site_metadata_upload_flow_provenance(site_metadata_flow_input_provenance(parsed$data))
+    updateTextAreaInput(session, "meta_paste", value = normalised_text)
     messages <- c(
       paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
       paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
@@ -372,7 +423,7 @@ function(input, output, session){
     contentType = "text/csv"
   )
 
-  metadata <- reactive({
+  metadata_result <- reactive({
     parsed <- parse_site_metadata(input$meta_paste)
     validate(need(is.null(parsed$error), parsed$error))
     normalised <- tryCatch(
@@ -382,7 +433,21 @@ function(input, output, session){
     validate(need(!inherits(normalised, "error"), if (inherits(normalised, "error")) conditionMessage(normalised) else ""))
     validation_error <- validate_dashboard_site_metadata(normalised)
     validate(need(is.null(validation_error), validation_error))
-    normalised
+    provenance <- site_metadata_flow_input_provenance(normalised)
+    if (identical(input$meta_paste, site_metadata_upload_text()) &&
+        !is.null(site_metadata_upload_flow_provenance())) {
+      provenance <- site_metadata_upload_flow_provenance()
+      attr(normalised, "flow_input_provenance") <- provenance
+    }
+    list(data = normalised, flow_input_provenance = provenance)
+  })
+
+  metadata <- reactive({
+    metadata_result()$data
+  })
+
+  metadata_flow_input_provenance <- reactive({
+    metadata_result()$flow_input_provenance
   })
 
   wq_site_import_result <- reactiveVal(list(
@@ -720,9 +785,32 @@ function(input, output, session){
       list(status = read_result$status, messages = read_result$messages)
     }
 
-    data <- if (identical(validation$status, "success")) validation$data else read_result$data
+    data <- if (validation$status %in% c("success", "warning")) validation$data else read_result$data
     list(data = data, validation = validation)
   })
+
+  observeEvent(input$local_flow_csv, {
+    invalidate_flow_derived_state(reset_external = TRUE)
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$meta_paste, {
+    invalidate_flow_derived_state(reset_external = TRUE)
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$date_range_flow, {
+    if (!local_flow_is_operational(local_flow_upload())) {
+      invalidate_flow_derived_state(reset_external = TRUE)
+    }
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$import_flow, {
+    if (!local_flow_is_operational(local_flow_upload())) {
+      invalidate_flow_derived_state(reset_external = TRUE)
+      external_import_requested_revision(isolate(flow_source_revision()))
+    } else {
+      external_import_requested_revision(NULL)
+    }
+  }, ignoreInit = FALSE, priority = 100)
 
   output$local_inv_status <- renderUI({
     format_validation_message(local_inv_upload()$validation)
@@ -838,20 +926,27 @@ function(input, output, session){
   ## Flow data ----
   ### importing ----
   external_flow_data <- eventReactive(input$import_flow, {
+    req(identical(external_import_requested_revision(), flow_source_revision()))
     flow_sites <- as.character(metadata()$flow_site_id)
     flow_inputs <- as.character(metadata()$flow_input)
-    
-    import_dashboard_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
-                          end_date = input$date_range_flow[2])
+
+    imported <- import_dashboard_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
+                                      end_date = input$date_range_flow[2])
+    wf$flow_loaded <- TRUE
+    external_flow_revision(isolate(flow_source_revision()))
+    imported
   })
 
   flow_data <- reactive({
     local_flow <- local_flow_upload()
-    if (identical(local_flow$validation$status, "success")) {
+    if (local_flow_is_operational(local_flow)) {
       return(local_flow$data)
     }
 
-    external_flow_data()
+    imported <- external_flow_data()
+    req(isTRUE(wf$flow_loaded))
+    req(identical(external_flow_revision(), flow_source_revision()))
+    imported
   })
   
   
@@ -1309,14 +1404,22 @@ function(input, output, session){
     
   })
   
-  flow_stats <- eventReactive(input$calc_flow_stats, {
+  flow_stats_result <- eventReactive(input$calc_flow_stats, {
     flow_data_final <- flow_data_final()
     
     flow_data_final$flow[flow_data_final$flow <= 0] <- NA
     
-    calc_flowstats(data = flow_data_final, site_col = "flow_site_id", date_col = "date",
-                   flow_col = "flow", win_width = paste(input$win_width_selector, "months"), 
-                   win_step = paste(input$win_step_selector, "months"))
+    result <- calc_flowstats(data = flow_data_final, site_col = "flow_site_id", date_col = "date",
+                             flow_col = "flow", win_width = paste(input$win_width_selector, "months"),
+                             win_step = paste(input$win_step_selector, "months"))
+    flow_stats_revision(isolate(flow_source_revision()))
+    result
+  })
+
+  flow_stats <- reactive({
+    result <- flow_stats_result()
+    req(identical(flow_stats_revision(), flow_source_revision()))
+    result
   })
   
   
@@ -1383,21 +1486,29 @@ function(input, output, session){
   ## Run join calculations ----
   ### default join type for modelling ----
   
-  join_data <- eventReactive(input$join_he, {
+  join_data_result <- eventReactive(input$join_he, {
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
     mapping$biol_site_id <- as.character(mapping$biol_site_id)
     mapping$flow_site_id <- as.character(mapping$flow_site_id)
     
     flowstats_1 <- flow_stats() %>% pluck(1)
     
-    join_he(biol_data = biol_all(), flow_stats = flowstats_1, mapping = mapping,
-            lags = as.integer(input$choose_lags), method = input$choose_join_method, join_type = "add_flows")
+    result <- join_he(biol_data = biol_all(), flow_stats = flowstats_1, mapping = mapping,
+                      lags = as.integer(input$choose_lags), method = input$choose_join_method, join_type = "add_flows")
+    join_revision(isolate(flow_source_revision()))
+    result
     
+  })
+
+  join_data <- reactive({
+    result <- join_data_result()
+    req(identical(join_revision(), flow_source_revision()))
+    result
   })
   
   ### join type for plotting ----
   
-  join_data_addbiol <- eventReactive(input$join_he, {
+  join_data_addbiol_result <- eventReactive(input$join_he, {
     all.combinations <- expand.grid(biol_site_id = unique(biol_data()$biol_site_id), 
                                     Year = min(biol_data()$Year):max(biol_data()$Year), 
                                     Season = c("Spring", "Autumn"), stringsAsFactors = FALSE)
@@ -1411,9 +1522,17 @@ function(input, output, session){
     
     flowstats_1 <- flow_stats() %>% pluck(1)
     
-    join_he(biol_data =  biol_data1, flow_stats = flowstats_1, mapping = mapping,
-            lags = as.integer(input$choose_lags), method = input$choose_join_method, join_type = "add_biol")
+    result <- join_he(biol_data = biol_data1, flow_stats = flowstats_1, mapping = mapping,
+                      lags = as.integer(input$choose_lags), method = input$choose_join_method, join_type = "add_biol")
+    join_revision(isolate(flow_source_revision()))
+    result
     
+  })
+
+  join_data_addbiol <- reactive({
+    result <- join_data_addbiol_result()
+    req(identical(join_revision(), flow_source_revision()))
+    result
   })
   
   ### error message for absent biology data ----
@@ -1590,7 +1709,7 @@ function(input, output, session){
   # HEV ----
   ## Create HEV dataset ----
   
-  HEV_data <- eventReactive(input$join_he, {
+  HEV_data_result <- eventReactive(input$join_he, {
     flowstats_1 <- flow_stats() %>% pluck(1)
     
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
@@ -1613,10 +1732,19 @@ function(input, output, session){
     
     hev_data$Season <- factor(hev_data$Season, levels = c("Spring", "Summer" ,"Autumn"))
     
-    join_he(biol_data =  hev_data, flow_stats = flow_data_hev, mapping = mapping,
-            method = "A", join_type = "add_biol") %>% select(-"win_no_lag0") %>% 
+    result <- join_he(biol_data = hev_data, flow_stats = flow_data_hev, mapping = mapping,
+                      method = "A", join_type = "add_biol") %>%
+      select(-"win_no_lag0") %>%
       rename_all(funs(str_replace_all(., '_lag0', '')))
+    hev_revision(isolate(flow_source_revision()))
+    result
     
+  })
+
+  HEV_data <- reactive({
+    result <- HEV_data_result()
+    req(identical(hev_revision(), flow_source_revision()))
+    result
   })
   
   ## Plotting ----

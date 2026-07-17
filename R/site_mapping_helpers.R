@@ -84,12 +84,11 @@ normalise_site_metadata_flow_input <- function(metadata) {
     return(metadata)
   }
 
-  if (!has_flow_input) {
-    metadata$flow_input <- "HDE"
-    return(metadata)
+  flow_inputs <- if (has_flow_input) {
+    trimws(as.character(metadata$flow_input))
+  } else {
+    rep(NA_character_, nrow(metadata))
   }
-
-  flow_inputs <- trimws(as.character(metadata$flow_input))
   missing_inputs <- is.na(flow_inputs) | !nzchar(flow_inputs)
   flow_inputs[missing_inputs] <- "HDE"
   flow_inputs <- toupper(flow_inputs)
@@ -103,7 +102,16 @@ normalise_site_metadata_flow_input <- function(metadata) {
   }
 
   metadata$flow_input <- flow_inputs
+  attr(metadata, "flow_input_provenance") <- data.frame(
+    flow_input_value = flow_inputs,
+    flow_input_source = ifelse(missing_inputs, "defaulted", "explicit"),
+    stringsAsFactors = FALSE
+  )
   metadata
+}
+
+site_metadata_flow_input_provenance <- function(metadata) {
+  attr(metadata, "flow_input_provenance", exact = TRUE)
 }
 
 import_dashboard_flow <- function(sites, inputs, start_date, end_date) {

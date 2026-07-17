@@ -152,12 +152,14 @@ Expected result:
 Steps:
 1. Go to Data Import > Local File Import.
 2. Upload `tests/fixtures/local_flow.csv`.
+3. Upload `tests/fixtures/local_flow_extra_columns.csv`.
 
 Expected result:
 - File validates successfully.
 - Preview table shows local flow rows.
 - Required input columns are `flow_site_id`, `date`, and `flow`; `biol_site_id` and `flow_input` are not required.
 - The uploaded data become the operational Flow data source.
+- The extra-column fixture reports **Pass with Warning**, lists `flow_input`, `biol_site_id`, and `note` as ignored, and exposes only `flow_site_id`, `date`, and `flow` operationally.
 
 ## TC-013 Invalid Local Flow Schema or Values
 

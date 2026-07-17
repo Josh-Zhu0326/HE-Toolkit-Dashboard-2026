@@ -64,6 +64,70 @@ testthat::test_that("valid Local Flow is operational and bypasses the external i
   })
 })
 
+testthat::test_that("extra Local Flow columns never enter the operational source", {
+  importer_calls <- 0L
+  rlang::local_bindings(
+    import_dashboard_flow = function(...) {
+      importer_calls <<- importer_calls + 1L
+      stop("External Flow importer must not be called for valid Local Flow data.")
+    },
+    .env = environment(dashboard_server)
+  )
+
+  shiny::testServer(dashboard_server, {
+    local_path <- testthat::test_path("..", "fixtures", "local_flow_extra_columns.csv")
+    set_inputs_ignoring_interrupted_promises(session,
+      meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      local_flow_csv = flow_upload_input(local_path)
+    )
+    session$flushReact()
+
+    testthat::expect_identical(local_flow_upload()$validation$status, "warning")
+    testthat::expect_identical(names(flow_data()), c("flow_site_id", "date", "flow"))
+    testthat::expect_identical(flow_data()$flow, 21.5)
+    testthat::expect_identical(importer_calls, 0L)
+  })
+})
+
+testthat::test_that("uploaded and pasted metadata preserve flow_input provenance", {
+  shiny::testServer(dashboard_server, {
+    upload_path <- testthat::test_path("..", "fixtures", "flow_mapping", "flow_input_missing.csv")
+    parsed <- read_site_metadata_csv(upload_path)
+    normalised <- normalise_site_metadata_flow_input(parsed$data)
+    normalised_text <- readr::format_csv(normalised)
+
+    set_inputs_ignoring_interrupted_promises(session, site_metadata_csv = flow_upload_input(upload_path))
+    session$flushReact()
+
+    upload_provenance <- site_metadata_upload_flow_provenance()
+    testthat::expect_identical(site_metadata_upload_result()$status, "success")
+    testthat::expect_identical(upload_provenance$flow_input_value, "HDE")
+    testthat::expect_identical(upload_provenance$flow_input_source, "defaulted")
+
+    set_inputs_ignoring_interrupted_promises(session, meta_paste = normalised_text)
+    session$flushReact()
+
+    preserved <- metadata_flow_input_provenance()
+    testthat::expect_identical(metadata()$flow_input, "HDE")
+    testthat::expect_identical(preserved$flow_input_value, "HDE")
+    testthat::expect_identical(preserved$flow_input_source, "defaulted")
+
+    session$setInputs(
+      meta_paste = paste(
+        "biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_survey_id",
+        "291,27090,HDE,WQ001,RHS001",
+        "292,27091,,WQ002,RHS002",
+        sep = "\n"
+      )
+    )
+    session$flushReact()
+
+    pasted <- metadata_flow_input_provenance()
+    testthat::expect_identical(metadata()$flow_input, c("HDE", "HDE"))
+    testthat::expect_identical(pasted$flow_input_source, c("explicit", "defaulted"))
+  })
+})
+
 testthat::test_that("invalid pasted flow_input is blocked before the external importer", {
   importer_calls <- 0L
   rlang::local_bindings(
@@ -123,6 +187,11 @@ testthat::test_that("replacing valid Local Flow with an invalid file removes the
     testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
     testthat::expect_identical(importer_calls, 0L)
 
+    session$setInputs(import_flow = 1)
+    session$flushReact()
+    testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
+    testthat::expect_identical(importer_calls, 0L)
+
     set_inputs_ignoring_interrupted_promises(session,
       local_flow_csv = flow_upload_input(invalid_path)
     )
@@ -133,10 +202,54 @@ testthat::test_that("replacing valid Local Flow with an invalid file removes the
     testthat::expect_error(flow_data(), class = "shiny.silent.error")
     testthat::expect_identical(importer_calls, 0L)
 
-    session$setInputs(import_flow = 1)
+    session$setInputs(import_flow = 2)
     session$flushReact()
     testthat::expect_identical(flow_data()$flow, 99)
     testthat::expect_identical(importer_calls, 1L)
+  })
+})
+
+testthat::test_that("replacing Local Flow invalidates Flow statistics and join state", {
+  rlang::local_bindings(
+    calc_flowstats = function(data, ...) {
+      marker <- data$flow[[1]]
+      list(
+        data.frame(flow_site_id = data$flow_site_id[[1]], start_date = data$date[[1]], source_flow = marker),
+        data.frame(flow_site_id = data$flow_site_id[[1]], source_flow = marker)
+      )
+    },
+    .env = environment(dashboard_server)
+  )
+
+  shiny::testServer(dashboard_server, {
+    source_a <- testthat::test_path("..", "fixtures", "local_flow.csv")
+    source_b <- testthat::test_path("..", "fixtures", "local_flow_extra_columns.csv")
+    set_inputs_ignoring_interrupted_promises(session,
+      meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      local_flow_csv = flow_upload_input(source_a),
+      calc_flow_stats = 1
+    )
+    session$flushReact()
+
+    testthat::expect_identical(flow_stats()[[1]]$source_flow, 12.4)
+    wf$flow_stats_done <- TRUE
+    wf$join_done <- TRUE
+    session$flushReact()
+    testthat::expect_true(wf$flow_stats_done)
+    testthat::expect_true(wf$join_done)
+
+    set_inputs_ignoring_interrupted_promises(session,
+      local_flow_csv = flow_upload_input(source_b)
+    )
+    session$flushReact()
+
+    testthat::expect_false(wf$flow_stats_done)
+    testthat::expect_false(wf$join_done)
+    testthat::expect_identical(flow_data()$flow, 21.5)
+    testthat::expect_error(flow_stats(), class = "shiny.silent.error")
+    testthat::expect_false(grepl("Flow statistics calculated", paste(as.character(output$cp_flow), collapse = ""), fixed = TRUE))
+    testthat::expect_match(paste(as.character(output$cp_hev), collapse = ""), "Flow stats not yet calculated", fixed = TRUE)
+    testthat::expect_match(paste(as.character(output$cp_hev), collapse = ""), "Data not yet joined", fixed = TRUE)
   })
 })
 
@@ -172,5 +285,9 @@ testthat::test_that("external Flow remains available when no valid Local Flow ex
 
     testthat::expect_identical(flow_data()$flow, c(8.5, 9.5))
     testthat::expect_identical(importer_calls, 1L)
+    provenance <- metadata_flow_input_provenance()
+    testthat::expect_identical(provenance$flow_input_value, c("HDE", "NRFA"))
+    testthat::expect_identical(provenance$flow_input_source, c("defaulted", "explicit"))
+    testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
   })
 })

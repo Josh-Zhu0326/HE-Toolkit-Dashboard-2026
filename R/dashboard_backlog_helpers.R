@@ -113,6 +113,7 @@ validate_local_flow <- function(data) {
 
   normalised <- data
   names(normalised) <- names_lower
+  extra_columns <- setdiff(names_lower, required)
   normalised$flow_site_id <- trimws(as.character(normalised$flow_site_id))
   if (any(is.na(normalised$flow_site_id) | !nzchar(normalised$flow_site_id))) {
     return(list(data = NULL, status = "error", messages = "Local flow CSV contains blank flow_site_id values."))
@@ -142,7 +143,18 @@ validate_local_flow <- function(data) {
   }
   normalised$flow <- flow_values
 
-  list(data = normalised, status = "success", messages = "Local flow CSV passed validation and will be used as the Flow data source.")
+  normalised <- normalised[, required, drop = FALSE]
+  messages <- "Local flow CSV passed validation and will be used as the Flow data source."
+  status <- "success"
+  if (length(extra_columns) > 0) {
+    status <- "warning"
+    messages <- c(
+      messages,
+      paste0("Ignored extra Local flow column(s): ", paste(extra_columns, collapse = ", "), ".")
+    )
+  }
+
+  list(data = normalised, status = status, messages = messages)
 }
 
 build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
