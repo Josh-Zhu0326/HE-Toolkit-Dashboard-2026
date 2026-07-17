@@ -1,3 +1,4 @@
+source(testthat::test_path("..", "..", "R", "site_mapping_helpers.R"))
 source(testthat::test_path("..", "..", "R", "dashboard_backlog_helpers.R"))
 
 testthat::test_that("mapping validation reports a missing biol_site_id column", {
