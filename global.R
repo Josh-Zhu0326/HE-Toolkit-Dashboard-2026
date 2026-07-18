@@ -38,6 +38,8 @@ addResourcePath("prefix", "www")
 source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
+source(file.path("R", "filtering_helpers.R"))
+source(file.path("R", "exclusion_log_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()

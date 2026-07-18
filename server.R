@@ -717,6 +717,29 @@ function(input, output, session){
     head(local_inv_upload()$data, 20)
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
 
+  # --- Filtering + exclusion log for local invertebrate data ----------------
+  filtered_inv <- reactive({
+    req(local_inv_upload()$data)
+    filter_records(local_inv_upload()$data)
+  })
+
+  exclusion_log_data <- reactive({
+    build_exclusion_log(filtered_inv())
+  })
+
+  output$exclusion_log_status <- renderUI({
+    format_validation_message(exclusion_log_summary(exclusion_log_data()))
+  })
+
+  output$exclusion_log_table <- DT::renderDataTable({
+    exclusion_log_data()
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$download_exclusion_log <- downloadHandler(
+    filename = function() paste0("exclusion_log_", format(Sys.Date(), "%Y%m%d"), ".csv"),
+    content  = function(file) utils::write.csv(exclusion_log_data(), file, row.names = FALSE)
+  )
+
   output$local_flow_preview <- DT::renderDataTable({
     req(local_flow_upload()$data)
     head(local_flow_upload()$data, 20)
