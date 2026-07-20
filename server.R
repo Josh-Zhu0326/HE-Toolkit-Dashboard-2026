@@ -1562,10 +1562,15 @@ function(input, output, session){
 
   observeEvent(input$run_basic_model, {
     data <- tryCatch(join_data(), error = function(e) NULL)
-    result <- build_basic_flow_ecology_model(
+    # run_model() is the safe UI-facing interface: it validates inputs and
+    # never lets a raw R error reach the user.
+    result <- run_model(
       data = data,
-      flow_var = input$basic_model_flow_var,
-      ecology_var = input$basic_model_ecology_var
+      params = list(
+        flow_var    = input$basic_model_flow_var,
+        ecology_var = input$basic_model_ecology_var,
+        model_type  = "linear"
+      )
     )
     basic_model_result(result)
   })

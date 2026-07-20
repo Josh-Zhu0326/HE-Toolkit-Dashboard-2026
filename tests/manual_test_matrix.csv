@@ -22,3 +22,19 @@ TC-020,Basic model,High,joined HE data,Basic model summary and scatter plot rend
 TC-021,Basic model validation,High,too few rows or no joined data,Clear error shown and app remains connected
 TC-022,Downloads,Medium,,Existing and new downloads are visible in relevant sections
 TC-023,Navigation,Medium,,All pages load with clear titles and help text
+TC-024,Filtering normal,High,tests/fixtures/local_invertebrate.csv,Clean invertebrate data passes filtering with no excluded rows and status success
+TC-025,Filtering missing fields,High,invertebrate CSV with blank biol_site_id/taxon rows,Rows with missing required fields are excluded and listed with a clear reason
+TC-026,Filtering bad values,High,invertebrate CSV with negative and non-numeric abundance,Negative or non-numeric abundance rows are excluded with reason and app stays connected
+TC-027,Filtering bad date,Medium,invertebrate CSV with malformed date,Rows with invalid date format are excluded with a clear reason
+TC-028,Filtering duplicates,Medium,invertebrate CSV with duplicated rows,Duplicate rows are removed keeping the first copy and flagged in the log
+TC-029,Filtering empty file,Medium,empty invertebrate CSV,Empty file is handled without crash and shows an info/error message
+TC-030,Filtering boundary threshold,Medium,invertebrate CSV with a single-record site,Small-site rows are kept but flagged as a warning when min_records_per_site is raised
+TC-031,Exclusion log display,High,invertebrate CSV with mixed good/bad rows,Exclusion log table shows site_id date excluded_value rule severity timestamp for each affected row
+TC-032,Exclusion log summary,Medium,invertebrate CSV with bad rows,Info-level summary states how many records were excluded or flagged
+TC-033,Exclusion log download,Medium,invertebrate CSV with bad rows,Exclusion log downloads as CSV matching the on-screen table
+TC-034,Exclusion log empty,Medium,tests/fixtures/local_invertebrate.csv,Clean data shows an empty exclusion log with No records were excluded or flagged
+TC-035,Model interface valid run,High,joined HE data with numeric flow and ecology variables,run_model returns summary and scatter plot for valid variables
+TC-036,Model interface no selection,High,joined HE data,Running without selecting both variables shows a clear friendly error not a raw R error
+TC-037,Model interface no data,High,no joined data,Running before joining shows a friendly error and app stays connected
+TC-038,Model interface too few rows,Medium,joined data with fewer than 3 complete rows,Clear error states at least 3 observations are needed
+TC-039,Model interface invalid variable,Medium,joined data with a non-existent variable name,Selecting an invalid variable shows a friendly reselect message not a crash
