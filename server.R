@@ -825,6 +825,29 @@ function(input, output, session){
     head(local_inv_upload()$data, 20)
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
 
+  # --- Filtering + exclusion log for local invertebrate data ----------------
+  filtered_inv <- reactive({
+    req(local_inv_upload()$data)
+    filter_records(local_inv_upload()$data)
+  })
+
+  exclusion_log_data <- reactive({
+    build_exclusion_log(filtered_inv())
+  })
+
+  output$exclusion_log_status <- renderUI({
+    format_validation_message(exclusion_log_summary(exclusion_log_data()))
+  })
+
+  output$exclusion_log_table <- DT::renderDataTable({
+    exclusion_log_data()
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$download_exclusion_log <- downloadHandler(
+    filename = function() paste0("exclusion_log_", format(Sys.Date(), "%Y%m%d"), ".csv"),
+    content  = function(file) utils::write.csv(exclusion_log_data(), file, row.names = FALSE)
+  )
+
   output$local_flow_preview <- DT::renderDataTable({
     req(local_flow_upload()$data)
     head(local_flow_upload()$data, 20)
@@ -1683,10 +1706,15 @@ function(input, output, session){
 
   observeEvent(input$run_basic_model, {
     data <- tryCatch(join_data(), error = function(e) NULL)
-    result <- build_basic_flow_ecology_model(
+    # run_model() is the safe UI-facing interface: it validates inputs and
+    # never lets a raw R error reach the user.
+    result <- run_model(
       data = data,
-      flow_var = input$basic_model_flow_var,
-      ecology_var = input$basic_model_ecology_var
+      params = list(
+        flow_var    = input$basic_model_flow_var,
+        ecology_var = input$basic_model_ecology_var,
+        model_type  = "linear"
+      )
     )
     basic_model_result(result)
   })
