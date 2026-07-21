@@ -1,41 +1,39 @@
 # model_interface_helpers.R
-# -----------------------------------------------------------------------------
-# A single, safe entry point between the dashboard UI and the statistical model.
+# This is the safe middle step between the UI and the model.
+# Users don't touch R, they just pick variables and press Run. The server calls
+# run_model(), and run_model() always gives back the same kind of result and
+# never lets a raw R error show up on screen. If something fails it comes back
+# as status = "error" with a plain message.
 #
-# Non-coding users never touch R. They pick variables in the UI and press Run;
-# the server calls run_model() and shows whatever it returns. run_model()
-# guarantees a consistent, structured result and NEVER lets a raw R error reach
-# the user -- any failure comes back as status = "error" with a plain message.
-#
-# EXISTING MODEL (confirmed I/O)
+# The actual model already exists:
 #   build_basic_flow_ecology_model(data, flow_var, ecology_var)
-#     input : joined HE data.frame + two column names
-#     does  : lm(ecology ~ flow) on complete numeric cases
-#     output: list(status, messages, plot, summary)
+#   input : the joined data plus two column names
+#   does  : lm(ecology ~ flow) on the complete numeric rows
+#   output: list(status, messages, plot, summary)
 #
-# run_model() wraps that model:
-#   input : data  = joined HE data.frame (downstream of filtering/join)
-#           params = list(flow_var =, ecology_var =, model_type = "linear")
-#   output: list(status, messages, plot, summary)   (same shape as above)
+# run_model() just wraps it:
+#   input : data = the joined data, params = list(flow_var, ecology_var, model_type)
+#   output: list(status, messages, plot, summary)  (same shape)
 #
-# Depends on: dashboard_backlog_helpers.R (build_basic_flow_ecology_model).
-# -----------------------------------------------------------------------------
+# Needs dashboard_backlog_helpers.R for build_basic_flow_ecology_model.
 
 SUPPORTED_MODEL_TYPES <- c("linear")
 
-# Consistent error result so the caller never has to handle raw errors.
+# a standard error result, so the caller never has to deal with raw errors
 model_error <- function(msg) {
   list(status = "error", messages = msg, plot = NULL, summary = NULL)
 }
 
 run_model <- function(data, params = list()) {
 
-  # --- Read + default the parameters --------------------------------------
+  # read the parameters, default the model type to linear
   flow_var    <- params$flow_var
   ecology_var <- params$ecology_var
   model_type  <- if (is.null(params$model_type)) "linear" else params$model_type
 
-  # --- Pre-flight validation (friendly messages, no raw errors) -----------
+  # check everything before running, and return a friendly message if not ok
+
+  # is the model type one we support?
   if (!model_type %in% SUPPORTED_MODEL_TYPES) {
     return(model_error(paste0(
       "Model type '", model_type, "' is not supported. ",
@@ -43,22 +41,25 @@ run_model <- function(data, params = list()) {
     )))
   }
 
+  # do we actually have data?
   if (is.null(data) || !is.data.frame(data) || nrow(data) == 0) {
     return(model_error(
       "No joined data available. Please complete the previous steps before modelling."
     ))
   }
 
+  # did the user pick both variables?
   if (is.null(flow_var) || is.null(ecology_var) ||
       !nzchar(flow_var) || !nzchar(ecology_var)) {
     return(model_error("Please select both a flow variable and an ecology variable."))
   }
 
+  # do those variables exist in the data?
   if (!all(c(flow_var, ecology_var) %in% names(data))) {
     return(model_error("The selected variables were not found in the data. Please reselect."))
   }
 
-  # --- Run the model, catching ANY failure --------------------------------
+  # run the model. tryCatch catches any error so nothing raw reaches the user.
   result <- tryCatch(
     switch(
       model_type,
@@ -74,7 +75,7 @@ run_model <- function(data, params = list()) {
     }
   )
 
-  # --- Guarantee the expected shape ---------------------------------------
+  # last safety check: make sure we got a proper result back
   if (is.null(result) || is.null(result$status)) {
     return(model_error("The model returned no result. Please try again."))
   }
