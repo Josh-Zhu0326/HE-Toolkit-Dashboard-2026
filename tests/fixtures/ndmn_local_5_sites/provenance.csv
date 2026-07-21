@@ -1,0 +1,7 @@
+dataset,source,retrieval_time_utc,start_date,end_date,package_version,notes
+site_mapping,NDMN site metadata.xlsx,2026-07-20 23:53:53 UTC,,,2.1.3,"Coverage-selected source rows 2, 6, 11, 16 and 40; rhs_site_id intentionally excluded from the standard mapping."
+biology_samples,EA Ecology and Fish Data Explorer,2026-07-20 23:53:53 UTC,2015-01-01,2024-12-31,2.1.3,Historical window fixed for reproducibility; uploaded O:E values are not included.
+environmental_site_data,EA Ecology and Fish Data Explorer,2026-07-20 23:53:53 UTC,,,2.1.3,Site-level fields standardised to the Week 7 data contract.
+flow_daily,EA Hydrology Data Explorer via hetoolkit::import_flow,2026-07-20 23:53:53 UTC,2020-01-01,2024-12-31,2.1.3,"Local flow schema contains flow_site_id, date and flow only; HDE source is recorded in site mapping. hetoolkit 2.1.3 emitted readr parsing warnings while processing HDE metadata/quality fields; 3 missing flow values were retained and date-site coverage was verified offline."
+wq_long_standard,EA Water Quality Explorer via hetoolkit::import_wq,2026-07-20 23:53:53 UTC,2022-01-01,2024-12-31,2.1.3,"Determinands 111, 180 and 9924; qualifiers are preserved and results are not detection-limit adjusted."
+rhs_site_level,EA River Habitat Survey Open Data via hetoolkit::import_rhs,2026-07-20 23:53:53 UTC,,,2.1.3,HMSRBB uses Hms.Rsctned.Bnk.Bed.Sub.Score; rhs_survey_id is the only mapping identifier.

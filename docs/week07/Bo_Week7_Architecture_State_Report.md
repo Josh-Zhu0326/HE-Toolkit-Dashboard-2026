@@ -59,6 +59,10 @@ The module is sourced from `global.R` but does not alter any current calculation
 - model-variable changes invalidate only `model_result`;
 - biology changes invalidate O:E and all dependent join, exploration, HEV and model outputs.
 
+### 4. Reproducible local-data fixtures
+
+A five-site snapshot was downloaded from public Environment Agency services using IDs selected from `NDMN site metadata.xlsx`. The snapshot includes mapping, biology, environmental, HDE flow, WQ and RHS files, plus coverage and provenance records. The offline fixture test confirms ID preservation, frozen schemas, WQ/RHS mapping and plot generation. Detailed evidence is recorded in `docs/week07/ndmn-local-fixture-test-report.md`.
+
 ## Reviewer Findings
 
 ### UX/Workflow review
