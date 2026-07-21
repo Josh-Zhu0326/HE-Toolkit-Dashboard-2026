@@ -93,7 +93,7 @@ assert_columns(
 environment <- environment_raw |>
   dplyr::transmute(
     biol_site_id = as.character(.data$biol_site_id),
-    NGR_prefix = as.character(.data$NGR_PREFIX),
+    NGR_PREFIX = as.character(.data$NGR_PREFIX),
     easting = as.character(.data$EASTING),
     northing = as.character(.data$NORTHING),
     altitude = as.numeric(.data$ALTITUDE),

@@ -1,4 +1,4 @@
-biol_site_id,NGR_prefix,easting,northing,altitude,slope,discharge,distance_from_source,width,depth,alkalinity,conductivity,total_hardness,calcium,boulders_cobbles,pebbles_gravel,sand,silt_clay
+biol_site_id,NGR_PREFIX,easting,northing,altitude,slope,discharge,distance_from_source,width,depth,alkalinity,conductivity,total_hardness,calcium,boulders_cobbles,pebbles_gravel,sand,silt_clay
 10708,SX,22810,68980,183,4.9,4,15,7.9,29.56,11.1,,,,32,48,13,7
 34310,TQ,02648,98966,69,2.2,2,9.37,11,25,251,,,,1,65,24,10
 54017,SO,73263,95802,34,1.4,3,36,6,19.33,162.5,,,,43,52,5,0

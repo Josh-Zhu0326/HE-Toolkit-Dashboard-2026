@@ -56,7 +56,7 @@ stopifnot(!any(grepl("_OE$", names(biology))))
 
 stopifnot(nrow(environment) == 5L)
 stopifnot(setequal(environment$biol_site_id, expected_biology_ids))
-stopifnot(all(nzchar(environment$NGR_prefix)))
+stopifnot(all(nzchar(environment$NGR_PREFIX)))
 alkalinity_available <- nzchar(environment$alkalinity)
 proxy_available <- nzchar(environment$conductivity) |
   nzchar(environment$total_hardness) |
