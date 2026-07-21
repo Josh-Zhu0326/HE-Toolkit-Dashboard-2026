@@ -1,24 +1,16 @@
 # exclusion_log_helpers.R
-# -----------------------------------------------------------------------------
-# Turns the output of filter_records() into a single, tidy EXCLUSION LOG and
-# provides the Shiny pieces to display + download it.
-#
-# The exclusion log answers, for every record that was dropped OR flagged:
-#   WHO   (site_id, date)
-#   WHAT  (the value that triggered the rule)
-#   WHY   (the rule / message + severity)
-#   WHEN  (timestamp)
-#
-# Log columns (fixed order):
-#   site_id | date | excluded_value | rule | severity | timestamp
-#
-# Depends on: filtering_helpers.R (for filter_records output shape).
-# -----------------------------------------------------------------------------
+# This takes what filter_records() gives back and turns it into one tidy log
+# table, plus a short summary message.
+# For every row that was removed or flagged, the log shows who (site_id, date),
+# what value caused it, why (the rule and severity), and when (timestamp).
+# The columns are always in this order:
+#   site_id, date, excluded_value, rule, severity, timestamp
+# Needs filtering_helpers.R because it reads the filter_records() output.
 
 EXCLUSION_LOG_COLUMNS <- c("site_id", "date", "excluded_value",
                            "rule", "severity", "timestamp")
 
-# Empty log with the correct columns (so the UI always has a table to show).
+# an empty log with the right columns, so the table always has something to show
 empty_exclusion_log <- function() {
   df <- data.frame(matrix(character(0), nrow = 0, ncol = length(EXCLUSION_LOG_COLUMNS)),
                    stringsAsFactors = FALSE)
@@ -26,9 +18,8 @@ empty_exclusion_log <- function() {
   df
 }
 
-# Build the exclusion log from a filter_records() result.
-#   filter_result : list returned by filter_records()
-#   timestamp     : override for testing (defaults to current time)
+# build the log from a filter_records() result.
+# timestamp can be passed in for testing, otherwise it uses the current time.
 build_exclusion_log <- function(filter_result, timestamp = NULL) {
   if (is.null(timestamp)) {
     timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
@@ -36,7 +27,7 @@ build_exclusion_log <- function(filter_result, timestamp = NULL) {
 
   parts <- list()
 
-  # 1) Rows that were REMOVED (Errors, duplicates)
+  # rows that were removed (errors and duplicates)
   ex <- filter_result$excluded
   if (!is.null(ex) && nrow(ex) > 0) {
     parts[[length(parts) + 1]] <- data.frame(
@@ -50,7 +41,7 @@ build_exclusion_log <- function(filter_result, timestamp = NULL) {
     )
   }
 
-  # 2) Rows that were KEPT but FLAGGED (Warnings, e.g. small sites)
+  # rows we kept but still flagged (warnings, like small sites)
   lg <- filter_result$log
   if (!is.null(lg) && nrow(lg) > 0) {
     parts[[length(parts) + 1]] <- data.frame(
@@ -64,11 +55,12 @@ build_exclusion_log <- function(filter_result, timestamp = NULL) {
     )
   }
 
+  # nothing to log, return the empty table
   if (length(parts) == 0) return(empty_exclusion_log())
   do.call(rbind, parts)
 }
 
-# Info-level summary message for the log (mirrors format_validation_message).
+# a short info message about the log, to show above the table
 exclusion_log_summary <- function(log) {
   n <- if (is.null(log)) 0 else nrow(log)
   if (n == 0) {
@@ -87,18 +79,15 @@ exclusion_log_summary <- function(log) {
   )
 }
 
-# ---------------------------------------------------------------------------
-# Shiny wiring (plain, non-module style to match server.R).
-# Copy the UI line into ui.R and the server block into server.R, then point
-# `exclusion_log_data` at your filtered result. See docs comment below.
-# ---------------------------------------------------------------------------
-
-# UI: add inside the relevant tab in ui.R
+# How to wire this into the app (plain style, like the rest of server.R).
+# Copy the UI lines into ui.R and the server block into server.R.
+#
+# UI (inside a tab in ui.R):
 #   uiOutput("exclusion_log_status"),
 #   DT::dataTableOutput("exclusion_log_table"),
 #   downloadButton("download_exclusion_log", "Download exclusion log as CSV")
-
-# SERVER: add inside server function in server.R
+#
+# SERVER (inside the server function in server.R):
 #   filtered_inv <- reactive({
 #     req(local_inv_upload()$data)
 #     filter_records(local_inv_upload()$data)

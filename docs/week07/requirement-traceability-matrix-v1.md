@@ -17,12 +17,12 @@
 
 | Role | Main responsibility this week | Owner | Reviewer |
 |---|---|---|---|
-| Architecture/State | Goal configuration, dependencies, states, and stale rules | Bo | Yutong |
+| Architecture/State | Goal configuration, dependencies, states, and stale rules | Bo | Lin |
 | Data Pipeline | Data dictionary, templates, validation, and HDE/RHS schema | Di | Benyu |
-| UX/Workflow | Five-stage navigation, Goal Selector, and checkpoint prototype | Yutong | Bo |
-| Modelling/Evaluation | Filtering, exclusion log, model interface, and experiment design | Lin | Di |
+| UX/Workflow | Five-stage navigation, Goal Selector, and checkpoint prototype | Lin | Bo |
+| Modelling/Evaluation | Filtering, exclusion log, model interface, and experiment design | Yutong | Di |
 | QA/Reproducibility | Testing, error recovery, fixtures, and regression verification | Benyu | Bo |
-| Documentation/Client | Decision log, traceability matrix, meeting evidence, and ethics materials | Zhaohang | Lin |
+| Documentation/Client | Decision log, traceability matrix, meeting evidence, and ethics materials | Zhaohang | Yutong |
 
 ### Report Destination Key
 
