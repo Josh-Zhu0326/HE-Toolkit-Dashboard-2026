@@ -6,7 +6,7 @@ mapping <- read_dashboard_csv(file.path("tests", "fixtures", "mapping.csv"), "Ma
 stopifnot(identical(mapping$status, "success"))
 mapping_validation <- validate_supporting_mapping(mapping$data)
 stopifnot(identical(mapping_validation$status, "warning"))
-stopifnot(any(grepl("rhs_site_id", mapping_validation$messages)))
+stopifnot(any(grepl("rhs_survey_id", mapping_validation$messages)))
 
 missing_mapping <- data.frame(
   biol_site_id = "291",
@@ -22,17 +22,24 @@ duplicated_mapping <- data.frame(
   flow_site_id = c("27090", "27091"),
   flow_input = c("NRFA", "NRFA"),
   wq_site_id = c("WQ1", "WQ2"),
-  rhs_site_id = c("RHS1", "RHS2"),
+  rhs_survey_id = c("RHS1", "RHS2"),
   stringsAsFactors = FALSE
 )
 duplicated_validation <- validate_supporting_mapping(duplicated_mapping)
 stopifnot(identical(duplicated_validation$status, "warning"))
 
+defaulted_mapping <- duplicated_mapping
+defaulted_mapping$flow_input <- NULL
+stopifnot(identical(validate_supporting_mapping(defaulted_mapping)$status, "warning"))
+stopifnot(all(normalise_site_metadata_flow_input(defaulted_mapping)$flow_input == "HDE"))
+
 local_flow <- read_dashboard_csv(file.path("tests", "fixtures", "local_flow.csv"), "Local flow")
-stopifnot(identical(validate_local_flow(local_flow$data)$status, "success"))
+local_flow_validation <- validate_local_flow(local_flow$data)
+stopifnot(identical(local_flow_validation$status, "success"))
+stopifnot(is.character(local_flow_validation$data$flow_site_id))
 
 bad_flow <- local_flow$data
-bad_flow$flow_input[[1]] <- "BAD"
+bad_flow$flow[[1]] <- "BAD"
 stopifnot(identical(validate_local_flow(bad_flow)$status, "error"))
 
 local_inv <- read_dashboard_csv(file.path("tests", "fixtures", "local_invertebrate.csv"), "Local invertebrate")

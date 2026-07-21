@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HE Toolkit — Wireframe Prototype</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f0f0; color: #222; font-size: 13px; }
+
+  /* Screen switcher */
+  .screen { display: none; min-height: 100vh; flex-direction: column; background: #fff; }
+  .screen.active { display: flex; }
+
+  /* ── WIREFRAME ELEMENTS ── */
+  .wf-bar {
+    background: #2E6B3E; color: #fff; padding: 0 24px;
+    display: flex; align-items: center; height: 48px; gap: 16px; flex-shrink: 0;
+  }
+  .wf-bar-title { font-weight: 700; font-size: 14px; }
+  .wf-bar-right { margin-left: auto; font-size: 12px; opacity: 0.7; }
+
+  .wf-hero {
+    background: #3d7a4e; color: #fff; padding: 32px 24px 28px;
+  }
+  .wf-hero h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .wf-hero p { font-size: 13px; opacity: 0.85; max-width: 500px; line-height: 1.5; }
+
+  /* box placeholder */
+  .wf-box {
+    border: 1px solid #ccc; border-radius: 4px;
+    background: #f7f7f7; padding: 16px;
+  }
+  .wf-box-dark { background: #ddd; border-color: #2E6B3E; border-width: 2px; }
+  .wf-box-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: #888; margin-bottom: 8px;
+  }
+  .wf-placeholder {
+    border: 2px dashed #ccc; border-radius: 4px;
+    background: #fafafa; padding: 20px; text-align: center;
+    color: #bbb; font-size: 12px;
+  }
+  .wf-btn {
+    display: inline-block; border: 2px solid #2E6B3E; background: #2E6B3E; color: #fff;
+    padding: 8px 18px; border-radius: 3px; font-size: 12px; font-weight: 700;
+    cursor: pointer;
+  }
+  .wf-btn-outline {
+    display: inline-block; border: 2px solid #2E6B3E; background: #fff; color: #2E6B3E;
+    padding: 8px 18px; border-radius: 3px; font-size: 12px; font-weight: 700;
+    cursor: pointer;
+  }
+  .wf-btn-ghost {
+    display: inline-block; border: 1px solid #2E6B3E; background: #fff; color: #2E6B3E;
+    padding: 6px 14px; border-radius: 3px; font-size: 12px; cursor: pointer;
+  }
+  .wf-link { color: #2E6B3E; text-decoration: underline; cursor: pointer; font-size: 12px; }
+
+  /* annotation */
+  .note {
+    background: #fffbe6; border: 1px solid #e6c800; border-radius: 3px;
+    padding: 6px 10px; font-size: 11px; color: #5a4400; font-style: italic;
+    margin-top: 6px;
+  }
+
+  /* grid helpers */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .span-2 { grid-column: span 2; }
+  .row { display: flex; gap: 12px; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .flex-1 { flex: 1; }
+
+  /* breadcrumb */
+  .wf-crumb {
+    background: #eee; border-bottom: 1px solid #ccc;
+    padding: 6px 24px; font-size: 12px; color: #666;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .wf-crumb span { cursor: pointer; text-decoration: underline; color: #555; }
+  .wf-crumb .current { text-decoration: none; color: #222; font-weight: 700; }
+
+  /* stepper */
+  .stepper { display: flex; align-items: flex-start; padding: 16px 24px; background: #f7f7f7; border-bottom: 1px solid #ccc; }
+  .st-item { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .st-circle {
+    width: 28px; height: 28px; border-radius: 3px; border: 2px solid #ccc;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; background: #fff; color: #aaa;
+  }
+  .st-circle.done { background: #2E6B3E; border-color: #2E6B3E; color: #fff; }
+  .st-circle.active { background: #2E6B3E; border-color: #2E6B3E; color: #fff; outline: 3px solid #a8d4b4; }
+  .st-circle.ready { border-color: #2E6B3E; color: #2E6B3E; background: #fff; }
+  .st-line { flex: 1; height: 2px; background: #ccc; margin-top: 13px; }
+  .st-line.done { background: #2E6B3E; }
+  .st-label { font-size: 10px; margin-top: 5px; color: #666; text-align: center; max-width: 60px; line-height: 1.3; }
+  .st-label.active { color: #2E6B3E; font-weight: 700; }
+
+  /* status chips */
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; border: 1px solid #ccc; }
+  .chip-ok { background: #e8f5e9; border-color: #aaa; color: #2a5c2a; }
+  .chip-warn { background: #fff8e6; border-color: #aaa; color: #7a5a00; }
+  .chip-err { background: #fff0f0; border-color: #aaa; color: #a00; }
+  .chip-req { background: #ffeaea; border-color: #aaa; color: #a00; }
+  .chip-opt { background: #f5f5f5; border-color: #aaa; color: #555; }
+
+  /* status dot */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot-ok { background: #2E6B3E; }
+  .dot-warn { background: #c07800; }
+  .dot-err { background: #c0392b; }
+  .dot-grey { background: #bbb; }
+
+  /* data row */
+  .data-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border: 1px solid #ccc; border-radius: 3px;
+    margin-bottom: 6px; background: #fafafa;
+  }
+  .data-row-warn { border-color: #c07800; background: #fffbf0; }
+  .data-row-err { border-color: #c0392b; background: #fff5f5; }
+  .data-row-ok { border-color: #2E6B3E; background: #f4faf5; }
+  .data-row .label { flex: 1; font-weight: 700; font-size: 12px; }
+  .data-row .sub { font-size: 11px; color: #888; }
+
+  /* checkpoint row */
+  .cp-row {
+    display: flex; gap: 10px; padding: 10px 12px;
+    border: 1px solid #ccc; border-radius: 3px; margin-bottom: 6px;
+    border-left: 4px solid #ccc;
+  }
+  .cp-row.pass { border-left-color: #2E6B3E; background: #f4faf5; }
+  .cp-row.warn { border-left-color: #c07800; background: #fffbf0; }
+  .cp-row.fail { border-left-color: #c0392b; background: #fff5f5; }
+  .cp-title { font-weight: 700; font-size: 12px; margin-bottom: 3px; }
+  .cp-desc { font-size: 11px; color: #666; line-height: 1.4; }
+  .cp-fix { font-size: 11px; color: #2E6B3E; text-decoration: underline; cursor: pointer; margin-top: 3px; }
+  .cp-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+  .cp-badge.pass { background: #e8f5e9; color: #2a5c2a; }
+  .cp-badge.warn { background: #fff8e6; color: #7a5a00; }
+  .cp-badge.fail { background: #fff0f0; color: #a00; }
+
+  /* content area */
+  .content { padding: 20px 24px; flex: 1; }
+
+  /* footer bar */
+  .footer {
+    background: #f7f7f7; border-top: 1px solid #ccc;
+    padding: 10px 24px; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .footer .step-hint { font-size: 11px; color: #888; }
+
+  /* upload zone */
+  .upload-zone {
+    border: 2px dashed #bbb; border-radius: 3px; padding: 16px;
+    text-align: center; font-size: 12px; color: #aaa; cursor: pointer;
+    background: #fafafa;
+  }
+  .upload-zone.done { border-color: #2E6B3E; color: #2E6B3E; background: #f4faf5; border-style: solid; }
+  .upload-zone.warn { border-color: #c07800; color: #7a5a00; background: #fffbf0; border-style: solid; }
+
+  /* section heading */
+  .section-head {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: #888; margin: 14px 0 8px;
+    border-bottom: 1px solid #eee; padding-bottom: 4px;
+  }
+
+  /* count summary chips */
+  .count-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .count-chip { flex: 1; text-align: center; padding: 8px 6px; border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5; }
+  .count-chip .n { font-size: 20px; font-weight: 700; }
+  .count-chip .l { font-size: 10px; color: #666; }
+
+  /* screen label */
+  .screen-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: #bbb; margin-bottom: 6px;
+  }
+
+  hr.wf { border: none; border-top: 1px solid #ddd; margin: 12px 0; }
+
+  /* summary table */
+  .sum-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+  .sum-row:last-child { border: none; }
+
+  /* chart mock */
+  .chart-mock {
+    border: 1px solid #ccc; border-radius: 3px; background: #f5f5f5;
+    height: 120px; display: flex; align-items: flex-end; gap: 4px; padding: 8px 12px 0;
+    position: relative; overflow: hidden;
+  }
+  .chart-bar { border-radius: 2px 2px 0 0; background: #5a9e6f; }
+  .chart-bar.low { background: #b0cdb8; }
+  .chart-bar.high { background: #2E6B3E; }
+  .chart-bar.alert { background: #e8a090; border: 1px solid #c0392b; }
+  .chart-threshold {
+    position: absolute; border-top: 1px dashed #666;
+    left: 0; right: 0;
+  }
+  .chart-label { position: absolute; top: 4px; right: 8px; font-size: 9px; color: #888; }
+  .chart-lock {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(245,245,245,0.9); border-top: 1px solid #ddd;
+    padding: 6px; text-align: center; font-size: 11px; color: #888;
+  }
+
+</style>
+</head>
+<body>
+
+
+<!-- ══════════════════════════════════════
+     SCREEN 1 — Goal Selector
+══════════════════════════════════════ -->
+<div id="s1" class="screen active">
+  <div class="wf-bar">
+    <span class="wf-bar-title">HE Toolkit Dashboard</span>
+    <span class="wf-bar-right">Environment Agency</span>
+  </div>
+
+  <div class="wf-hero">
+    <div class="screen-label">Screen 1 — Goal Selector (Homepage)</div>
+    <h1>What would you like to use the dashboard for?</h1>
+    <p>Select a task. The dashboard guides you through only the steps you need.</p>
+  </div>
+
+  <div class="content">
+    <div class="section-head">Choose your output</div>
+
+    <div class="grid-3">
+
+      <div class="wf-box wf-box-dark" style="cursor:pointer; border-color:#555;" onclick="goTo('s2')">
+        <div class="wf-box-label">★ Primary path</div>
+        <div style="font-weight:700; margin-bottom:4px;">Create HEV Plot</div>
+        <div style="color:#555; font-size:12px; line-height:1.4;">Ecological health vs. flow variability across sites.</div>
+        <hr class="wf">
+        <div style="font-size:11px; color:#777;"><b>Needs:</b> Biology · Environmental · Flow</div>
+        <div class="note">Task entry → triggers full guided workflow</div>
+      </div>
+
+      <div class="wf-box" style="cursor:pointer;" onclick="goTo('s2')">
+        <div class="wf-box-label">Task</div>
+        <div style="font-weight:700; margin-bottom:4px;">Calculate O:E Ratio</div>
+        <div style="color:#555; font-size:12px; line-height:1.4;">Observed ÷ Expected ecological score per site.</div>
+        <hr class="wf">
+        <div style="font-size:11px; color:#777;"><b>Needs:</b> Biology · Environmental only</div>
+        <div class="note">No flow required — simpler path</div>
+      </div>
+
+      <div class="wf-box" style="cursor:pointer;" onclick="goTo('s2')">
+        <div class="wf-box-label">Task</div>
+        <div style="font-weight:700; margin-bottom:4px;">Flow Statistics</div>
+        <div style="color:#555; font-size:12px; line-height:1.4;">Q values and seasonal summaries from daily gauge records.</div>
+        <hr class="wf">
+        <div style="font-size:11px; color:#777;"><b>Needs:</b> Flow data (NRFA or local)</div>
+      </div>
+
+      <div class="wf-box" style="cursor:pointer;" onclick="goTo('s2')">
+        <div class="wf-box-label">Task</div>
+        <div style="font-weight:700; margin-bottom:4px;">Regression Model</div>
+        <div style="color:#555; font-size:12px; line-height:1.4;">Model ecological response to flow and environment.</div>
+        <hr class="wf">
+        <div style="font-size:11px; color:#777;"><b>Needs:</b> Joined dataset + O:E + Flow stats</div>
+      </div>
+
+      <div class="wf-box span-2" style="cursor:pointer;" onclick="goTo('s3')">
+        <div class="wf-box-label">Task</div>
+        <div style="font-weight:700; margin-bottom:4px;">Prepare / Join Dataset</div>
+        <div style="color:#555; font-size:12px; line-height:1.4;">Import and join biology, environmental, flow, and optional supporting data into one dataset.</div>
+        <hr class="wf">
+        <div style="font-size:11px; color:#777;"><b>Needs:</b> Biology · Environmental · Flow · (optional: WQ, RHS)</div>
+      </div>
+
+    </div>
+
+    <div class="note" style="margin-top:14px; max-width:800px;">
+      Note: Tasks are not independent — HEV Plot internally runs O:E + Flow Stats + Join automatically. The interface shows task entry points; the data dependency order runs in the background.
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     SCREEN 2 — Workflow Overview
+══════════════════════════════════════ -->
+<div id="s2" class="screen">
+  <div class="wf-bar">
+    <span class="wf-bar-title">HE Toolkit Dashboard</span>
+    <span class="wf-bar-right">Environment Agency</span>
+  </div>
+
+  <div class="wf-crumb">
+    <span onclick="goTo('s1')">Home</span> › <span class="current">HEV Plot Workflow</span>
+  </div>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    <div class="st-item"><div class="st-circle done">✓</div><div class="st-label">Define goal</div></div>
+    <div class="st-line done"></div>
+    <div class="st-item"><div class="st-circle active">2</div><div class="st-label active">Import data</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">3</div><div class="st-label">Check data</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">4</div><div class="st-label">Process biology</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">5</div><div class="st-label">Process flow</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">6</div><div class="st-label">Join dataset</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">7</div><div class="st-label">Create HEV plot</div></div>
+  </div>
+
+  <div class="content">
+    <div class="screen-label">Screen 2 — Workflow Overview</div>
+    <div class="row">
+
+      <!-- LEFT: Data status -->
+      <div class="col flex-1">
+        <div class="wf-box">
+          <div class="wf-box-label">Step 2 — Import Data</div>
+          <div style="font-size:12px; color:#666; margin-bottom:12px;">Upload required datasets. Status shown for each.</div>
+
+          <div class="count-row">
+            <div class="count-chip"><div class="n">1</div><div class="l">Uploaded</div></div>
+            <div class="count-chip"><div class="n">1</div><div class="l">Warning</div></div>
+            <div class="count-chip"><div class="n">1</div><div class="l">Missing</div></div>
+          </div>
+
+          <div class="section-head">Core inputs</div>
+
+          <div class="data-row data-row-ok">
+            <div class="dot dot-ok"></div>
+            <div class="flex-1">
+              <div class="label">Biology data <span class="chip chip-req">Required</span></div>
+              <div class="sub">47 sites · 94 samples</div>
+            </div>
+            <div class="wf-btn-ghost" onclick="goTo('s3')">Uploaded</div>
+          </div>
+
+          <div class="data-row data-row-warn">
+            <div class="dot dot-warn"></div>
+            <div class="flex-1">
+              <div class="label">Environmental data <span class="chip chip-req">Required</span></div>
+              <div class="sub">[!] 3 sites missing alkalinity</div>
+            </div>
+            <div class="wf-btn-ghost" onclick="goTo('s3')">Review</div>
+          </div>
+
+          <div class="data-row data-row-err">
+            <div class="dot dot-err"></div>
+            <div class="flex-1">
+              <div class="label">Flow data <span class="chip chip-req">Required</span></div>
+              <div class="sub">Not uploaded</div>
+            </div>
+            <div class="wf-btn-ghost" onclick="goTo('s3')">Upload</div>
+          </div>
+
+          <div class="section-head">Supporting inputs (optional)</div>
+
+          <div class="data-row">
+            <div class="dot dot-grey"></div>
+            <div class="flex-1">
+              <div class="label">Water quality <span class="chip chip-opt">Optional</span></div>
+              <div class="sub">Time-varying — for modelling &amp; warnings</div>
+            </div>
+            <div class="wf-btn-ghost" onclick="goTo('s3')">Upload</div>
+          </div>
+
+          <div class="data-row">
+            <div class="dot dot-grey"></div>
+            <div class="flex-1">
+              <div class="label">RHS Survey <span class="chip chip-opt">Optional</span></div>
+              <div class="sub">Site-level — one value per site</div>
+            </div>
+            <div class="wf-btn-ghost" onclick="goTo('s3')">Upload</div>
+          </div>
+
+          <div class="note" style="margin-top:10px;">
+            Hidden dependency: HEV Plot auto-runs Flow Stats → O:E → Join in correct order once all core inputs ready.
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Goal & checklist -->
+      <div class="col" style="width:280px;">
+        <div class="wf-box">
+          <div class="wf-box-label">Your goal</div>
+          <div style="font-weight:700; margin-bottom:8px;">HEV Plot</div>
+          <div class="wf-placeholder" style="height:80px; font-size:11px;">[ HEV plot output — unlocked after all core inputs loaded ]</div>
+          <div style="margin-top:10px;">
+            <button class="wf-btn" style="width:100%; background:#aaa; border-color:#aaa; cursor:not-allowed;">Generate HEV Plot</button>
+            <div class="note" style="margin-top:6px;">Locked — resolve error first</div>
+          </div>
+        </div>
+
+        <div class="wf-box">
+          <div class="wf-box-label">Workflow checklist</div>
+          <div style="font-size:12px; display:flex; flex-direction:column; gap:6px;">
+            <div>✓ Define goal</div>
+            <div style="font-weight:700;">◉ Import data ← current</div>
+            <div style="color:#aaa;">○ Check data quality</div>
+            <div style="color:#aaa;">○ Process biology (RICT / O:E)</div>
+            <div style="color:#aaa;">○ Process flow statistics</div>
+            <div style="color:#aaa;">○ Join HE dataset</div>
+            <div style="color:#aaa;">○ Create HEV plot</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="wf-btn-outline" onclick="goTo('s1')">← Back to home</button>
+    <span class="step-hint">Step 2 of 7</span>
+    <button class="wf-btn" onclick="goTo('s3')">Upload Data →</button>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     SCREEN 3 — Import / Upload Data
+══════════════════════════════════════ -->
+<div id="s3" class="screen">
+  <div class="wf-bar">
+    <span class="wf-bar-title">HE Toolkit Dashboard</span>
+    <span class="wf-bar-right">Environment Agency</span>
+  </div>
+
+  <div class="wf-crumb">
+    <span onclick="goTo('s1')">Home</span> ›
+    <span onclick="goTo('s2')">HEV Plot</span> ›
+    <span class="current">Import Data</span>
+  </div>
+
+  <div class="stepper">
+    <div class="st-item"><div class="st-circle done">✓</div><div class="st-label">Define goal</div></div>
+    <div class="st-line done"></div>
+    <div class="st-item"><div class="st-circle active">2</div><div class="st-label active">Import data</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">3</div><div class="st-label">Check data</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">4</div><div class="st-label">Process biology</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">5</div><div class="st-label">Process flow</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">6</div><div class="st-label">Join dataset</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">7</div><div class="st-label">Create HEV plot</div></div>
+  </div>
+
+  <div class="content">
+    <div class="screen-label">Screen 3 — Import / Upload Data</div>
+
+    <div class="grid-2">
+
+      <!-- Biology -->
+      <div class="wf-box">
+        <div class="wf-box-label">Biology data <span class="chip chip-req">Required</span></div>
+        <div class="upload-zone done">
+          ✓ invertebrate_data_2023.csv<br>
+          <span style="font-size:11px; color:#888;">47 sites · 94 samples</span>
+        </div>
+        <div class="note" style="margin-top:6px;">Columns valid · Site IDs matched</div>
+        <div class="wf-link" style="margin-top:8px; display:block;">Download biology template</div>
+      </div>
+
+      <!-- Environmental -->
+      <div class="wf-box">
+        <div class="wf-box-label">Environmental data <span class="chip chip-req">Required</span></div>
+        <div class="upload-zone warn">
+          [!] env_variables_v2.csv<br>
+          <span style="font-size:11px;">47 sites uploaded</span>
+        </div>
+        <div class="note" style="margin-top:6px; border-color:#c9a000;">[!] 3 sites missing alkalinity (EA-002, EA-017, EA-031). Will be excluded from O:E unless fixed.</div>
+        <div class="wf-link" style="margin-top:8px; display:block;">Download environmental template</div>
+      </div>
+
+      <!-- Flow -->
+      <div class="wf-box">
+        <div class="wf-box-label">Flow data <span class="chip chip-req">Required</span></div>
+
+        <div style="font-size:11px; font-weight:700; margin-bottom:6px;">Option A — NRFA fetch</div>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <input type="text" placeholder="Station IDs, e.g. 39001, 39002" value="39001, 39002, 39050"
+            style="flex:1; padding:6px 8px; border:1px solid #ccc; border-radius:3px; font-size:12px;">
+          <button class="wf-btn-ghost">Fetch</button>
+        </div>
+        <div style="font-size:11px; color:#888; margin-bottom:8px;">— or —</div>
+        <div style="font-size:11px; font-weight:700; margin-bottom:6px;">Option B — Local file upload</div>
+        <div class="upload-zone">Drop CSV / click to browse</div>
+        <div class="note" style="margin-top:6px; border-color:#c00; background:#fff0f0; color:#900;">[Error] Not loaded — required to continue</div>
+        <div class="wf-link" style="margin-top:8px; display:block;">Download flow template</div>
+      </div>
+
+      <!-- Supporting -->
+      <div class="wf-box">
+        <div class="wf-box-label">Supporting inputs <span class="chip chip-opt">Optional</span></div>
+
+        <div style="font-size:12px; color:#666; margin-bottom:10px;">Not needed for O:E ratio. Used for regression modelling and quality warnings.</div>
+
+        <div style="font-weight:700; font-size:12px; margin-bottom:4px;">Water quality</div>
+        <div style="font-size:11px; color:#888; margin-bottom:6px;">Time-varying — select time window, then summarised</div>
+        <div class="upload-zone" style="padding:10px; font-size:11px;">Drop WQ CSV</div>
+        <div class="wf-link" style="margin:4px 0 12px; display:block;">Download WQ template</div>
+
+        <div style="font-weight:700; font-size:12px; margin-bottom:4px;">RHS Survey</div>
+        <div style="font-size:11px; color:#888; margin-bottom:6px;">Site-level — one row per site</div>
+        <div class="upload-zone" style="padding:10px; font-size:11px;">Drop RHS CSV</div>
+        <div class="wf-link" style="margin-top:4px; display:block;">Download RHS template</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="wf-btn-outline" onclick="goTo('s2')">← Workflow overview</button>
+    <span class="step-hint">Step 2 of 7</span>
+    <button class="wf-btn" onclick="goTo('s4')">Check Data Quality →</button>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     SCREEN 4 — Data Checkpoints
+══════════════════════════════════════ -->
+<div id="s4" class="screen">
+  <div class="wf-bar">
+    <span class="wf-bar-title">HE Toolkit Dashboard</span>
+    <span class="wf-bar-right">Environment Agency</span>
+  </div>
+
+  <div class="wf-crumb">
+    <span onclick="goTo('s1')">Home</span> ›
+    <span onclick="goTo('s2')">HEV Plot</span> ›
+    <span onclick="goTo('s3')">Import Data</span> ›
+    <span class="current">Check Data</span>
+  </div>
+
+  <div class="stepper">
+    <div class="st-item"><div class="st-circle done">✓</div><div class="st-label">Define goal</div></div>
+    <div class="st-line done"></div>
+    <div class="st-item"><div class="st-circle done">✓</div><div class="st-label">Import data</div></div>
+    <div class="st-line done"></div>
+    <div class="st-item"><div class="st-circle active">3</div><div class="st-label active">Check data</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">4</div><div class="st-label">Process biology</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">5</div><div class="st-label">Process flow</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">6</div><div class="st-label">Join dataset</div></div>
+    <div class="st-line"></div>
+    <div class="st-item"><div class="st-circle ready">7</div><div class="st-label">Create HEV plot</div></div>
+  </div>
+
+  <div class="content">
+    <div class="screen-label">Screen 4 — Data Quality Checkpoints</div>
+    <div class="row">
+
+      <!-- LEFT: Checkpoints -->
+      <div class="col flex-1">
+        <div class="count-row">
+          <div class="count-chip"><div class="n">5</div><div class="l">Passed</div></div>
+          <div class="count-chip"><div class="n">3</div><div class="l">Warnings</div></div>
+          <div class="count-chip"><div class="n">1</div><div class="l">Error</div></div>
+        </div>
+
+        <div class="cp-row pass">
+          <div style="flex:1;">
+            <div class="cp-title">Metadata validity</div>
+            <div class="cp-desc">Required columns present in biology and environmental files.</div>
+          </div>
+          <span class="cp-badge pass">Pass</span>
+        </div>
+
+        <div class="cp-row pass">
+          <div style="flex:1;">
+            <div class="cp-title">Site ID matching</div>
+            <div class="cp-desc">47 biology sites matched to environmental data.</div>
+          </div>
+          <span class="cp-badge pass">Pass</span>
+        </div>
+
+        <div class="cp-row pass">
+          <div style="flex:1;">
+            <div class="cp-title">Biology sample completeness</div>
+            <div class="cp-desc">94 samples across 47 sites. Min 1 sample/site met.</div>
+          </div>
+          <span class="cp-badge pass">Pass</span>
+        </div>
+
+        <div class="cp-row warn">
+          <div style="flex:1;">
+            <div class="cp-title">[!] Missing environmental variables</div>
+            <div class="cp-desc">Sites EA-002, EA-017, EA-031 missing alkalinity. These will be excluded from O:E calculation.</div>
+            <div class="cp-fix" onclick="goTo('s3')">→ Fix in Import Data</div>
+          </div>
+          <span class="cp-badge warn">Warning</span>
+        </div>
+
+        <div class="cp-row warn">
+          <div style="flex:1;">
+            <div class="cp-title">[!] Biology pre-dates flow period</div>
+            <div class="cp-desc">7 sites: ecology sampled before 2015, flow starts 2016. Temporal mismatch may reduce HEV reliability.</div>
+          </div>
+          <span class="cp-badge warn">Warning</span>
+        </div>
+
+        <div class="cp-row warn">
+          <div style="flex:1;">
+            <div class="cp-title">[!] Potential outliers detected</div>
+            <div class="cp-desc">2 samples with O:E &gt; 2 SD from site mean. Review before proceeding.</div>
+            <div class="cp-fix">→ View flagged samples</div>
+          </div>
+          <span class="cp-badge warn">Warning</span>
+        </div>
+
+        <div class="cp-row fail">
+          <div style="flex:1;">
+            <div class="cp-title">[Error] Flow data not loaded</div>
+            <div class="cp-desc">
+              Flow data required for HEV plot.<br>
+              Accepted: NRFA station IDs or local CSV with columns: date, flow_m3s, station_id.<br>
+              Accepted flow_input values: "HDE" or "NRFA".
+            </div>
+            <div class="cp-fix" onclick="goTo('s3')">→ Go to Import Data to upload</div>
+          </div>
+          <span class="cp-badge fail">Error</span>
+        </div>
+
+        <div class="cp-row pass">
+          <div style="flex:1;">
+            <div class="cp-title">File format valid</div>
+            <div class="cp-desc">UTF-8 CSV, no encoding errors or merged headers.</div>
+          </div>
+          <span class="cp-badge pass">Pass</span>
+        </div>
+
+        <div class="cp-row pass">
+          <div style="flex:1;">
+            <div class="cp-title">Coordinate system</div>
+            <div class="cp-desc">All sites in British National Grid (OSGB36). Within UK bounds.</div>
+          </div>
+          <span class="cp-badge pass">Pass</span>
+        </div>
+      </div>
+
+      <!-- RIGHT: Summary + preview -->
+      <div class="col" style="width:280px;">
+        <div class="wf-box">
+          <div class="wf-box-label">Dataset summary</div>
+          <div class="sum-row"><span>Sites</span><span style="font-weight:700;">47</span></div>
+          <div class="sum-row"><span>Biology samples</span><span style="font-weight:700;">94</span></div>
+          <div class="sum-row"><span>Env. variables</span><span style="font-weight:700; color:#7a5a00;">12 / 15</span></div>
+          <div class="sum-row"><span>Flow data</span><span style="font-weight:700; color:#a00;">Not loaded</span></div>
+          <div class="sum-row"><span>Date range</span><span>2014–2023</span></div>
+          <div class="sum-row"><span>Sites excluded</span><span style="color:#7a5a00;">3</span></div>
+        </div>
+
+        <div class="wf-box">
+          <div class="wf-box-label">HEV plot preview</div>
+          <div class="chart-mock">
+            <span class="chart-label">— Threshold (O:E = 0.9)</span>
+            <div class="chart-threshold" style="bottom:42px;"></div>
+            <div class="chart-bar low" style="height:55px; width:18px;"></div>
+            <div class="chart-bar" style="height:70px; width:18px;"></div>
+            <div class="chart-bar high" style="height:90px; width:18px;"></div>
+            <div class="chart-bar alert" style="height:30px; width:18px;"></div>
+            <div class="chart-bar high" style="height:100px; width:18px;"></div>
+            <div class="chart-bar low" style="height:60px; width:18px;"></div>
+            <div class="chart-bar" style="height:75px; width:18px;"></div>
+            <div class="chart-lock">[Locked] Load flow data to unlock</div>
+          </div>
+          <div class="note" style="margin-top:8px;">Plot layout only — not real data</div>
+        </div>
+
+        <div class="wf-box">
+          <div class="wf-box-label">What happens next</div>
+          <div style="font-size:12px; color:#555; line-height:1.5;">
+            After flow data loaded, runs automatically:<br>
+            1. RICT prediction<br>
+            2. O:E ratio calculation<br>
+            3. Flow statistics<br>
+            4. Dataset join<br>
+            5. HEV plot output
+          </div>
+          <div class="note" style="margin-top:8px;">Warnings noted in output report; do not block processing.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="wf-btn-outline" onclick="goTo('s3')">← Upload Data</button>
+    <span class="step-hint">Step 3 of 7</span>
+    <button class="wf-btn" style="background:#888; border-color:#888; cursor:not-allowed;">Resolve flow error first</button>
+  </div>
+</div>
+
+
+<script>
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const t = document.getElementById(id);
+  if (t) { t.classList.add('active'); window.scrollTo(0,0); }
+  else { document.getElementById('s1').classList.add('active'); }
+}
+</script>
+</body>
+</html>
