@@ -80,13 +80,17 @@ filter_records <- function(data,
 
   is_error <- !is.na(severity) & severity == "Error"
 
-  # duplicate rows are a warning. we keep the first copy and drop the rest.
+  # DEC-23: never auto-delete or aggregate biology samples. If a row looks like
+  # an exact duplicate we only FLAG it (Warning) and keep it in the data.
+  # The sample-level "same site + same date / month-year" duplicate rule is a
+  # separate frozen contract (WK8-16, owned by Di) and is not decided here, so
+  # we do not guess that science and only mark exact repeated rows.
   dup <- duplicated(df) & !is_error
-  flag(dup, "Warning", "Duplicate row (only the first copy is kept)", df$biol_site_id)
+  flag(dup, "Warning", "Possible duplicate row (flagged and kept, not removed)", df$biol_site_id)
 
   # small-site rule is a warning. the row stays but gets flagged.
-  # count the good rows per site first.
-  valid_for_count <- !is_error & !dup
+  # count the good rows per site first (duplicates are kept, so they count).
+  valid_for_count <- !is_error
   site_counts <- table(df$biol_site_id[valid_for_count])
   small_sites <- names(site_counts)[site_counts < min_records_per_site]
   if (length(small_sites) > 0) {
@@ -97,7 +101,8 @@ filter_records <- function(data,
   }
 
   # split into kept rows and excluded rows.
-  remove_row <- is_error | dup            # these rows leave the analysis
+  # only genuinely invalid rows (errors) are removed. duplicates stay in (DEC-23).
+  remove_row <- is_error
   kept_idx   <- which(!remove_row)
   excl_idx   <- which(remove_row)
 

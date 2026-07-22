@@ -43,11 +43,16 @@ stopifnot(all(res$excluded$severity == "Error"))
 stopifnot("exclusion_reason" %in% names(res$excluded))  # reason column exists for the log
 stopifnot(nrow(res$kept) == nrow(inv$data))             # original good rows all survive
 
-# --- 3. Duplicate row -> Warning, first copy kept ---------------------------
+# --- 3. Duplicate row -> flagged as Warning but KEPT (DEC-23) ----------------
+# The dashboard must never auto-delete biology samples, so a duplicate is
+# flagged and kept, not removed.
 dup <- rbind(inv$data, inv$data[1, ])
 res_dup <- filter_records(dup)
-stopifnot(nrow(res_dup$kept) == nrow(inv$data))         # duplicate removed
-stopifnot(any(grepl("Duplicate", res_dup$excluded$exclusion_reason)))
+stopifnot(nrow(res_dup$kept) == nrow(dup))              # nothing removed
+stopifnot(is.null(res_dup$excluded))                    # duplicate is not excluded
+stopifnot(!is.null(res_dup$log))                        # it shows up as a warning
+stopifnot(any(grepl("duplicate", res_dup$log$reason, ignore.case = TRUE)))
+stopifnot(all(res_dup$log$severity == "Warning"))
 
 # --- 4. Outlier cap (optional threshold) ------------------------------------
 res_cap <- filter_records(inv$data, max_abundance = 20)
