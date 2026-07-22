@@ -1,7 +1,7 @@
 # Week 7 Requirement Traceability Matrix — v1
 
 > Date: 13 July 2026  
-> Decision source: [Week 7 Client Decision Log](client-decision-log-v1.md)  
+> Decision source: [Week 7 Client Decision Log](../client-decision-log-v1.md)
 > Matrix owner: Zhaohang (Documentation/Client)  
 > Matrix reviewer: Lin (Modelling/Evaluation)
 

@@ -1,6 +1,15 @@
 # Week 7 Client Decision Log
 
 > Scope: v1 decisions frozen from client feedback available by 13 July 2026.
+>
+> Controlled update: v1.1 adds the 17 and 21 July 2026 UI direction, terminology, and extension decisions without rewriting the historical Week 7 baseline.
+
+## Version History
+
+| Version | Date | Change |
+|---|---|---|
+| v1.0 | 2026-07-17 | Week 7 client-decision baseline. |
+| v1.1 | 2026-07-21 | Added the confirmed Option A direction, Task terminology, eight wording replacements, extension priorities, and the ethics-status resolution. |
 
 ## 1. Decision Rules and Sources
 
@@ -19,6 +28,8 @@ The latest client confirmation overrides only conflicting older assumptions; ear
 | `SRC-03` | [Data template and dependency map](../../../ProjectInfo/client_feedback/2026-07-10_122900_data-template-and-dependency-map.md) |
 | `SRC-04` | [Local upload and whiteboard clarification](../../../ProjectInfo/client_feedback/2026-07-07_142800_local-data-upload-and-whiteboard-files.md) |
 | `SRC-05` | HE Toolkit package [`import_wq()` documentation/implementation](../../../HE-Toolkit-Shiny-UI-APEM-LTD/R/import_wq.R) and [Case Study 1 WQ rules](../../../HE-Toolkit-Shiny-UI-APEM-LTD/vignettes/CaseStudy1.Rmd) |
+| `SRC-06` | [UI direction and extension prioritisation](../../../ProjectInfo/client_feedback/2026-07-17_102650_ui-direction-and-extension-prioritisation.md) |
+| `SRC-07` | [UI wording and extension priorities](../../../ProjectInfo/client_feedback/2026-07-21_115543_ui-wording-and-extension-priorities.md) |
 
 ## 2. Final Decisions
 
@@ -50,7 +61,38 @@ The latest client confirmation overrides only conflicting older assumptions; ear
 | DEC-24 | Store WQ `det_id` as a four-character string in v1. Orthophosphate uses `0180` (`Orthophosphate reactive as P`, canonical unit `mg/L`) with the mean; ammonia uses `0111` (`Ammoniacal Nitrogen as N`, canonical unit `mg/L`) with P90. `0119` (un-ionised ammonia) is a different determinand and must not be treated as an alias of `0111` or silently included in ammonia P90. Normalise input unit aliases `mg/L`, `mg/l`, and `MILLIGRAM PER LITRE` to `mg/L`, while preserving the source value, source unit, qualifier, and normalisation provenance. | `TEAM-V1 + INTERNAL` | `SRC-01 + SRC-05` | Update the WQ registry, schema, normalisation, enrichment, and tests; the exact dissolved-oxygen determinand remains under the narrowed `OPEN-02`. |
 | DEC-25 | XLSX sheet and column order is a versioned team data contract, not a client-confirmation item. The v1 importer validates the canonical order in `data-contract-v1.md`; the legacy workbook is migration input and cannot override the frozen schema. | `TEAM-V1 + INTERNAL` | `SRC-01 + SRC-03 + SRC-04` | Update the template, field dictionary, importer, order-difference messages, and row-bind tests to the frozen order. |
 
-## 3. Deferred and Open Items
+## 3. Controlled Update - 2026-07-21
+
+The following decisions supplement the Week 7 baseline. They do not retrospectively alter the wording or status recorded in the original decisions above.
+
+| ID | Final decision | Basis | Source | Required action |
+|--|---|---|---|---|
+| DEC-26 | Use Option A, the guided five-stage workflow, as the single primary workflow direction. Task selection may expose the appropriate five-stage route but must not create a competing navigation system. Preserve reusable completed outputs when users move between Tasks. | `CLIENT + INTERNAL` | `SRC-06 + SRC-07` | Integrate the Option A structure into the real Shiny application and derive Task/stage guidance from one shared configuration and runtime state. |
+| DEC-27 | Use `Task`, not `Goal`, in all user-facing workflow labels, guidance, help text, tests of visible wording, and participant materials. Stable internal identifiers such as `goal_id` may remain where renaming would add compatibility risk, provided they are never presented to users. | `CLIENT + INTERNAL` | `SRC-07` | Replace visible `Goal` wording; keep any retained internal identifier explicitly documented as implementation-only. |
+| DEC-28 | Apply the eight client-confirmed wording replacements in the controlled wording register below. Internal objects such as `analysis_dataset` may retain stable technical names, but those names must not be used as user-facing Task or output labels. | `CLIENT + INTERNAL` | `SRC-07` | Update the prototype-to-Shiny mapping, UI text, help text, visible-wording tests, and pilot materials. |
+| DEC-29 | Explain flow-source behaviour in plain language: NRFA is an alternative flow-data source for sites not available through HDE. Do not show the unexplained phrase `NRFA fallback` to users; continue recording the actual source and reason internally. | `CLIENT + TEAM-V1` | `SRC-06 + SRC-07` | Use `Data source` and, where transformation history is shown, `Data history`; retain structured source/fallback fields in internal provenance. |
+| DEC-30 | Local biology, flow, WQ, and RHS file import is required. A general-purpose workspace for adding, editing, merging, deleting, or renaming whole datasets is not required; image-data support is also out of scope. | `CLIENT` | `SRC-07` | Implement the agreed local-file contracts and retain record-level Task 4/5 refinement without building a general dataset manager. |
+| DEC-31 | Provide processed-dataset download checkpoints and allow a processed dataset to be uploaded in a later session for Tasks 4 and 5. Direct automatic in-session hand-off is useful but not essential when download/re-upload provides a clear route. | `CLIENT + TEAM-V1` | `SRC-06 + SRC-07` | Treat download/re-upload as the v1 continuity path; preserve automatic hand-off as a separately prioritised enhancement. |
+| DEC-32 | Tasks 4 and 5 are iterative. Users may filter or restore individual sites and samples and regenerate HEV outputs; modelling users may change predictors, re-fit, and retain enough history to compare model results. Upstream processed and joined data must remain non-destructive. | `CLIENT + INTERNAL` | `SRC-07` | Implement record-level exclusion/restoration, precise stale propagation, re-plot/re-fit behaviour, and auditable data/model history. |
+| DEC-33 | Detect same-site, same-day biology, flow, and WQ duplicates and require an explicit user decision to retain, average, or remove records. Do not silently aggregate or delete duplicates. Detailed averaging and selection rules remain open where more than two or non-numeric records are involved. | `CLIENT + INTERNAL` | `SRC-07` | Add duplicate detection and an explainable blocker until the user chooses an eligible resolution; close the remaining scientific rules before implementing averaging. |
+| DEC-34 | A colour-coded site-pairing map, a user guide/home page, constrained GAMs, selectable downloadable Task 4/5 reports, multiple flow-statistic windows, and raw-daily-flow/processed-statistic HEV display options are useful additions. They do not override the frozen core workflow or enter v1 acceptance without explicit prioritisation and acceptance criteria. | `CLIENT + INTERNAL` | `SRC-07` | Keep each addition as a separately scoped backlog item with dependencies, tests, and a report destination. |
+| DEC-35 | The canonical internal Task identifier field is `task_id`. Its frozen ordered values are `ecological_condition`, `flow_regime`, `build_he_dataset`, `generate_hev`, and `he_modelling`. For the current implementation, this resolves DEC-27's conditional compatibility allowance in favour of `task_id`. The legacy `goal_id` field and earlier Goal IDs remain only in preserved historical documents; active configuration and runtime code do not maintain a second alias. | `TEAM-V1 + INTERNAL` | `SRC-07` | Enforce the exact identifier field, values, and order in automated tests; require controlled change and compatibility review before any future rename. |
+| DEC-36 | Task 3 completes at its Stage 3 processed-dataset checkpoint. Stage 4 exploration/refinement is optional for Task 3 and remains required for iterative Tasks 4 and 5. | `TEAM-V1 + INTERNAL` | `SRC-07` | Use the Task 3 path `R, R, R, O, O`; exclude `analysis_dataset` from its Required artifacts; consume `processed_dataset_checkpoint` as its runtime completion artifact. |
+
+### Controlled User-Facing Wording Register
+
+| Previous wording | Confirmed user-facing wording |
+|---|---|
+| `Goal` | `Task` |
+| `RICT and calculated O:E` | `Expected values and O:E ratios` |
+| `Create separate core, enriched and filtered analysis layers` | `Join biomonitoring indices with flow statistics and other environmental data` |
+| `Versioned analysis_dataset` | `Joined HE dataset` |
+| `Visualise hydroecological change` | `Generate HEV plots` |
+| `Generate an HEV view from a current, traceable analysis dataset` | `Produce HEV plots with daily flows or flow statistics` |
+| `Explore flow-ecology relationships` | `Undertake HE modelling` |
+| `Explore variables and fit an eligible multiple-predictor model` | `Fit, compare and visualise regression-based HE models` |
+
+## 4. Deferred and Open Items
 
 ### Deferred beyond v1
 
@@ -73,8 +115,21 @@ The latest client confirmation overrides only conflicting older assumptions; ear
 | OPEN-04 | Availability and final count of six EA volunteers | Prepare an availability poll and participant information | Zhaohang (Documentation/Client) |
 | OPEN-05 | Ethical approval by 21 July | Do not start formal research without approval | Go/no-go on 21 July |
 | OPEN-06 | Minimum data conditions and failure handling for mixed-effects models | A [modelling-contract review baseline](modelling-contract-v1.md) exists, but do not mark the mixed-model path ready or `Verified` until every `MC-O*` item is reviewed and the contract is frozen; the single-site additive path may proceed independently | Lin (Modelling/Evaluation); resolve by freezing minimum sites, per-site/total complete cases, random-slope repeated observations, scaling/missingness rules, convergence/singularity handling, R²/reference parity, and warning/error/export boundaries |
+| OPEN-07 | Exact placement of the user guide/home page | It must support, not compete with, the Option A primary navigation | UX/Workflow owner; resolve before implementation |
+| OPEN-08 | GAM families, smoothing controls, diagnostics, and comparison outputs | Do not infer unsupported scientific defaults from the Case Study 2 example | Modelling/Evaluation owner; obtain client/scientific review |
+| OPEN-09 | Whether three flow-statistic windows is a fixed maximum | Treat three as a recommendation, not a confirmed acceptance limit | Documentation/Client owner |
+| OPEN-10 | Duplicate selection and averaging rules for more than two or non-numeric records | Detect and block the affected resolution action; never silently average or remove | Data Pipeline owner with scientific review |
+| OPEN-11 | Required report format and permitted interpretation content | Do not promise interactive tabs in a static format or introduce AI interpretation | Documentation/Client and Modelling/Evaluation owners |
 
-## 4. Execution Rules
+### Resolved Open Items
+
+The original `OPEN-05` row is retained above as historical Week 7 evidence. Its active status is superseded by the resolution below.
+
+| Open item | Resolution date | Resolution |
+|---|---|---|
+| OPEN-05 | 2026-07-21 | Ethics approval confirmed. Archive the authoritative approval reference/date, approved scope, participant-material versions, and data-handling boundaries in the controlled ethics record before counting pilot or formal-study data. |
+
+## 5. Execution Rules
 
 1. Every implementation issue must reference its `DEC-*` entry and source.
 2. Superseded assumptions must not drive new implementation work.

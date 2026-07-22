@@ -7,7 +7,7 @@
 > Decisions: `DEC-08`, `DEC-09`, `DEC-10`, `DEC-21`  
 > Requirements: `RTM-08A`, `RTM-08B`, `RTM-09`, `RTM-10`, `RTM-21`  
 > Open item: `OPEN-06`  
-> Sources: [Client Decision Log](client-decision-log-v1.md) and [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)  
+> Sources: [Client Decision Log](../client-decision-log-v1.md) and [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
 
 ## 1. Purpose and Current State
 

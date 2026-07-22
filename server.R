@@ -1,9 +1,70 @@
 # This file contains the server function, allowing user interactions with the dashboard to be executed
 
 function(input, output, session){
-  
+
+  # FIVE-STAGE WORKFLOW SHELL ----
+  # Preserve this registry when changing Tasks so reusable outputs remain available.
+  workflow_artifacts <- reactiveVal(new_he_artifact_registry())
+  workflow_session <- reactiveValues(
+    task_id = NULL,
+    stage_index = 1L
+  )
+
+  output$workflow_shell <- renderUI({
+    workflow_shell_ui(
+      task_id = workflow_session$task_id,
+      current_stage = workflow_session$stage_index,
+      registry = workflow_artifacts()
+    )
+  })
+
+  # Always derive Resume from artifact state; do not hard-code a starting Stage.
+  lapply(he_workflow_task_ids(), function(task_id) {
+    observeEvent(input[[paste0("select_task__", task_id)]], {
+      task <- get_he_workflow_task(task_id)
+      workflow_session$task_id <- task_id
+      workflow_session$stage_index <- workflow_resume_stage(
+        task,
+        workflow_artifacts()
+      )
+    }, ignoreInit = TRUE)
+  })
+
+  # Keep unused "-" Stages inaccessible in both the UI and server.
+  lapply(seq_along(he_workflow_stages), function(stage_index) {
+    observeEvent(input[[paste0("workflow_stage_", stage_index)]], {
+      req(workflow_session$task_id)
+      task <- get_he_workflow_task(workflow_session$task_id)
+      if (!identical(task$stage_path[[stage_index]], "-")) {
+        workflow_session$stage_index <- stage_index
+      }
+    }, ignoreInit = TRUE)
+  })
+
+  observeEvent(input$change_task, {
+    workflow_session$task_id <- NULL
+    workflow_session$stage_index <- 1L
+  }, ignoreInit = TRUE)
+
+  # Route primary actions through the shared mapping; do not duplicate panel rules here.
+  observeEvent(input$workflow_primary_action, {
+    req(workflow_session$task_id)
+    target <- workflow_nav_target(
+      workflow_session$task_id,
+      workflow_session$stage_index
+    )
+    updateNavbarPage(session, "main_nav", selected = target)
+  }, ignoreInit = TRUE)
+
+  output$workflow_status_announcement <- renderText({
+    req(workflow_session$task_id)
+    task <- get_he_workflow_task(workflow_session$task_id)
+    stage <- he_workflow_stages[[workflow_session$stage_index]]
+    sprintf("Current Task: %s. Current stage: %s.", task$task_label, stage$stage_label)
+  })
+
   # INTRO PAGE ----
-  
+
   output$intro_page <- renderUI({
     tags$iframe(
       id = "intro-page-frame",
@@ -23,7 +84,7 @@ function(input, output, session){
     )
   })
   
-  #jump to cards
+  # jump to cards
   observeEvent(input$goto_hev,     {
     updateNavbarPage(session, "main_nav", selected = "HEV Plots") 
   })
@@ -48,18 +109,78 @@ function(input, output, session){
     updateNavbarPage(session, "main_nav", selected = "Analysis")
   })
   
-  #workflow state ----
-  wf <- reactiveValues(
-    biol_loaded     = FALSE,
-    env_loaded      = FALSE,
-    flow_loaded     = FALSE,
-    rict_done       = FALSE,
-    oe_done         = FALSE,
-    flow_stats_done = FALSE,
-    join_done       = FALSE
-  )
+  # WORKFLOW ARTIFACT ADAPTERS ----
+  # Route real business outcomes through these adapters; never complete on click.
+  workflow_set_artifact <- function(
+      artifact_id,
+      status,
+      data_source = NULL,
+      history_summary = NULL,
+      blocking_reason = NULL,
+      next_action = NULL,
+      invalidate_downstream = FALSE) {
+    registry <- isolate(workflow_artifacts())
+    if (invalidate_downstream) {
+      registry <- invalidate_he_artifacts_from(registry, artifact_id)
+    }
+    registry <- set_he_artifact_status(
+      registry,
+      artifact_id,
+      status,
+      data_source = data_source,
+      history_summary = history_summary,
+      blocking_reason = blocking_reason,
+      next_action = next_action
+    )
+    workflow_artifacts(registry)
+    invisible(registry[[artifact_id]])
+  }
+
+  workflow_begin_artifact <- function(artifact_id, next_action) {
+    workflow_set_artifact(
+      artifact_id,
+      "running",
+      next_action = next_action,
+      invalidate_downstream = TRUE
+    )
+  }
+
+  workflow_complete_artifact <- function(artifact_id, data_source, history_summary) {
+    workflow_set_artifact(
+      artifact_id,
+      "complete",
+      data_source = data_source,
+      history_summary = history_summary,
+      invalidate_downstream = TRUE
+    )
+  }
+
+  workflow_reset_artifact <- function(artifact_id, blocking_reason, next_action) {
+    workflow_set_artifact(
+      artifact_id,
+      "not_started",
+      blocking_reason = blocking_reason,
+      next_action = next_action,
+      invalidate_downstream = TRUE
+    )
+  }
+
+  workflow_artifact_is_current <- function(artifact_id) {
+    artifact_is_current(workflow_artifacts()[[artifact_id]])
+  }
+
+  workflow_checkpoint_card <- function(artifact_id, complete_message, blocked_message) {
+    artifact <- workflow_artifacts()[[artifact_id]]
+    if (artifact_is_current(artifact)) {
+      status <- if (identical(artifact$status, "warning")) "warn" else "pass"
+      return(cp_card(status, complete_message))
+    }
+    cp_card("fail", blocked_message)
+  }
+
   server_context <- environment()
   flow_source_revision <- reactiveVal(0L)
+  external_flow_loaded <- reactiveVal(FALSE)
   external_flow_revision <- reactiveVal(NULL)
   external_import_requested_revision <- reactiveVal(NULL)
   flow_stats_revision <- reactiveVal(NULL)
@@ -72,14 +193,17 @@ function(input, output, session){
 
   invalidate_flow_derived_state <- function(reset_external = FALSE) {
     flow_source_revision(isolate(flow_source_revision()) + 1L)
-    wf$flow_stats_done <- FALSE
-    wf$join_done <- FALSE
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
+    workflow_reset_artifact(
+      "flow_input",
+      "The Flow source changed after downstream outputs were generated.",
+      "Validate or import the current Flow source."
+    )
 
     if (reset_external) {
-      wf$flow_loaded <- FALSE
+      external_flow_loaded(FALSE)
       external_flow_revision(NULL)
       external_import_requested_revision(NULL)
     }
@@ -100,46 +224,84 @@ function(input, output, session){
     }
   }
 
-  observeEvent(input$import_inv,      { wf$biol_loaded     <- TRUE })
-  observeEvent(input$import_env,      { wf$env_loaded      <- TRUE })
-  observeEvent(input$run_rict,        { wf$rict_done       <- TRUE })
-  observeEvent(input$calc_OE,         { wf$oe_done         <- TRUE })
-  observeEvent(input$calc_flow_stats, { wf$flow_stats_done <- TRUE })
-  observeEvent(input$join_he,         { wf$join_done       <- TRUE })
+  observeEvent(input$import_inv, {
+    workflow_begin_artifact("biology_input", "Complete the Biology import.")
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(input$import_env, {
+    workflow_begin_artifact("environment_input", "Complete the environmental-data import.")
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(input$run_rict, {
+    workflow_begin_artifact("processed_environment", "Complete RICT prediction processing.")
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(input$calc_OE, {
+    workflow_begin_artifact("oe_result", "Complete the O:E calculation.")
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(input$calc_flow_stats, {
+    workflow_begin_artifact("flow_statistics", "Complete the Flow-statistics calculation.")
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(input$join_he, {
+    workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
+  }, ignoreInit = TRUE, priority = 100)
+  observeEvent(input$renderHEV, {
+    workflow_begin_artifact("hev_result", "Complete HEV plot generation.")
+  }, ignoreInit = TRUE, priority = 100)
   
   output$cp_biology <- renderUI({
     tagList(
-      cp_card(if (wf$biol_loaded) "pass" else "fail",
-              if (wf$biol_loaded) "Biology data loaded" else "[Blocked] Biology data not imported"),
-      cp_card(if (wf$env_loaded)  "pass" else "fail",
-              if (wf$env_loaded)  "Environmental data loaded" else "[Blocked] Environmental data not imported"),
-      if (wf$rict_done) cp_card("pass", "RICT predictions complete"),
-      if (wf$oe_done)   cp_card("pass", "O:E ratios calculated")
+      workflow_checkpoint_card(
+        "biology_input",
+        "Biology data loaded",
+        "[Blocked] Biology data not imported"
+      ),
+      workflow_checkpoint_card(
+        "environment_input",
+        "Environmental data loaded",
+        "[Blocked] Environmental data not imported"
+      ),
+      if (workflow_artifact_is_current("processed_environment")) {
+        cp_card("pass", "RICT predictions complete")
+      },
+      if (workflow_artifact_is_current("oe_result")) {
+        cp_card("pass", "O:E ratios calculated")
+      }
     )
   })
   
   output$cp_flow <- renderUI({
-    local_flow_loaded <- local_flow_is_operational(local_flow_upload())
-    external_flow_loaded <- isTRUE(wf$flow_loaded) &&
-      identical(external_flow_revision(), flow_source_revision())
-    flow_loaded <- local_flow_loaded || external_flow_loaded
     tagList(
-      cp_card(if (flow_loaded)     "pass" else "fail",
-              if (flow_loaded)     "Flow data loaded" else "[Blocked] Flow data not imported"),
-      if (wf$flow_stats_done) cp_card("pass", "Flow statistics calculated")
+      workflow_checkpoint_card(
+        "flow_input",
+        "Flow data loaded",
+        "[Blocked] Flow data not imported"
+      ),
+      if (workflow_artifact_is_current("flow_statistics")) {
+        cp_card("pass", "Flow statistics calculated")
+      }
     )
   })
   
   output$cp_hev <- renderUI({
     tagList(
-      cp_card(if (wf$oe_done)         "pass" else "fail",
-              if (wf$oe_done)         "O:E ratios ready" else "[Blocked] O:E not yet calculated"),
-      cp_card(if (wf$flow_stats_done) "pass" else "fail",
-              if (wf$flow_stats_done) "Flow statistics ready" else "[Blocked] Flow stats not yet calculated"),
-      cp_card(if (wf$join_done)       "pass" else "fail",
-              if (wf$join_done)       "Biology and flow paired" else "[Blocked] Data not yet joined (Analysis page)"),
-      if (wf$oe_done && wf$flow_stats_done && wf$join_done)
+      workflow_checkpoint_card(
+        "oe_result",
+        "O:E ratios ready",
+        "[Blocked] O:E not yet calculated"
+      ),
+      workflow_checkpoint_card(
+        "flow_statistics",
+        "Flow statistics ready",
+        "[Blocked] Flow stats not yet calculated"
+      ),
+      workflow_checkpoint_card(
+        "joined_core",
+        "Biology and Flow paired",
+        "[Blocked] Data not yet joined (Analysis page)"
+      ),
+      if (workflow_artifact_is_current("oe_result") &&
+          workflow_artifact_is_current("flow_statistics") &&
+          workflow_artifact_is_current("joined_core")) {
         cp_card("pass", "All prerequisites met — ready to generate HEV plot")
+      }
     )
   })
 
@@ -332,6 +494,48 @@ function(input, output, session){
     list(data = read_result$data, validation = validation)
   })
 
+  observeEvent(input$wq_csv, {
+    workflow_reset_artifact(
+      "wq_input",
+      "The WQ source changed.",
+      "Validate the current WQ source if enrichment is required."
+    )
+  }, ignoreNULL = FALSE, priority = 200)
+
+  observeEvent(input$rhs_csv, {
+    workflow_reset_artifact(
+      "rhs_input",
+      "The RHS source changed.",
+      "Validate the current RHS source if enrichment is required."
+    )
+  }, ignoreNULL = FALSE, priority = 200)
+
+  observeEvent(wq_upload(), {
+    upload <- wq_upload()
+    req(!is.null(upload$data), nrow(upload$data) > 0L)
+    req(upload$validation$status %in% c("success", "warning"))
+    workflow_set_artifact(
+      "wq_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local WQ file",
+      history_summary = "Validated local WQ upload.",
+      invalidate_downstream = TRUE
+    )
+  })
+
+  observeEvent(rhs_upload(), {
+    upload <- rhs_upload()
+    req(!is.null(upload$data), nrow(upload$data) > 0L)
+    req(upload$validation$status %in% c("success", "warning"))
+    workflow_set_artifact(
+      "rhs_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local RHS file",
+      history_summary = "Validated local RHS upload.",
+      invalidate_downstream = TRUE
+    )
+  })
+
   output$wq_validation_status <- renderUI({
     format_validation_message(wq_upload()$validation)
   })
@@ -446,6 +650,16 @@ function(input, output, session){
     metadata_result()$data
   })
 
+  observeEvent(metadata(), {
+    site_metadata <- metadata()
+    req(nrow(site_metadata) > 0L)
+    workflow_complete_artifact(
+      "site_mapping",
+      "Validated site metadata",
+      sprintf("Validated %d site-mapping row(s).", nrow(site_metadata))
+    )
+  })
+
   metadata_flow_input_provenance <- reactive({
     metadata_result()$flow_input_provenance
   })
@@ -525,6 +739,11 @@ function(input, output, session){
       message,
       "WQ records are mapped through wq_site_id; no ID equality with biology or flow sites is assumed."
     )))
+    workflow_complete_artifact(
+      "wq_input",
+      "Water Quality Explorer",
+      sprintf("Imported %d mapped WQ record(s).", nrow(output_data))
+    )
     showNotification(message, type = "message")
   })
 
@@ -577,6 +796,11 @@ function(input, output, session){
       message,
       "RHS records are mapped through rhs_survey_id; RHS site IDs are not used as survey IDs."
     )))
+    workflow_complete_artifact(
+      "rhs_input",
+      "RHS import",
+      sprintf("Imported %d mapped RHS record(s).", nrow(output_data))
+    )
     showNotification(message, type = "message")
   })
 
@@ -789,11 +1013,41 @@ function(input, output, session){
     list(data = data, validation = validation)
   })
 
+  observeEvent(local_inv_upload(), {
+    upload <- local_inv_upload()
+    req(!is.null(upload$data), nrow(upload$data) > 0L)
+    req(upload$validation$status %in% c("success", "warning"))
+    workflow_set_artifact(
+      "biology_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local invertebrate file",
+      history_summary = "Validated local invertebrate upload.",
+      invalidate_downstream = TRUE
+    )
+  })
+
+  observeEvent(local_flow_upload(), {
+    upload <- local_flow_upload()
+    req(local_flow_is_operational(upload), !is.null(upload$data), nrow(upload$data) > 0L)
+    workflow_set_artifact(
+      "flow_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local Flow file",
+      history_summary = "Validated local Flow upload.",
+      invalidate_downstream = TRUE
+    )
+  })
+
   observeEvent(input$local_flow_csv, {
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$meta_paste, {
+    workflow_reset_artifact(
+      "site_mapping",
+      "Site metadata changed.",
+      "Validate the current site mapping."
+    )
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
@@ -871,6 +1125,16 @@ function(input, output, session){
     import_inv(source = "parquet", sites = biol_sites, start_date = input$date_range_biol[1],
                end_date = input$date_range_biol[2])
   })
+
+  observeEvent(biol_data(), {
+    imported <- biol_data()
+    req(nrow(imported) > 0L)
+    workflow_complete_artifact(
+      "biology_input",
+      "Biology import",
+      sprintf("Imported %d Biology record(s).", nrow(imported))
+    )
+  })
   
   
   #### warning message for unID'd sites----
@@ -899,6 +1163,16 @@ function(input, output, session){
     biol_sites <- as.character(metadata()$biol_site_id)
     
     import_env(sites = biol_sites) %>% mutate(across(BOULDERS_COBBLES: SILT_CLAY, ~tidyr::replace_na(.,0)))
+  })
+
+  observeEvent(env_data(), {
+    imported <- env_data()
+    req(nrow(imported) > 0L)
+    workflow_complete_artifact(
+      "environment_input",
+      "Environmental import",
+      sprintf("Imported %d environmental record(s).", nrow(imported))
+    )
   })
   
   #### warning message for unID'd sites----
@@ -955,9 +1229,19 @@ function(input, output, session){
 
     imported <- import_dashboard_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
                                       end_date = input$date_range_flow[2])
-    wf$flow_loaded <- TRUE
+    external_flow_loaded(TRUE)
     external_flow_revision(isolate(flow_source_revision()))
     imported
+  })
+
+  observeEvent(external_flow_data(), {
+    imported <- external_flow_data()
+    req(nrow(imported) > 0L)
+    workflow_complete_artifact(
+      "flow_input",
+      "HDE/NRFA Flow import",
+      sprintf("Imported %d Flow record(s).", nrow(imported))
+    )
   })
 
   flow_data <- reactive({
@@ -967,7 +1251,7 @@ function(input, output, session){
     }
 
     imported <- external_flow_data()
-    req(isTRUE(wf$flow_loaded))
+    req(isTRUE(external_flow_loaded()))
     req(identical(external_flow_revision(), flow_source_revision()))
     imported
   })
@@ -1050,11 +1334,21 @@ function(input, output, session){
     keeps <- c("biol_site_id", "SEASON", "TL2_WHPT_ASPT_AbW_DistFam", "TL2_WHPT_NTAXA_AbW_DistFam",
                "TL3_LIFE_Fam_DistFam", "TL3_PSI_Fam")
     
-    predict_indices(env_data = env_data, file_format = "EDE", all_indices = TRUE) %>% 
-      select(keeps) %>% dplyr::rename(Season = SEASON) %>%
+    predict_indices(env_data = env_data, file_format = "EDE", all_indices = TRUE) %>%
+      select(dplyr::all_of(keeps)) %>% dplyr::rename(Season = SEASON) %>%
       dplyr::mutate(Season = case_when(Season == 1 ~ "Spring", Season == 2 ~ "Summer",
                                        Season == 3 ~ "Autumn"))
-    
+
+  })
+
+  observeEvent(predict_data(), {
+    predictions <- predict_data()
+    req(nrow(predictions) > 0L)
+    workflow_complete_artifact(
+      "processed_environment",
+      "RICT processing",
+      sprintf("Generated predictions for %d environmental record(s).", nrow(predictions))
+    )
   })
   
   #### error message for absent env data ----
@@ -1139,7 +1433,22 @@ function(input, output, session){
       select(c(biol_site_id, SAMPLE_ID, date, Month, Year, Season, NGR_10_FIG, WFD_WATERBODY_ID:CALCIUM,
                WHPT_ASPT_O:PSI_OE))
     
-    
+
+  })
+
+  observeEvent(biol_all(), {
+    result <- biol_all()
+    req(nrow(result) > 0L)
+    workflow_complete_artifact(
+      "processed_biology",
+      "Biology processing",
+      sprintf("Processed %d Biology record(s).", nrow(result))
+    )
+    workflow_complete_artifact(
+      "oe_result",
+      "O:E calculation",
+      sprintf("Calculated O:E outputs for %d Biology record(s).", nrow(result))
+    )
   })
   
   #### error message for absent biol data ----
@@ -1444,6 +1753,22 @@ function(input, output, session){
     req(identical(flow_stats_revision(), flow_source_revision()))
     result
   })
+
+  observeEvent(flow_stats(), {
+    result <- flow_stats()
+    req(length(result) > 0L)
+    row_count <- sum(vapply(result, nrow, integer(1)))
+    workflow_complete_artifact(
+      "processed_flow",
+      "Flow processing",
+      "Prepared the current Flow source for statistics."
+    )
+    workflow_complete_artifact(
+      "flow_statistics",
+      "Flow-statistics calculation",
+      sprintf("Generated %d Flow-statistic row(s).", row_count)
+    )
+  })
   
   
   #### error message for absent flow data ----
@@ -1527,6 +1852,31 @@ function(input, output, session){
     result <- join_data_result()
     req(identical(join_revision(), flow_source_revision()))
     result
+  })
+
+  observeEvent(join_data(), {
+    result <- join_data()
+    req(nrow(result) > 0L)
+    workflow_complete_artifact(
+      "joined_core",
+      "Biology–Flow join",
+      sprintf("Built a core Joined HE dataset with %d row(s).", nrow(result))
+    )
+    workflow_complete_artifact(
+      "processed_dataset_checkpoint",
+      "Joined HE dataset checkpoint",
+      "Made the current core Joined HE dataset available for download."
+    )
+    workflow_complete_artifact(
+      "filter_selection",
+      "Default analysis selection",
+      "Started with all joined records selected."
+    )
+    workflow_complete_artifact(
+      "analysis_dataset",
+      "Core Joined HE dataset",
+      sprintf("Created analysis selection version 0 with %d row(s).", nrow(result))
+    )
   })
   
   ### join type for plotting ----
@@ -1705,6 +2055,8 @@ function(input, output, session){
   ))
 
   observeEvent(input$run_basic_model, {
+    workflow_begin_artifact("model_spec", "Validate the selected model specification.")
+    workflow_begin_artifact("model_result", "Complete model fitting and diagnostics.")
     data <- tryCatch(join_data(), error = function(e) NULL)
     # run_model() is the safe UI-facing interface: it validates inputs and
     # never lets a raw R error reach the user.
@@ -1717,7 +2069,41 @@ function(input, output, session){
       )
     )
     basic_model_result(result)
+    if (identical(result$status, "success")) {
+      workflow_complete_artifact(
+        "model_spec",
+        "Model controls",
+        "Validated the selected Flow and ecology variables."
+      )
+      workflow_complete_artifact(
+        "model_result",
+        "Basic Flow–ecology model",
+        "Fitted the current model and generated diagnostics."
+      )
+    } else {
+      workflow_set_artifact(
+        "model_result",
+        "failed",
+        blocking_reason = paste(result$messages, collapse = " "),
+        next_action = "Correct the model inputs and run the model again."
+      )
+    }
   })
+
+  observeEvent(
+    list(input$basic_model_flow_var, input$basic_model_ecology_var),
+    {
+      if (workflow_artifact_is_current("model_result")) {
+        workflow_set_artifact(
+          "model_spec",
+          "ready",
+          next_action = "Run the model with the current variable selection.",
+          invalidate_downstream = TRUE
+        )
+      }
+    },
+    ignoreInit = TRUE
+  )
 
   output$basic_model_status <- renderUI({
     result <- basic_model_result()
@@ -1763,7 +2149,7 @@ function(input, output, session){
     result <- join_he(biol_data = hev_data, flow_stats = flow_data_hev, mapping = mapping,
                       method = "A", join_type = "add_biol") %>%
       select(-"win_no_lag0") %>%
-      rename_all(funs(str_replace_all(., '_lag0', '')))
+      rename_with(~str_replace_all(.x, "_lag0", ""))
     hev_revision(isolate(flow_source_revision()))
     result
     
@@ -1853,6 +2239,16 @@ function(input, output, session){
                   biol_metric = biol_metrics,
                   multiplot = isTRUE(input$HEV_show_all_metrics),
                   clr_by = "Season")
+  })
+
+  observeEvent(HEV_plot(), {
+    plot_result <- HEV_plot()
+    req(!is.null(plot_result))
+    workflow_complete_artifact(
+      "hev_result",
+      "HEV plot generation",
+      "Generated the current HEV plot from the current analysis selection."
+    )
   })
 
   output$HEV_plot <- renderPlot({

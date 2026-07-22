@@ -2,13 +2,10 @@
 
 # Title, layout and main settings ----
 tagList(
-  add_busy_spinner(spin = "fading-circle", color="#00a33b", position="bottom-left"),
-page_navbar(
-  id = "main_nav",
-  theme = bs_theme(navbar_bg = "#008938", bg = "#f6f8f7", fg = "#17231d", version = 5, bootswatch = "minty"),
-  title = "HE Toolkit Dashboard",
   tags$head(
     tags$script(type="text/javascript", src = "logo.js"),
+    # Load workflow styles once here; keep workflow markup in workflow_ui.R.
+    workflow_style_tags(),
     tags$style(type='text/css', ".irs-grid-text { font-size: 10pt; }"),
     tags$style(HTML("
       .hint-text {
@@ -192,28 +189,6 @@ page_navbar(
         font-weight: bold;
       }
       
-      .wf-bar {
-        display:flex; align-items:center; gap:0;
-        margin:0 0 1.5rem 0; padding:1rem 1.25rem;
-        background:#f6f8f7; border:1px solid #dfe8e2; border-radius:8px;
-      }
-      .wf-step { display:flex; align-items:center; flex:1; position:relative; }
-      .wf-step:not(:last-child)::after {
-        content:''; flex:1; height:2px; background:#dfe8e2; margin:0 0.5rem;
-      }
-      .wf-step.done:not(:last-child)::after { background:#008938; }
-      .wf-circle {
-        width:28px; height:28px; border-radius:50%;
-        border:2px solid #dfe8e2; background:white;
-        display:flex; align-items:center; justify-content:center;
-        font-size:0.8rem; font-weight:600; color:#5c6770; flex-shrink:0;
-      }
-      .wf-step.done  .wf-circle { background:#008938; border-color:#008938; color:white; }
-      .wf-step.active .wf-circle { background:white;  border-color:#008938; color:#008938; }
-      .wf-label { font-size:0.78rem; color:#5c6770; margin-left:0.4rem; white-space:nowrap; }
-      .wf-step.active .wf-label { color:#008938; font-weight:600; }
-      .wf-step.done   .wf-label { color:#17231d; }
-
       .cp-card {
         display:flex; align-items:flex-start; gap:0.6rem;
         padding:0.55rem 0.8rem; border-radius:6px;
@@ -228,120 +203,27 @@ page_navbar(
       .cp-card.fail .cp-icon { color:#d9534f; }
             "))
         ),
+  add_busy_spinner(spin = "fading-circle", color="#00a33b", position="bottom-left"),
+page_navbar(
+  id = "main_nav",
+  theme = bs_theme(navbar_bg = "#008938", bg = "#f6f8f7", fg = "#17231d", version = 5, bootswatch = "minty"),
+  title = "HE Toolkit Dashboard",
   
   # INTRO PAGE ----
     nav_panel(
       title = "Home",
       div(
-        class = "introduction-page",
+        class = "workflow-home-page",
+        uiOutput("workflow_shell"),
         div(
-          class = "home-summary",
-          
-      # cards ----
-          h2(class = "section-title", style = "font-size:1.5rem; margin-bottom:0.3rem;",
-             "What would you like to do?"),
-          p(class = "page-lead", style = "margin-bottom:1.2rem;",
-            "Select a task to jump to the relevant page."),
-          div(
-            class = "workflow-note",
-            tags$strong("Note: "),
-            "HEV Plot automatically chains Flow Statistics, O:E, and data joining steps. ",
-            "WQ and RHS are supporting evidence only — not used in O:E calculations."
-          ),
-          
-      layout_columns(
-        col_widths = c(4, 4, 4),
-        card(
-          class = "dashboard-card",
-          card_header(tags$strong("Import Data")),
-          p(class = "hint-text", "Import biology, environmental, flow, WQ, and RHS datasets."),
-          p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
-            "Start here before running any workflow"),
-          div(style = "margin-top:auto;",
-              actionButton("goto_import", "Go to Data Import \u2192",
-                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-        ),
-        card(
-          class = "dashboard-card",
-          card_header(tags$strong("O:E Ratio")),
-          p(class = "hint-text", "Calculate observed vs expected ecological scores using RICT predictions."),
-          p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
-            "Needs: biology + environmental data only"),
-          div(style = "margin-top:auto;",
-              actionButton("goto_oe", "Go to Process Biology \u2192",
-                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-        ),
-        card(
-          class = "dashboard-card",
-          card_header(tags$strong("Flow Statistics")),
-          p(class = "hint-text", "Impute missing flow data and calculate windowed flow statistics."),
-          p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
-            "Needs: flow data"),
-          div(style = "margin-top:auto;",
-              actionButton("goto_flow", "Go to Process Flow \u2192",
-                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-        )
-      ),
-      layout_columns(
-        col_widths = c(4, 4, 4),
-        card(
-          class = "dashboard-card",
-          card_header(tags$strong("Analysis")),
-          p(class = "hint-text", "Pair biology and flow, explore correlations and flow-ecology models."),
-          p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
-            "Exploratory — does not alter O:E"),
-          div(style = "margin-top:auto;",
-              actionButton("goto_analysis", "Go to Analysis \u2192",
-                           style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
-        ),
-        card(
-          class = "dashboard-card",
-          card_header(tags$strong("HEV Plot")),
-          p(class = "hint-text", "Full hydroecological evaluation — flow statistics, O:E ratios, and HEV visualisation."),
-          p(class = "hint-text", style = "color:#2E6B3E; font-size:0.82rem;",
-            "Needs: biology + environmental + flow data"),
-          div(style = "margin-top:auto;",
-              actionButton("goto_hev", "Go to HEV Plots \u2192",
-                           style = "background:#008938; border-color:#008938; color:white; width:100%;"))
-        ),
-        card(
-          class = "dashboard-card",
-          card_header(tags$strong("WQ / RHS Review")),
-          p(class = "hint-text", "Review mapped Water Quality and River Habitat Survey supporting data."),
-          p(class = "hint-text", style = "color:#5c6770; font-size:0.82rem;",
-            "Supporting evidence — not part of O:E"),
-          div(style = "margin-top:auto;",
-              actionButton("goto_wqrhs", "Go to WQ/RHS Data \u2192",
-                           style = "background:#5c6770; border-color:#5c6770; color:white; width:100%;"))
-        )
-      ),
-          
-          tags$hr(style = "margin: 2rem 0;"
-                  ),
-          card(
-            class = "dashboard-card",
-            card_header("Dashboard review guide"),
-            p(class = "page-lead", "Use this dashboard to import hydro-ecology datasets, process existing HE Toolkit workflows, and review supporting Water Quality (WQ) and River Habitat Survey (RHS) evidence."),
-            div(
-              class = "workflow-note",
-              tags$strong("Important: "),
-              "WQ and RHS are supporting mapped datasets only. They are not used in the O:E calculation."
-            ),
-            layout_columns(
-              col_widths = c(4, 4, 4),
-              div(tags$strong("Mapping"), p(class = "hint-text", "Upload or paste site IDs that connect biology, flow, WQ, and RHS records.")),
-              div(tags$strong("WQ/RHS review"), p(class = "hint-text", "Preview mapped supporting data, generate plots, and download mapped outputs.")),
-              div(tags$strong("Core HE workflow"), p(class = "hint-text", "Existing biology, flow, O:E, and HEV workflow outputs remain separate."))
-            )
+          class = "workflow-guide",
+          tags$details(
+            tags$summary("Data and mapping guide"),
+            p(class = "page-lead", "Use site IDs to connect biology, flow, water-quality and River Habitat Survey records. WQ and RHS are optional enrichment and never block a valid core HE dataset."),
+            p("When HDE has no data for a site, NRFA can be used as an alternative flow-data source."),
+            tags$strong("Example site mapping"),
+            DT::dataTableOutput("wq_rhs_mapping_example")
           )
-        ),
-        htmlOutput("intro_page"),
-        div(
-          class = "wq-rhs-mapping-example",
-          h2(class = "section-title", "WQ/RHS site-ID mapping example"),
-          p("This example shows the extended site metadata format needed for WQ/RHS import. WQ site ID SW-A4070115 is the candidate Water Quality Archive sampling point CHEW KEYNSHAM M. RHS survey ID 6145 is the mapping used for biology site 291 in HE Toolkit CaseStudy2 and has been verified in the official RHS open dataset."),
-          p("Both values are included for demonstration and reference. WQ and RHS IDs should not be assumed to match biology or flow site IDs, and final mappings should be confirmed by the user or client."),
-          DT::dataTableOutput("wq_rhs_mapping_example")
         )
       )
     ),
@@ -549,7 +431,6 @@ page_navbar(
   ## Main body ----  
    nav_panel("RICT Predictions",
              div(class = "dashboard-page",
-                 wf_progress_bar(active_step = 2),
                card(class = "dashboard-card",
                  card_header("RICT predictions"),
                  p(class = "hint-text", "Predicted biological index values used by the existing O:E workflow."),
@@ -608,7 +489,6 @@ page_navbar(
             
             nav_panel("Imputed Flow Data",
                       div(class = "dashboard-page",
-                          wf_progress_bar(active_step = 3),
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imputed flow data"),
                           radioButtons(inputId = "imp_flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
@@ -618,7 +498,6 @@ page_navbar(
             ),
             nav_panel("Flow Statistics",
                       div(class = "dashboard-page",
-                          wf_progress_bar(active_step = 3),
                         card(class = "dashboard-card",
                           card_header("Calculated flow statistics"),
                           radioButtons(inputId = "flow_stats_display", "Display:", choices = c("Time-varying", "Long-term")),
@@ -644,7 +523,6 @@ page_navbar(
           ),
           nav_panel("Joined Data",
                     div(class = "dashboard-page",
-                        wf_progress_bar(active_step = 4),
                       card(class = "dashboard-card",
                         card_header("Paired biology-flow data"),
                         dataTableOutput("join_he_table")
@@ -684,7 +562,7 @@ page_navbar(
 
   # SIXTH PAGE ----
     nav_panel("HEV Plots",
-          navset_card_tab(
+      layout_sidebar(
             
   ## Sidebar ----
         
@@ -719,7 +597,6 @@ page_navbar(
             )
           ),
           div(class = "dashboard-page",
-              wf_progress_bar(active_step = 5),
             h3(class = "section-title", "Hydro-ecological variation plot"),
             p(class = "page-lead", "Review HEV plots for selected biological and flow metrics. Existing HEV download behaviour is preserved."),
             card(class = "dashboard-card",
