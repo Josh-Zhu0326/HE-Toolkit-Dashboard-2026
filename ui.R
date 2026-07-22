@@ -383,7 +383,13 @@ page_navbar(
                             div(class = "hint-text", "Required columns: biol_site_id, date, taxon, abundance."),
                             fileInput("local_inv_csv", "Choose local invertebrate CSV", accept = c(".csv", "text/csv")),
                             uiOutput("local_inv_status"),
-                            DT::dataTableOutput("local_inv_preview")
+                            DT::dataTableOutput("local_inv_preview"),
+                            hr(),
+                            h5("Exclusion log"),
+                            div(class = "hint-text", "Records removed or flagged during filtering, with the reason for each."),
+                            uiOutput("exclusion_log_status"),
+                            DT::dataTableOutput("exclusion_log_table"),
+                            downloadButton("download_exclusion_log", "Download exclusion log as CSV")
                           ),
                           card(class = "dashboard-card",
                             card_header("Local flow CSV"),
