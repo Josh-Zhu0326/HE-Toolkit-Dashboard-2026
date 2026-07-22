@@ -4,8 +4,8 @@
 > Status: Frozen v1  
 > Owner: Di (Data Pipeline)  
 > Reviewer: Benyu (QA/Reproducibility)  
-> Decision source: [Week 7 Client Decision Log](client-decision-log-v1.md)  
-> Traceability source: [Week 7 Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
+> Decision source: [Client Decision Log](../client-decision-log-v1.md)
+> Traceability source: [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
 
 ## 1. Purpose and Scope
 
@@ -23,7 +23,7 @@ This document freezes only system-level invariants that an individual module mus
 
 ## 3. Frozen System-Level Data Invariants
 
-### DC-01 — Sole RHS Identifier
+### DC-01: Sole RHS Identifier
 
 **Specification**
 
@@ -56,7 +56,7 @@ This document freezes only system-level invariants that an individual module mus
 - Decisions: `DEC-11`, `DEC-22`
 - Requirements: `RTM-11`, `RTM-22`
 
-### DC-02 — Standard Local `flow_daily` Input
+### DC-02: Standard Local `flow_daily` Input
 
 **Specification**
 
@@ -87,7 +87,7 @@ flow
 - Decision: `DEC-15`
 - Requirement: `RTM-15`
 
-### DC-03 — `flow_input` Ownership and HDE Default
+### DC-03: `flow_input` Ownership and HDE Default
 
 **Specification**
 
@@ -106,7 +106,7 @@ flow
 - Decisions: `DEC-12`, `DEC-15`
 - Requirements: `RTM-12`, `RTM-15`
 
-### DC-04 — Transparent NRFA Fallback
+### DC-04: Transparent NRFA Fallback
 
 **Specification**
 
@@ -134,7 +134,7 @@ timestamp
 - Decision: `DEC-12`
 - Requirement: `RTM-12`
 
-### DC-05 — WQ and RHS as Optional Enrichment
+### DC-05: WQ and RHS as Optional Enrichment
 
 **Specification**
 
@@ -149,7 +149,7 @@ timestamp
 - Decision: `DEC-19`
 - Requirement: `RTM-19`
 
-### DC-06 — Three-Layer Analysis Data Boundary
+### DC-06: Three-Layer Analysis Data Boundary
 
 **Canonical definitions**
 
@@ -184,7 +184,7 @@ analysis_dataset
 - Decisions: `DEC-07`, `DEC-19`
 - Requirements: `RTM-07`, `RTM-19`
 
-### DC-07 — Filtering as a Non-Destructive Derivation
+### DC-07: Filtering as a Non-Destructive Derivation
 
 **Specification**
 
@@ -215,7 +215,7 @@ timestamp
 - Decision: `DEC-07`
 - Requirement: `RTM-07`
 
-### DC-08 — Default Joined/Modelling Flow Fields
+### DC-08: Default Joined/Modelling Flow Fields
 
 **Canonical fields**
 
@@ -243,7 +243,7 @@ Q95z_lag1
 - Decisions: `DEC-03`, `DEC-21`
 - Requirements: `RTM-03`, `RTM-21`
 
-### DC-09 — `HMSRBB` as the Sole Internal and Output Field
+### DC-09: `HMSRBB` as the Sole Internal and Output Field
 
 **Specification**
 
@@ -264,7 +264,7 @@ Q95z_lag1
 - Decision: `DEC-20`
 - Requirement: `RTM-20`
 
-### DC-10 — WQ Determinand, Unit, and Detection-Limit Normalisation
+### DC-10: WQ Determinand, Unit, and Detection-Limit Normalisation
 
 **Canonical registry**
 
@@ -303,7 +303,7 @@ Q95z_lag1
 - Decisions: `DEC-05`, `DEC-06`, `DEC-24`
 - Requirements: `RTM-05`, `RTM-06`, `RTM-18`, `RTM-24`
 
-### DC-11 — XLSX v1 Canonical Sheet/Column Order
+### DC-11: XLSX v1 Canonical Sheet/Column Order
 
 **Ownership and version rules**
 

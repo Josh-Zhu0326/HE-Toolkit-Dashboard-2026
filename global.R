@@ -38,6 +38,10 @@ addResourcePath("prefix", "www")
 source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
+# Keep this order: config defines the contract, state consumes it, then UI renders it.
+source(file.path("R", "workflow_config.R"))
+source(file.path("R", "workflow_state.R"))
+source(file.path("R", "workflow_ui.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
@@ -896,20 +900,6 @@ link_web <- tags$a(
   href = "https://apem-ltd.github.io/hetoolkit/index.html",
   target = "_blank"
 )
-
-# 5-stage ----
-wf_progress_bar <- function(active_step) {
-  steps <- c("Import Data", "RICT / O:E", "Flow Statistics", "Join & Analyse", "HEV Plot")
-  step_els <- lapply(seq_along(steps), function(i) {
-    cls  <- if (i < active_step) "wf-step done" else if (i == active_step) "wf-step active" else "wf-step"
-    icon <- if (i < active_step) "\u2713" else as.character(i)
-    div(class = cls,
-        div(class = "wf-circle", icon),
-        div(class = "wf-label", steps[i])
-    )
-  })
-  div(class = "wf-bar", step_els)
-}
 
 # Checkpoint ----
 cp_card <- function(status, message) {

@@ -56,6 +56,7 @@ testthat::test_that("valid Local Flow is operational and bypasses the external i
     testthat::expect_identical(flow_data()$flow_site_id, c("27090", "27090", "27091"))
     testthat::expect_type(flow_data()$flow_site_id, "character")
     testthat::expect_true(all(flow_data()$flow_site_id %in% metadata()$flow_site_id))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
     testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
 
     session$setInputs(import_flow = 1)
@@ -232,19 +233,24 @@ testthat::test_that("replacing Local Flow invalidates Flow statistics and join s
     session$flushReact()
 
     testthat::expect_identical(flow_stats()[[1]]$source_flow, 12.4)
-    wf$flow_stats_done <- TRUE
-    wf$join_done <- TRUE
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    workflow_complete_artifact(
+      "joined_core",
+      "test fixture",
+      "Generated for Flow invalidation test."
+    )
     session$flushReact()
-    testthat::expect_true(wf$flow_stats_done)
-    testthat::expect_true(wf$join_done)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
 
     set_inputs_ignoring_interrupted_promises(session,
       local_flow_csv = flow_upload_input(source_b)
     )
     session$flushReact()
 
-    testthat::expect_false(wf$flow_stats_done)
-    testthat::expect_false(wf$join_done)
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
     testthat::expect_identical(flow_data()$flow, 21.5)
     testthat::expect_error(flow_stats(), class = "shiny.silent.error")
     testthat::expect_false(grepl("Flow statistics calculated", paste(as.character(output$cp_flow), collapse = ""), fixed = TRUE))
@@ -285,6 +291,7 @@ testthat::test_that("external Flow remains available when no valid Local Flow ex
 
     testthat::expect_identical(flow_data()$flow, c(8.5, 9.5))
     testthat::expect_identical(importer_calls, 1L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
     provenance <- metadata_flow_input_provenance()
     testthat::expect_identical(provenance$flow_input_value, c("HDE", "NRFA"))
     testthat::expect_identical(provenance$flow_input_source, c("defaulted", "explicit"))
