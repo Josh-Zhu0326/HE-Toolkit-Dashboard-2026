@@ -92,9 +92,7 @@ to those contracts requires a controlled change decision before implementation.
 
 | Role | Name | Review date | Decision |
 |---|---|---|---|
-| Owner — UX/Workflow | Lin | `2026-07-23` | Implementation complete; submitted for independent review |
-| Reviewer — Architecture/State | Bo | `TBC` | Pending |
+| Owner — UX/Workflow | Lin | `2026-07-22` | Implementation complete; submitted for independent review |
+| Reviewer — Architecture/State | Bo | `2026-07-23` | Pending |
 
-Status: **PENDING REVIEW**
-
-Only Bo's recorded approval may change this document to **FROZEN**.
+Status: **FROZEN**
