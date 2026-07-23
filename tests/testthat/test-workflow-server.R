@@ -87,6 +87,148 @@ testthat::test_that("Resume uses reusable artifact state instead of returning to
   })
 })
 
+testthat::test_that("Status announcement reacts to artifact state and next action", {
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(
+      session$setInputs(`select_task__ecological_condition` = 1)
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_match(
+      output$workflow_status_announcement,
+      "Stage status: not started",
+      fixed = TRUE
+    )
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "biology_input",
+      "blocked",
+      blocking_reason = "One biology site is not mapped.",
+      next_action = "Add the missing site mapping and validate again."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_match(
+      output$workflow_status_announcement,
+      "Stage status: blocked",
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      output$workflow_status_announcement,
+      "Add the missing site mapping and validate again.",
+      fixed = TRUE
+    )
+  })
+})
+
+testthat::test_that("Join-setting changes stale current outputs without rerunning them", {
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(session$setInputs(
+      choose_lags = 0,
+      choose_join_method = "A"
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(
+      workflow_artifacts()$joined_core$status,
+      "not_started"
+    )
+    testthat::expect_null(join_request())
+
+    registry <- workflow_artifacts()
+    for (artifact_id in c(
+      "flow_statistics",
+      "joined_core",
+      "joined_enriched",
+      "processed_dataset_checkpoint",
+      "filter_selection",
+      "analysis_dataset",
+      "hev_result",
+      "model_spec",
+      "model_result"
+    )) {
+      registry <- set_he_artifact_status(
+        registry,
+        artifact_id,
+        "complete",
+        data_source = "test fixture",
+        history_summary = sprintf("Generated %s once.", artifact_id)
+      )
+    }
+    workflow_artifacts(registry)
+    built_request <- list(
+      flow_revision = flow_source_revision(),
+      settings = normalise_join_settings(0, "A"),
+      request_id = 1
+    )
+    join_request(built_request)
+    join_revision(built_request)
+    hev_revision(built_request)
+    join_settings_used(built_request$settings)
+    revisions_before <- vapply(
+      workflow_artifacts(),
+      `[[`,
+      integer(1),
+      "output_revision"
+    )
+
+    # A duplicate/reordered lag selection is the same canonical setting.
+    muffle_interrupted_workflow_promise(
+      session$setInputs(choose_lags = c(0, 0))
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(join_revision(), built_request)
+
+    muffle_interrupted_workflow_promise(
+      session$setInputs(choose_join_method = "B")
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    expected_stale <- c(
+      "joined_core",
+      "joined_enriched",
+      "processed_dataset_checkpoint",
+      "analysis_dataset",
+      "hev_result",
+      "model_result"
+    )
+    testthat::expect_true(all(vapply(
+      workflow_artifacts()[expected_stale],
+      function(artifact) identical(artifact$status, "stale"),
+      logical(1)
+    )))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$filter_selection))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$model_spec))
+    testthat::expect_identical(
+      workflow_artifacts()$joined_core$data_source,
+      "test fixture"
+    )
+    testthat::expect_identical(
+      vapply(workflow_artifacts(), `[[`, integer(1), "output_revision"),
+      revisions_before
+    )
+    testthat::expect_identical(
+      join_settings_used(),
+      normalise_join_settings(0, "A")
+    )
+    testthat::expect_null(join_revision())
+    testthat::expect_null(hev_revision())
+
+    # Further edits do not recalculate or increment any retained output.
+    muffle_interrupted_workflow_promise(session$setInputs(choose_lags = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(
+      vapply(workflow_artifacts(), `[[`, integer(1), "output_revision"),
+      revisions_before
+    )
+  })
+})
+
 testthat::test_that("real business outputs advance the shared artifact registry", {
   biology_fixture <- data.frame(
     biol_site_id = "B1",

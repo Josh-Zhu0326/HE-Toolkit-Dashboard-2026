@@ -9,12 +9,19 @@ function(input, output, session){
     task_id = NULL,
     stage_index = 1L
   )
+  selected_enrichments <- reactive({
+    c(
+      if (!is.null(input$wq_csv)) "wq",
+      if (!is.null(input$rhs_csv)) "rhs"
+    )
+  })
 
   output$workflow_shell <- renderUI({
     workflow_shell_ui(
       task_id = workflow_session$task_id,
       current_stage = workflow_session$stage_index,
-      registry = workflow_artifacts()
+      registry = workflow_artifacts(),
+      selected_enrichments = selected_enrichments()
     )
   })
 
@@ -59,8 +66,11 @@ function(input, output, session){
   output$workflow_status_announcement <- renderText({
     req(workflow_session$task_id)
     task <- get_he_workflow_task(workflow_session$task_id)
-    stage <- he_workflow_stages[[workflow_session$stage_index]]
-    sprintf("Current Task: %s. Current stage: %s.", task$task_label, stage$stage_label)
+    workflow_status_announcement_text(
+      task,
+      workflow_session$stage_index,
+      workflow_artifacts()
+    )
   })
 
   # INTRO PAGE ----
@@ -186,6 +196,15 @@ function(input, output, session){
   flow_stats_revision <- reactiveVal(NULL)
   join_revision <- reactiveVal(NULL)
   hev_revision <- reactiveVal(NULL)
+  join_request <- reactiveVal(NULL)
+  join_settings_used <- reactiveVal(NULL)
+
+  normalise_join_settings <- function(lags, method) {
+    list(
+      lags = sort(unique(as.integer(lags))),
+      method = as.character(method)[[1L]]
+    )
+  }
 
   local_flow_is_operational <- function(upload) {
     upload$validation$status %in% c("success", "warning")
@@ -196,6 +215,8 @@ function(input, output, session){
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
+    join_request(NULL)
+    join_settings_used(NULL)
     workflow_reset_artifact(
       "flow_input",
       "The Flow source changed after downstream outputs were generated.",
@@ -239,12 +260,65 @@ function(input, output, session){
   observeEvent(input$calc_flow_stats, {
     workflow_begin_artifact("flow_statistics", "Complete the Flow-statistics calculation.")
   }, ignoreInit = TRUE, priority = 100)
+  # Snapshot controls at click time so lazy output consumers cannot run a new
+  # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
+    req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
+    join_request(list(
+      flow_revision = isolate(flow_source_revision()),
+      settings = normalise_join_settings(
+        input$choose_lags,
+        input$choose_join_method
+      ),
+      request_id = input$join_he
+    ))
+  }, ignoreInit = TRUE, priority = 110)
+  observeEvent(input$join_he, {
+    req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$renderHEV, {
     workflow_begin_artifact("hev_result", "Complete HEV plot generation.")
   }, ignoreInit = TRUE, priority = 100)
+
+  observeEvent(
+    list(input$choose_lags, input$choose_join_method),
+    {
+      req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
+      settings_used <- isolate(join_settings_used())
+      if (is.null(settings_used)) {
+        return()
+      }
+
+      current_settings <- normalise_join_settings(
+        input$choose_lags,
+        input$choose_join_method
+      )
+      if (identical(current_settings, settings_used)) {
+        return()
+      }
+
+      registry <- isolate(workflow_artifacts())
+      joined_core <- registry$joined_core
+      if (artifact_is_current(joined_core)) {
+        # Retain the cached output and its metadata, but stop treating it as
+        # current until the user explicitly submits another Join request.
+        join_revision(NULL)
+        hev_revision(NULL)
+        workflow_set_artifact(
+          "joined_core",
+          "stale",
+          data_source = joined_core$data_source,
+          history_summary = joined_core$history_summary,
+          blocking_reason = "Join settings changed after the current Joined HE dataset was generated.",
+          next_action = "Run the join again with the current lag and method settings.",
+          invalidate_downstream = TRUE
+        )
+      }
+    },
+    ignoreInit = TRUE,
+    priority = 90
+  )
   
   output$cp_biology <- renderUI({
     tagList(
@@ -1812,6 +1886,8 @@ function(input, output, session){
   ### default join type for modelling ----
   
   join_data_result <- eventReactive(input$join_he, {
+    request <- isolate(join_request())
+    req(request)
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
     mapping$biol_site_id <- as.character(mapping$biol_site_id)
     mapping$flow_site_id <- as.character(mapping$flow_site_id)
@@ -1819,21 +1895,31 @@ function(input, output, session){
     flowstats_1 <- flow_stats() %>% pluck(1)
     
     result <- join_he(biol_data = biol_all(), flow_stats = flowstats_1, mapping = mapping,
-                      lags = as.integer(input$choose_lags), method = input$choose_join_method, join_type = "add_flows")
-    join_revision(isolate(flow_source_revision()))
+                      lags = request$settings$lags, method = request$settings$method, join_type = "add_flows")
+    req(nrow(result) > 0L)
+    join_revision(request)
     result
     
   })
 
   join_data <- reactive({
     result <- join_data_result()
-    req(identical(join_revision(), flow_source_revision()))
+    revision <- join_revision()
+    req(
+      identical(revision, join_request()),
+      identical(revision$flow_revision, flow_source_revision()),
+      identical(
+        revision$settings,
+        normalise_join_settings(input$choose_lags, input$choose_join_method)
+      )
+    )
     result
   })
 
   observeEvent(join_data(), {
     result <- join_data()
     req(nrow(result) > 0L)
+    join_settings_used(join_revision()$settings)
     workflow_complete_artifact(
       "joined_core",
       "Biology–Flow join",
@@ -1859,6 +1945,8 @@ function(input, output, session){
   ### join type for plotting ----
   
   join_data_addbiol_result <- eventReactive(input$join_he, {
+    request <- isolate(join_request())
+    req(request)
     all.combinations <- expand.grid(biol_site_id = unique(biol_data()$biol_site_id), 
                                     Year = min(biol_data()$Year):max(biol_data()$Year), 
                                     Season = c("Spring", "Autumn"), stringsAsFactors = FALSE)
@@ -1873,15 +1961,18 @@ function(input, output, session){
     flowstats_1 <- flow_stats() %>% pluck(1)
     
     result <- join_he(biol_data = biol_data1, flow_stats = flowstats_1, mapping = mapping,
-                      lags = as.integer(input$choose_lags), method = input$choose_join_method, join_type = "add_biol")
-    join_revision(isolate(flow_source_revision()))
+                      lags = request$settings$lags, method = request$settings$method, join_type = "add_biol")
     result
     
   })
 
   join_data_addbiol <- reactive({
     result <- join_data_addbiol_result()
-    req(identical(join_revision(), flow_source_revision()))
+    revision <- join_revision()
+    req(
+      identical(revision, join_request()),
+      identical(revision$flow_revision, flow_source_revision())
+    )
     result
   })
   
@@ -2096,6 +2187,8 @@ function(input, output, session){
   ## Create HEV dataset ----
   
   HEV_data_result <- eventReactive(input$join_he, {
+    request <- isolate(join_request())
+    req(request)
     flowstats_1 <- flow_stats() %>% pluck(1)
     
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
@@ -2122,14 +2215,17 @@ function(input, output, session){
                       method = "A", join_type = "add_biol") %>%
       select(-"win_no_lag0") %>%
       rename_with(~str_replace_all(.x, "_lag0", ""))
-    hev_revision(isolate(flow_source_revision()))
+    hev_revision(request)
     result
     
   })
 
   HEV_data <- reactive({
     result <- HEV_data_result()
-    req(identical(hev_revision(), flow_source_revision()))
+    req(
+      identical(hev_revision(), join_revision()),
+      identical(hev_revision()$flow_revision, flow_source_revision())
+    )
     result
   })
   
