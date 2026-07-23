@@ -1,0 +1,16 @@
+wq_site_id,date_time,det_id,determinand,result,unit,qualifier,observation
+SW-A4070115,2018-01-15,0180,Orthophosphate reactive as P,0.120,mg/l,,manual fixture
+SW-A4070115,2018-06-15,0111,Ammoniacal Nitrogen as N,1.900,mg/L,,manual fixture
+SW-A4070115,2019-01-15,0180,Orthophosphate reactive as P,0.160,MILLIGRAM PER LITRE,<,manual fixture
+SW-A4070115,2019-06-15,0111,Ammoniacal Nitrogen as N,2.200,mg/L,,manual fixture
+SW-A4070115,2020-01-15,0180,Orthophosphate reactive as P,0.140,mg/L,,manual fixture
+SW-A4070115,2020-06-15,0111,Ammoniacal Nitrogen as N,3.000,mg/L,<,manual fixture
+SW-A4070115,2021-01-15,0180,Orthophosphate reactive as P,0.180,mg/L,,manual fixture
+SW-A4070115,2021-06-15,0111,Ammoniacal Nitrogen as N,3.400,mg/L,,manual fixture
+SW-A4070115,2022-01-15,0180,Orthophosphate reactive as P,0.220,mg/L,,manual fixture
+SW-A4070115,2022-06-15,0111,Ammoniacal Nitrogen as N,4.100,mg/L,,manual fixture
+SW-A4070115,2023-01-15,0180,Orthophosphate reactive as P,0.240,mg/L,,manual fixture
+SW-A4070115,2023-06-15,0111,Ammoniacal Nitrogen as N,4.600,mg/L,,manual fixture
+SW-A4070115,2024-01-15,0180,Orthophosphate reactive as P,0.260,mg/L,,manual fixture
+SW-A4070115,2024-06-15,0111,Ammoniacal Nitrogen as N,5.000,mg/L,<,manual fixture
+SW-A4070115,2024-07-15,0119,Ammonia un-ionised as N,9.900,mg/L,,should be ignored
