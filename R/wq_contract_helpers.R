@@ -406,6 +406,10 @@ build_wq_contract_summary_plot <- function(summary_data) {
         hjust = if (many_sites) 0.5 else 1,
         size = if (many_sites) 7 else 9
       ),
+      axis.text.y = ggplot2::element_text(
+        size = if (many_sites) 7 else 9,
+        lineheight = if (many_sites) 0.9 else 1
+      ),
       panel.spacing.y = ggplot2::unit(1.1, "lines")
     )
 

@@ -332,7 +332,7 @@ page_navbar(
                             ),
                             uiOutput("wq_contract_summary_status"),
                             DT::dataTableOutput("wq_contract_summary_table"),
-                            div(class = "plot-frame", plotOutput("wq_contract_summary_plot", height = 360)),
+                            div(class = "plot-frame", plotOutput("wq_contract_summary_plot", height = 560)),
                             uiOutput("wq_contract_summary_provenance"),
                             div(class = "download-row",
                               downloadButton("download_wq_contract_summary_csv", "Download WQ summary CSV", class = "wq-rhs-action-button")

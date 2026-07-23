@@ -62,7 +62,7 @@ summary_data <- data.frame(
   wq_window_end = as.Date("2024-12-31")
 )
 wq_contract <- build_wq_contract_summary_plot(summary_data)$plot
-save_plot("wq_contract_summary_many_long_sites", wq_contract, 13, 7)
+save_plot("wq_contract_summary_many_long_sites", wq_contract, 13, 9)
 
 rhs_data <- data.frame(
   biol_site_id = rep(site_ids[1:18], each = 6),
