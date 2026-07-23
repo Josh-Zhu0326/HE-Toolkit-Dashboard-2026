@@ -34,9 +34,12 @@ library(leaflet)
 library(hetoolkit)
 library(rnrfa)
 
+options(sass.cache = FALSE)
+
 addResourcePath("prefix", "www")
 source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
+source(file.path("R", "wq_contract_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
 # Keep this order: config defines the contract, state consumes it, then UI renders it.
 source(file.path("R", "workflow_config.R"))

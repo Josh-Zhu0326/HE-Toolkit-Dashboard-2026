@@ -325,8 +325,22 @@ page_navbar(
                             )
                           ),
                           card(class = "dashboard-card",
-                            card_header("WQ plots"),
-                            div(class = "hint-text", "Plots use mapped WQ data only. WQ data are mapped through wq_site_id when a site metadata mapping is available."),
+                            card_header("Contracted WQ summary"),
+                            div(class = "hint-text", "Builds the formal v1 WQ summary and plot from mapped WQ records: det_id 0180 as orthophosphate_mean, det_id 0111 as ammonia_p90, biology-year Y-2 to Y calendar window, record counts, and provenance. Dissolved oxygen is kept as not_ready_open_02 pending OPEN-02."),
+                            div(class = "action-stack",
+                              actionButton("build_wq_contract_summary", "Build WQ summary", class = "wq-rhs-action-button", icon = shiny::icon("calculator", verify_fa = FALSE))
+                            ),
+                            uiOutput("wq_contract_summary_status"),
+                            DT::dataTableOutput("wq_contract_summary_table"),
+                            div(class = "plot-frame", plotOutput("wq_contract_summary_plot", height = 360)),
+                            uiOutput("wq_contract_summary_provenance"),
+                            div(class = "download-row",
+                              downloadButton("download_wq_contract_summary_csv", "Download WQ summary CSV", class = "wq-rhs-action-button")
+                            )
+                          ),
+                          card(class = "dashboard-card",
+                            card_header("WQ preview plots"),
+                            div(class = "hint-text", "Preview plots use mapped WQ data only and do not define the contracted WQ summary fields."),
                             selectInput(
                               "wq_plot_type",
                               "WQ plot type",

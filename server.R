@@ -674,6 +674,11 @@ function(input, output, session){
   ))
   wq_site_import_data <- reactiveVal(NULL)
   rhs_site_import_data <- reactiveVal(NULL)
+  wq_contract_summary_result <- reactiveVal(list(
+    status = "info",
+    messages = "Import mapped WQ records and calculate O:E biology data, then click 'Build WQ summary'.",
+    data = data.frame()
+  ))
 
   observeEvent(input$import_wq_site_ids, {
     parsed <- parse_site_metadata(input$meta_paste)
@@ -837,6 +842,76 @@ function(input, output, session){
     content = function(file) {
       data <- mapped_rhs_plot_data()
       validate(need(!is.null(data) && nrow(data) > 0, "No mapped RHS data are available to download."))
+      readr::write_csv(data, file)
+    },
+    contentType = "text/csv"
+  )
+
+  observeEvent(input$build_wq_contract_summary, {
+    wq_data <- mapped_wq_plot_data()
+    biology_data <- tryCatch(
+      isolate(biol_all()),
+      error = function(e) NULL
+    )
+    result <- build_wq_contract_summary(wq_data, biology_data)
+    wq_contract_summary_result(result)
+    if (result$status %in% c("success", "warning") && !is.null(result$data) && nrow(result$data) > 0) {
+      workflow_set_artifact(
+        "wq_input",
+        result$status,
+        data_source = "Contracted WQ summary",
+        history_summary = sprintf(
+          "Built WQ summary for %d biology record(s): 0180 orthophosphate mean, 0111 ammonia P90, DO pending OPEN-02.",
+          nrow(result$data)
+        ),
+        invalidate_downstream = TRUE
+      )
+    }
+
+    notification_type <- switch(
+      result$status,
+      success = "message",
+      warning = "warning",
+      error = "error",
+      "message"
+    )
+    showNotification(paste(result$messages, collapse = " "), type = notification_type)
+  })
+
+  output$wq_contract_summary_status <- renderUI({
+    result <- wq_contract_summary_result()
+    format_validation_message(result)
+  })
+
+  output$wq_contract_summary_table <- DT::renderDataTable({
+    result <- wq_contract_summary_result()
+    req(!is.null(result$data), nrow(result$data) > 0)
+    result$data
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$wq_contract_summary_plot <- renderPlot({
+    plot_result <- build_wq_contract_summary_plot(wq_contract_summary_result()$data)
+    validate(need(!is.null(plot_result$plot), plot_result$message))
+    plot_result$plot
+  })
+
+  output$wq_contract_summary_provenance <- renderUI({
+    data <- wq_contract_summary_result()$data
+    req(!is.null(data), nrow(data) > 0)
+    provenance <- unique(stats::na.omit(data$wq_summary_provenance))
+    req(length(provenance) > 0)
+    tags$div(
+      class = "upload-status upload-status-info",
+      tags$strong("WQ summary provenance"),
+      tags$ul(lapply(provenance, tags$li))
+    )
+  })
+
+  output$download_wq_contract_summary_csv <- downloadHandler(
+    filename = function() "wq_contract_summary.csv",
+    content = function(file) {
+      data <- wq_contract_summary_result()$data
+      validate(need(!is.null(data) && nrow(data) > 0, "No WQ contract summary is available to download."))
       readr::write_csv(data, file)
     },
     contentType = "text/csv"
