@@ -27,10 +27,17 @@ wq_normalise_det_id <- function(value) {
 
 wq_normalise_unit <- function(value) {
   source <- trimws(as.character(value))
+  source[is.na(value) | !nzchar(source)] <- NA_character_
   normalised <- source
   mg_l <- toupper(source) %in% c("MG/L", "MG/LITRE", "MILLIGRAM PER LITRE")
   normalised[mg_l] <- "mg/L"
   normalised
+}
+
+wq_normalise_determinand_text <- function(value) {
+  value <- tolower(trimws(as.character(value)))
+  value[is.na(value) | !nzchar(value)] <- NA_character_
+  value
 }
 
 wq_first_matching_column <- function(names_lower, candidates) {
@@ -127,7 +134,14 @@ standardise_wq_contract_records <- function(wq_data) {
 
   registry <- wq_contract_det_registry()
   supported <- data$det_id %in% registry$det_id
-  unsupported_units <- supported & data$canonical_unit != "mg/L"
+  expected_determinand <- registry$canonical_determinand[match(data$det_id, registry$det_id)]
+  determinand_conflict <- supported &
+    (
+      is.na(data$determinand) |
+        wq_normalise_determinand_text(data$determinand) !=
+          wq_normalise_determinand_text(expected_determinand)
+    )
+  unsupported_units <- supported & (is.na(data$canonical_unit) | data$canonical_unit != "mg/L")
   invalid_dates <- is.na(data$date_time)
   invalid_values <- supported & is.na(data$analysis_value)
 
@@ -143,6 +157,10 @@ standardise_wq_contract_records <- function(wq_data) {
   }
   if (any(unsupported_units, na.rm = TRUE)) {
     messages <- c(messages, "Some supported WQ records used unsupported units and were excluded from summary calculations.")
+    status <- "warning"
+  }
+  if (any(determinand_conflict, na.rm = TRUE)) {
+    messages <- c(messages, "Some supported WQ det_id values had determinand text that did not match the contract registry and were excluded from summary calculations.")
     status <- "warning"
   }
   if (any(invalid_dates, na.rm = TRUE)) {
@@ -164,7 +182,8 @@ standardise_wq_contract_records <- function(wq_data) {
     status <- "warning"
   }
 
-  data$wq_contract_usable <- supported & !unsupported_units & !invalid_dates & !invalid_values
+  data$wq_contract_usable <- supported & !unsupported_units & !determinand_conflict & !invalid_dates & !invalid_values
+  data$wq_contract_usable[is.na(data$wq_contract_usable)] <- FALSE
   if (length(messages) == 0) {
     messages <- "WQ records were standardised successfully for the v1 WQ contract."
   }
@@ -362,15 +381,16 @@ build_wq_contract_summary_plot <- function(summary_data) {
     "Window: biology anchored Y-2 to Y"
   }
 
-  plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = biol_site_id, y = value, fill = summary_field)) +
+  site_count <- length(unique(plot_data$biol_site_id))
+  many_sites <- site_count > 10L
+  facet_scales <- if (many_sites) "free_x" else "free_y"
+  plot_data$plot_site_id <- stringr::str_trunc(as.character(plot_data$biol_site_id), width = 28)
+  plot_data$plot_site_id <- factor(plot_data$plot_site_id, levels = unique(plot_data$plot_site_id))
+  show_value_labels <- site_count <= 10L
+
+  plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = plot_site_id, y = value, fill = summary_field)) +
     ggplot2::geom_col(position = "dodge") +
-    ggplot2::geom_text(
-      ggplot2::aes(label = ifelse(plot_measure == "Supporting record count", paste0("n=", value), round(value, 3))),
-      position = ggplot2::position_dodge(width = 0.9),
-      vjust = -0.25,
-      size = 3
-    ) +
-    ggplot2::facet_wrap(~plot_measure, scales = "free_y", ncol = 1) +
+    ggplot2::facet_wrap(~plot_measure, scales = facet_scales, ncol = 1) +
     ggplot2::labs(
       x = "Biology site ID",
       y = NULL,
@@ -379,6 +399,31 @@ build_wq_contract_summary_plot <- function(summary_data) {
       subtitle = window_text
     ) +
     ggplot2::theme_minimal() +
-    ggplot2::theme(legend.position = "bottom")
+    ggplot2::theme(
+      legend.position = "bottom",
+      axis.text.x = ggplot2::element_text(
+        angle = if (many_sites) 0 else 30,
+        hjust = if (many_sites) 0.5 else 1,
+        size = if (many_sites) 7 else 9
+      ),
+      panel.spacing.y = ggplot2::unit(1.1, "lines")
+    )
+
+  if (show_value_labels) {
+    plot <- plot +
+      ggplot2::geom_text(
+        ggplot2::aes(label = ifelse(plot_measure == "Supporting record count", paste0("n=", value), round(value, 3))),
+        position = ggplot2::position_dodge(width = 0.9),
+        vjust = -0.25,
+        size = 3
+      )
+  }
+
+  if (many_sites) {
+    plot <- plot +
+      ggplot2::coord_flip() +
+      ggplot2::labs(caption = "Long biology site IDs are truncated in the plot; full IDs remain available in the summary table and CSV.")
+  }
+
   list(plot = plot, message = NULL)
 }

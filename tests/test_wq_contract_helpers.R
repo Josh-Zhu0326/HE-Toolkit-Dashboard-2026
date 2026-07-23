@@ -3,8 +3,8 @@ source(file.path("R", "wq_rhs_plot_helpers.R"))
 source(file.path("R", "wq_contract_helpers.R"))
 
 wq_contract_data <- data.frame(
-  biol_site_id = rep("B1", 7),
-  wq_site_id = rep("WQ1", 7),
+  biol_site_id = rep("B1", 9),
+  wq_site_id = rep("WQ1", 9),
   date_time = c(
     "2022-01-01",
     "2023-06-01",
@@ -12,9 +12,11 @@ wq_contract_data <- data.frame(
     "2021-12-31",
     "2024-01-01",
     "2024-02-01",
-    "2024-03-01"
+    "2024-03-01",
+    "2024-04-01",
+    "2024-05-01"
   ),
-  det_id = c("180", "0180", "0111", "0180", "0111", "0119", "0111"),
+  det_id = c("180", "0180", "0111", "0180", "0111", "0119", "0111", "0180", "0111"),
   determinand = c(
     "Orthophosphate reactive as P",
     "Orthophosphate reactive as P",
@@ -22,11 +24,13 @@ wq_contract_data <- data.frame(
     "Orthophosphate reactive as P",
     "Ammoniacal Nitrogen as N",
     "Nitrogen 0119",
+    "Ammoniacal Nitrogen as N",
+    "Ammoniacal Nitrogen as N",
     "Ammoniacal Nitrogen as N"
   ),
-  result = c(0.10, 0.20, 2.0, 999, 4.0, 8.0, 10.0),
-  unit = c("mg/l", "MILLIGRAM PER LITRE", "mg/L", "mg/L", "mg/L", "mg/L", "mg/L"),
-  qualifier = c("", "<", "", "", "", "", "<"),
+  result = c(0.10, 0.20, 2.0, 999, 4.0, 8.0, 10.0, 10.0, 9.0),
+  unit = c("mg/l", "MILLIGRAM PER LITRE", "mg/L", "mg/L", "mg/L", "mg/L", "mg/L", "mg/L", NA),
+  qualifier = c("", "<", "", "", "", "", "<", "", ""),
   stringsAsFactors = FALSE
 )
 
@@ -45,6 +49,11 @@ stopifnot(standardised$data$det_id[[1]] == "0180")
 stopifnot(standardised$data$analysis_value[[2]] == 0.10)
 stopifnot(standardised$data$analysis_value[[7]] == 5.00)
 stopifnot(any(grepl("0119", standardised$messages)))
+stopifnot(any(grepl("determinand text", standardised$messages)))
+stopifnot(any(grepl("unsupported units", standardised$messages)))
+stopifnot(!any(is.na(standardised$data$wq_contract_usable)))
+stopifnot(!standardised$data$wq_contract_usable[[8]])
+stopifnot(!standardised$data$wq_contract_usable[[9]])
 
 hetoolkit_alias_data <- data.frame(
   `sample.samplingPoint.notation` = "WQ1",
@@ -89,5 +98,10 @@ stopifnot(grepl("det_id", missing_result$messages))
 
 plot_result <- build_wq_contract_summary_plot(summary_data)
 stopifnot(inherits(plot_result$plot, "ggplot"))
+
+many_site_summary <- summary_data[rep(1, 12), ]
+many_site_summary$biol_site_id <- paste0("BIO_SITE_", sprintf("%02d", seq_len(12)), "_LONG_LABEL")
+many_site_plot <- build_wq_contract_summary_plot(many_site_summary)
+stopifnot(inherits(many_site_plot$plot, "ggplot"))
 
 cat("WQ contract helper tests passed\n")

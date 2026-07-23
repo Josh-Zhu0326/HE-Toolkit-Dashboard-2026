@@ -514,6 +514,14 @@ function(input, output, session){
     upload <- wq_upload()
     req(!is.null(upload$data), nrow(upload$data) > 0L)
     req(upload$validation$status %in% c("success", "warning"))
+    if (exists("wq_site_import_data", envir = server_context, inherits = FALSE)) {
+      get("wq_site_import_data", envir = server_context)(NULL)
+    }
+    if (exists("reset_wq_contract_summary", envir = server_context, inherits = FALSE)) {
+      get("reset_wq_contract_summary", envir = server_context)(
+        "The local WQ upload changed. Rebuild the WQ contract summary from the current mapped records."
+      )
+    }
     workflow_set_artifact(
       "wq_input",
       if (identical(upload$validation$status, "warning")) "warning" else "complete",
@@ -679,8 +687,25 @@ function(input, output, session){
     messages = "Import mapped WQ records and calculate O:E biology data, then click 'Build WQ summary'.",
     data = data.frame()
   ))
+  reset_wq_contract_summary <- function(message) {
+    wq_contract_summary_result(list(
+      status = "info",
+      messages = message,
+      data = data.frame()
+    ))
+  }
+
+  observeEvent(list(input$meta_paste, input$date_range_wq), {
+    wq_site_import_data(NULL)
+    reset_wq_contract_summary(
+      "The WQ mapping or date range changed. Import or validate WQ records again, then rebuild the WQ contract summary."
+    )
+  }, ignoreInit = TRUE)
 
   observeEvent(input$import_wq_site_ids, {
+    reset_wq_contract_summary(
+      "The WQ import source changed. Rebuild the WQ contract summary after the import completes."
+    )
     parsed <- parse_site_metadata(input$meta_paste)
     if (!is.null(parsed$error)) {
       wq_site_import_data(NULL)
@@ -703,6 +728,7 @@ function(input, output, session){
     end_date <- as.Date(input$date_range_wq[[2]])
     if (end_date <= start_date) {
       message <- "The WQ end date must be later than the start date. Water Quality Explorer data are available from 2000 onwards."
+      wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = message))
       showNotification(message, type = "error")
       return()
@@ -856,9 +882,10 @@ function(input, output, session){
     result <- build_wq_contract_summary(wq_data, biology_data)
     wq_contract_summary_result(result)
     if (result$status %in% c("success", "warning") && !is.null(result$data) && nrow(result$data) > 0) {
+      workflow_status <- if (identical(result$status, "warning")) "warning" else "complete"
       workflow_set_artifact(
         "wq_input",
-        result$status,
+        workflow_status,
         data_source = "Contracted WQ summary",
         history_summary = sprintf(
           "Built WQ summary for %d biology record(s): 0180 orthophosphate mean, 0111 ammonia P90, DO pending OPEN-02.",
