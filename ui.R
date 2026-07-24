@@ -3,7 +3,6 @@
 # Title, layout and main settings ----
 tagList(
   tags$head(
-    tags$script(type="text/javascript", src = "logo.js"),
     # Load workflow styles once here; keep workflow markup in workflow_ui.R.
     workflow_style_tags(),
     tags$style(type='text/css', ".irs-grid-text { font-size: 10pt; }"),
@@ -206,8 +205,18 @@ tagList(
   add_busy_spinner(spin = "fading-circle", color="#00a33b", position="bottom-left"),
 page_navbar(
   id = "main_nav",
-  theme = bs_theme(navbar_bg = "#008938", bg = "#f6f8f7", fg = "#17231d", version = 5, bootswatch = "minty"),
+  theme = bs_theme(
+    navbar_bg = "#245f3b",
+    bg = "#f4f6f4",
+    fg = "#1f2a24",
+    version = 5,
+    bootswatch = "minty"
+  ),
   title = "HE Toolkit Dashboard",
+  header = tagList(
+    uiOutput("workflow_header"),
+    uiOutput("workflow_stage_overview")
+  ),
   
   # INTRO PAGE ----
     nav_panel(
@@ -522,57 +531,109 @@ page_navbar(
   )
 ),
 
- # FIFTH PAGE ----
-   nav_panel("Analysis",
-          navset_card_tab(
-            
-  ## Sidebar ----
-      sidebar = sidebar("", width = 300, position = "right",
-            div(class = "sidebar-section control-stack action-stack",
-              h5("Pair biology and flow"),
-              pickerInput(inputId = "choose_lags", label = "Select lags", choices = 0:10, multiple = TRUE),
-              pickerInput(inputId = "choose_join_method", label = "Select join method", choices = c("A", "B"), multiple = FALSE),
-              actionButton("join_he", "Pair biology and flow data", class = "client-action-button", icon = shiny::icon("link", verify_fa = FALSE))
-            )
+  # STAGE 3 ----
+  nav_panel(
+    "Build HE Dataset",
+    navset_card_tab(
+      sidebar = sidebar(
+        "",
+        width = 300,
+        position = "right",
+        div(
+          class = "sidebar-section control-stack action-stack",
+          h5("Pair biology and flow"),
+          pickerInput(
+            inputId = "choose_lags",
+            label = "Select lags",
+            choices = 0:10,
+            multiple = TRUE
           ),
-          nav_panel("Joined Data",
-                    div(class = "dashboard-page",
-                      card(class = "dashboard-card",
-                        card_header("Paired biology-flow data"),
-                        dataTableOutput("join_he_table")
-                      )
-                    )),
-          nav_panel("Pairwise Correlations",
-                    div(class = "dashboard-page",
-                      card(class = "dashboard-card",
-                        card_header("Pairwise correlation plots"),
-                        plotOutput("corr_plots")
-                      )
-                    )),
-          nav_panel("Historical Coverage",
-                    div(class = "dashboard-page",
-                      card(class = "dashboard-card",
-                        card_header("Historical flow and biology coverage"),
-                        plotOutput("flow_hull")
-                      )
-                    )),
-          nav_panel("Flow-Ecology Model",
-                    div(class = "dashboard-page",
-                      h3(class = "section-title", "Basic flow-ecology model"),
-                      p(class = "page-lead", "Optional exploratory analysis only. This does not alter O:E calculations."),
-                      card(class = "dashboard-card",
-                        card_header("Model setup and result"),
-                        uiOutput("basic_model_controls"),
-                        div(class = "action-stack",
-                          actionButton("run_basic_model", "Run basic model", class = "client-action-button", icon = shiny::icon("chart-line", verify_fa = FALSE))
-                        ),
-                        uiOutput("basic_model_status"),
-                        DT::dataTableOutput("basic_model_summary"),
-                        plotOutput("basic_model_plot", height = 420)
-                      )
-                    ))
-)
-),
+          pickerInput(
+            inputId = "choose_join_method",
+            label = "Select join method",
+            choices = c("A", "B"),
+            multiple = FALSE
+          ),
+          actionButton(
+            "join_he",
+            "Pair biology and flow data",
+            class = "client-action-button",
+            icon = shiny::icon("link", verify_fa = FALSE)
+          )
+        )
+      ),
+      nav_panel(
+        "Joined Data",
+        div(
+          class = "dashboard-page",
+          card(
+            class = "dashboard-card",
+            card_header("Paired biology-flow data"),
+            dataTableOutput("join_he_table")
+          )
+        )
+      )
+    )
+  ),
+
+  # STAGE 4 ----
+  nav_panel(
+    "Explore Relationships",
+    navset_card_tab(
+      nav_panel(
+        "Pairwise Correlations",
+        div(
+          class = "dashboard-page",
+          card(
+            class = "dashboard-card",
+            card_header("Pairwise correlation plots"),
+            plotOutput("corr_plots")
+          )
+        )
+      ),
+      nav_panel(
+        "Historical Coverage",
+        div(
+          class = "dashboard-page",
+          card(
+            class = "dashboard-card",
+            card_header("Historical flow and biology coverage"),
+            plotOutput("flow_hull")
+          )
+        )
+      )
+    )
+  ),
+
+  # STAGE 5 ----
+  nav_panel(
+    "Model and Export",
+    div(
+      class = "dashboard-page",
+      h3(class = "section-title", "Basic flow-ecology model"),
+      p(
+        class = "page-lead",
+        "Fit and inspect the current model without altering O:E calculations."
+      ),
+      card(
+        class = "dashboard-card",
+        card_header("Model setup and result"),
+        uiOutput("basic_model_controls"),
+        div(
+          class = "action-stack",
+          actionButton(
+            "run_basic_model",
+            "Run basic model",
+            class = "client-action-button",
+            icon = shiny::icon("chart-line", verify_fa = FALSE)
+          )
+        ),
+        uiOutput("basic_model_status"),
+        DT::dataTableOutput("basic_model_summary"),
+        plotOutput("basic_model_plot", height = 420)
+      )
+    )
+  ),
 
   # SIXTH PAGE ----
     nav_panel("HEV Plots",

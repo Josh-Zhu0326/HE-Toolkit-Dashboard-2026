@@ -16,8 +16,20 @@ function(input, output, session){
     )
   })
 
-  output$workflow_shell <- renderUI({
-    workflow_shell_ui(
+  output$workflow_header <- renderUI({
+    workflow_header_ui(
+      task_id = workflow_session$task_id,
+      current_stage = workflow_session$stage_index,
+      registry = workflow_artifacts(),
+      current_panel = input$main_nav
+    )
+  })
+
+  output$workflow_stage_overview <- renderUI({
+    if (is.null(workflow_session$task_id)) {
+      return(NULL)
+    }
+    workflow_stage_overview_ui(
       task_id = workflow_session$task_id,
       current_stage = workflow_session$stage_index,
       registry = workflow_artifacts(),
@@ -25,14 +37,21 @@ function(input, output, session){
     )
   })
 
+  output$workflow_shell <- renderUI({
+    workflow_task_selector_ui(registry = workflow_artifacts())
+  })
+
   # Always derive Resume from artifact state; do not hard-code a starting Stage.
   lapply(he_workflow_task_ids(), function(task_id) {
     observeEvent(input[[paste0("select_task__", task_id)]], {
       task <- get_he_workflow_task(task_id)
+      resume_stage <- workflow_resume_stage(task, workflow_artifacts())
       workflow_session$task_id <- task_id
-      workflow_session$stage_index <- workflow_resume_stage(
-        task,
-        workflow_artifacts()
+      workflow_session$stage_index <- resume_stage
+      updateNavbarPage(
+        session,
+        "main_nav",
+        selected = workflow_nav_target(task_id, resume_stage)
       )
     }, ignoreInit = TRUE)
   })
@@ -44,6 +63,11 @@ function(input, output, session){
       task <- get_he_workflow_task(workflow_session$task_id)
       if (!identical(task$stage_path[[stage_index]], "-")) {
         workflow_session$stage_index <- stage_index
+        updateNavbarPage(
+          session,
+          "main_nav",
+          selected = workflow_nav_target(workflow_session$task_id, stage_index)
+        )
       }
     }, ignoreInit = TRUE)
   })
@@ -51,16 +75,29 @@ function(input, output, session){
   observeEvent(input$change_task, {
     workflow_session$task_id <- NULL
     workflow_session$stage_index <- 1L
+    updateNavbarPage(session, "main_nav", selected = "Home")
   }, ignoreInit = TRUE)
 
-  # Route primary actions through the shared mapping; do not duplicate panel rules here.
-  observeEvent(input$workflow_primary_action, {
+  observeEvent(input$open_task_selector, {
+    workflow_session$task_id <- NULL
+    workflow_session$stage_index <- 1L
+    updateNavbarPage(session, "main_nav", selected = "Home")
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$workflow_stage_view_biology, {
     req(workflow_session$task_id)
-    target <- workflow_nav_target(
-      workflow_session$task_id,
-      workflow_session$stage_index
-    )
-    updateNavbarPage(session, "main_nav", selected = target)
+    req(identical(workflow_session$stage_index, 2L))
+    updateNavbarPage(session, "main_nav", selected = "Process Biology")
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$workflow_stage_view_flow, {
+    req(workflow_session$task_id)
+    req(identical(workflow_session$stage_index, 2L))
+    updateNavbarPage(session, "main_nav", selected = "Process Flow")
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$open_csv_validation, {
+    updateNavbarPage(session, "main_nav", selected = "CSV Validation Sandbox")
   }, ignoreInit = TRUE)
 
   output$workflow_status_announcement <- renderText({
@@ -116,7 +153,7 @@ function(input, output, session){
   })
   
   observeEvent(input$goto_analysis,{
-    updateNavbarPage(session, "main_nav", selected = "Analysis")
+    updateNavbarPage(session, "main_nav", selected = "Build HE Dataset")
   })
   
   # WORKFLOW ARTIFACT ADAPTERS ----
