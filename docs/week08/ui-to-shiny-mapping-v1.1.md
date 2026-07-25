@@ -2,7 +2,7 @@
 
 > Prototype baseline: [`workflow-stepper-prototype-v2.2.html`](../week07/workflow-stepper-prototype-v2.2.html)
 > Controlled implementation date: 23 July 2026
-> Status: **PENDING REVIEW**
+> Status: **FROZEN**
 > Owner: Lin (UX/Workflow)
 > Reviewer: Bo (Architecture/State)
 
@@ -99,6 +99,4 @@ to those contracts requires a controlled change decision before implementation.
 | Role | Name | Review date | Decision |
 |---|---|---|---|
 | Owner — UX/Workflow | Lin | `2026-07-22` | Implementation complete; submitted for independent review |
-| Reviewer — Architecture/State | Bo | `2026-07-23` | Pending |
-
-Status: **FROZEN**
+| Reviewer — Architecture/State | Bo | `2026-07-23` | Approved |
