@@ -166,6 +166,165 @@ testthat::test_that("optional reusable artifacts do not affect required Stage st
   testthat::expect_identical(workflow_stage_status(task, 3L, registry), "complete")
 })
 
+testthat::test_that("route-only required Stages never present themselves as optional", {
+  cases <- list(
+    build_he_dataset = list(
+      stages = 1L,
+      evidence = c("oe_result", "flow_statistics")
+    ),
+    generate_hev = list(
+      stages = c(1L, 2L),
+      evidence = "joined_core"
+    ),
+    he_modelling = list(
+      stages = c(1L, 2L),
+      evidence = "joined_core"
+    )
+  )
+
+  for (task_id in names(cases)) {
+    task <- get_he_workflow_task(task_id)
+    registry <- new_he_artifact_registry()
+
+    for (stage_index in cases[[task_id]]$stages) {
+      steps_html <- render_workflow_html(
+        workflow_required_steps_ui(task, stage_index, registry)
+      )
+      checkpoint_html <- render_workflow_html(
+        workflow_checkpoint_ui(task, stage_index, registry)
+      )
+
+      testthat::expect_match(
+        steps_html,
+        'data-required-route="indirect"',
+        fixed = TRUE,
+        info = sprintf("%s Stage %d", task_id, stage_index)
+      )
+      testthat::expect_match(steps_html, "Required route stage", fixed = TRUE)
+      testthat::expect_match(
+        checkpoint_html,
+        'data-checkpoint-evidence="downstream-artifact"',
+        fixed = TRUE
+      )
+      testthat::expect_match(
+        checkpoint_html,
+        "No current completion evidence is recorded yet.",
+        fixed = TRUE
+      )
+      testthat::expect_false(grepl("optional capability", steps_html, fixed = TRUE))
+      testthat::expect_identical(
+        workflow_stage_status(task, stage_index, registry),
+        "not_started"
+      )
+    }
+
+    for (artifact_id in cases[[task_id]]$evidence) {
+      registry <- set_he_artifact_status(
+        registry,
+        artifact_id,
+        "complete"
+      )
+    }
+
+    for (stage_index in cases[[task_id]]$stages) {
+      checkpoint_html <- render_workflow_html(
+        workflow_checkpoint_ui(task, stage_index, registry)
+      )
+
+      testthat::expect_identical(
+        workflow_stage_status(task, stage_index, registry),
+        "complete"
+      )
+      testthat::expect_match(
+        checkpoint_html,
+        "Current causally linked downstream evidence is recorded.",
+        fixed = TRUE
+      )
+      testthat::expect_match(
+        checkpoint_html,
+        "does not claim that unrelated or stale calculations ran in this session.",
+        fixed = TRUE
+      )
+    }
+  }
+})
+
+testthat::test_that("route-only Stage UI rejects progress states as completion", {
+  task <- get_he_workflow_task("generate_hev")
+
+  for (status in c("ready", "running", "blocked", "failed", "stale")) {
+    registry <- new_he_artifact_registry()
+    registry <- set_he_artifact_status(registry, "joined_core", "complete")
+    registry <- set_he_artifact_status(registry, "joined_core", status)
+
+    testthat::expect_identical(
+      workflow_stage_status(task, 1L, registry),
+      "not_started",
+      info = status
+    )
+    checkpoint_html <- render_workflow_html(
+      workflow_checkpoint_ui(task, 1L, registry)
+    )
+    testthat::expect_match(
+      checkpoint_html,
+      'data-completion-evidence="none"',
+      fixed = TRUE,
+      info = status
+    )
+  }
+})
+
+testthat::test_that("route-only Stage UI identifies contract-allowed reusable evidence", {
+  task <- get_he_workflow_task("generate_hev")
+  registry <- new_he_artifact_registry()
+  registry <- set_he_artifact_status(
+    registry,
+    "processed_dataset_checkpoint",
+    "complete"
+  )
+
+  checkpoint_html <- render_workflow_html(
+    workflow_checkpoint_ui(task, 2L, registry)
+  )
+
+  testthat::expect_identical(
+    workflow_stage_status(task, 2L, registry),
+    "complete"
+  )
+  testthat::expect_match(
+    checkpoint_html,
+    'data-completion-evidence="validated-reusable"',
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    checkpoint_html,
+    "A current validated reusable output allowed by this Task is recorded.",
+    fixed = TRUE
+  )
+})
+
+testthat::test_that("route-only status announcements provide an honest next action", {
+  task <- get_he_workflow_task("generate_hev")
+  registry <- new_he_artifact_registry()
+
+  announcement <- workflow_status_announcement_text(task, 1L, registry)
+  testthat::expect_match(
+    announcement,
+    "Stage status: not started.",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    announcement,
+    "Complete the required route work in this Stage or provide a validated reusable output.",
+    fixed = TRUE
+  )
+
+  registry <- set_he_artifact_status(registry, "joined_core", "complete")
+  progressed <- workflow_status_announcement_text(task, 1L, registry)
+  testthat::expect_match(progressed, "Stage status: complete.", fixed = TRUE)
+  testthat::expect_false(grepl("Next action:", progressed, fixed = TRUE))
+})
+
 testthat::test_that("Checkpoint renders real artifact metadata and recovery guidance", {
   task <- get_he_workflow_task("ecological_condition")
   registry <- new_he_artifact_registry()
@@ -186,6 +345,22 @@ testthat::test_that("Checkpoint renders real artifact metadata and recovery guid
   testthat::expect_match(html, "One biology site is not mapped.", fixed = TRUE)
   testthat::expect_match(html, "Add the missing site mapping and validate again.", fixed = TRUE)
   testthat::expect_false(grepl("Shown after", html, fixed = TRUE))
+})
+
+testthat::test_that("Not started checkpoints always provide a concrete next action", {
+  task <- get_he_workflow_task("ecological_condition")
+  html <- render_workflow_html(
+    workflow_checkpoint_ui(task, 1L, new_he_artifact_registry())
+  )
+
+  testthat::expect_match(html, "Not started", fixed = TRUE)
+  testthat::expect_match(html, "Upload or import Biology data.", fixed = TRUE)
+  testthat::expect_match(
+    html,
+    "Import Environmental data for the mapped Biology sites.",
+    fixed = TRUE
+  )
+  testthat::expect_false(grepl("No action recorded yet", html, fixed = TRUE))
 })
 
 testthat::test_that("Core-only scope is informational and disappears when enrichment is selected", {

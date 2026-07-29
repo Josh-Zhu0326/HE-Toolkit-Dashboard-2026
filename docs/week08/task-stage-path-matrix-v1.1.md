@@ -113,7 +113,7 @@ Recorded on 22 July 2026:
 - `tests/testthat/test-workflow-config.R` asserts the exact five Stage IDs, complete 5×5 Task paths, ordered Task IDs, full completion/reuse/next-Task contracts, and absence of an active `goal_id` field.
 - `validate_he_workflow_config()` rejects missing required fields, unknown or unmapped artifacts, Required artifacts outside `R` Stages, later-Stage dependencies, invalid Stage paths, and unknown next Tasks.
 - `workflow_resume_stage()` derives Start/Resume from runtime artifact status; pure-state and server tests cover new, reusable-output, complete, blocked, failed, and stale cases.
-- Required-step UI and Stage status use only `required_artifacts`; unselected reusable enrichment cannot block the core route.
+- Required-step UI and direct-artifact Stage status use `required_artifacts`; a Required route Stage without a standalone artifact displays `Complete` only for current causally linked evidence or a current validated reusable output allowed by the Task contract. Resume may still use non-current progress to return the user to the recovery Stage. Unselected reusable enrichment cannot block the core route.
 - `processed_dataset_checkpoint` remains a Stage 3 output and depends on `joined_core`, never on Stage 4 `analysis_dataset`.
 - The legacy hard-coded `wf_progress_bar()` and all five real-page calls were removed; the configured Stage navigation is the only workflow stepper.
 - Real import, processing, O:E, Flow-statistics, join, HEV, and modelling outcomes now update the shared artifact registry; upstream replacement uses dependency invalidation.

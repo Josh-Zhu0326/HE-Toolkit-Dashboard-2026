@@ -90,6 +90,56 @@ testthat::test_that("extra Local Flow columns never enter the operational source
   })
 })
 
+testthat::test_that("Flow-statistics calculation failures become recoverable workflow state", {
+  rlang::local_bindings(
+    calc_flowstats = function(...) {
+      stop("synthetic internal calculation detail")
+    },
+    .env = environment(dashboard_server)
+  )
+
+  shiny::testServer(dashboard_server, {
+    local_path <- testthat::test_path("..", "fixtures", "local_flow.csv")
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      local_flow_csv = flow_upload_input(local_path)
+    )
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(
+      workflow_artifacts()$flow_input
+    ))
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      win_width_selector = 6,
+      win_step_selector = 6,
+      calc_flow_stats = 1
+    )
+    session$flushReact()
+
+    artifact <- workflow_artifacts()$flow_statistics
+    testthat::expect_identical(artifact$status, "failed")
+    testthat::expect_match(
+      artifact$blocking_reason,
+      "could not be calculated",
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      artifact$next_action,
+      "Review Flow coverage, dates and values",
+      fixed = TRUE
+    )
+    testthat::expect_false(grepl(
+      "synthetic internal calculation detail",
+      paste(artifact$blocking_reason, artifact$next_action),
+      fixed = TRUE
+    ))
+    testthat::expect_null(flow_stats_revision())
+    testthat::expect_error(flow_stats(), class = "shiny.silent.error")
+  })
+})
+
 testthat::test_that("uploaded and pasted metadata preserve flow_input provenance", {
   shiny::testServer(dashboard_server, {
     upload_path <- testthat::test_path("..", "fixtures", "flow_mapping", "flow_input_missing.csv")
