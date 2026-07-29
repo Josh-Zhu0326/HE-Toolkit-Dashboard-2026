@@ -24,6 +24,43 @@ testthat::test_that("Task selector renders all five client-confirmed Tasks", {
   testthat::expect_match(html, "Undertake HE modelling", fixed = TRUE)
 })
 
+testthat::test_that("workflow shell preserves the v2.2 prototype structure", {
+  selector_html <- render_workflow_html(workflow_shell_ui())
+  workspace_html <- render_workflow_html(workflow_shell_ui("build_he_dataset", 3L))
+
+  testthat::expect_length(
+    gregexpr("workflow-task-card", selector_html, fixed = TRUE)[[1]],
+    5L
+  )
+  testthat::expect_match(selector_html, "workflow-contextbar", fixed = TRUE)
+  testthat::expect_match(selector_html, "workflow-stagebar-shell", fixed = TRUE)
+  testthat::expect_match(workspace_html, "workflow-stage-overview", fixed = TRUE)
+  testthat::expect_match(workspace_html, "workflow-grid", fixed = TRUE)
+  testthat::expect_match(workspace_html, 'aria-current="step"', fixed = TRUE)
+})
+
+testthat::test_that("workflow header owns branding, utilities, and Stage 2 work areas", {
+  header_html <- render_workflow_html(
+    workflow_header_ui(
+      "build_he_dataset",
+      2L,
+      current_panel = "Process Flow"
+    )
+  )
+
+  testthat::expect_match(header_html, "HE Toolkit Dashboard", fixed = TRUE)
+  testthat::expect_match(header_html, "EA_logo_white.png", fixed = TRUE)
+  testthat::expect_match(header_html, "Task selector", fixed = TRUE)
+  testthat::expect_match(header_html, "CSV validation", fixed = TRUE)
+  testthat::expect_match(header_html, "Biology processing", fixed = TRUE)
+  testthat::expect_match(header_html, "Flow processing", fixed = TRUE)
+  testthat::expect_match(
+    header_html,
+    'id="workflow_stage_view_flow"',
+    fixed = TRUE
+  )
+})
+
 testthat::test_that("Task selector consumes completion artifact state", {
   registry <- new_he_artifact_registry()
   registry <- set_he_artifact_status(registry, "biology_input", "complete")
@@ -50,22 +87,50 @@ testthat::test_that("legacy hard-coded progress navigation is removed", {
   testthat::expect_false(grepl("Join & Analyse", active_ui_code, fixed = TRUE))
 })
 
+testthat::test_that("Workflow Header replaces the legacy primary navbar", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(
+    readLines(file.path(project_root, "ui.R"), warn = FALSE),
+    collapse = "\n"
+  )
+  style_html <- render_workflow_html(workflow_style_tags())
+
+  testthat::expect_match(ui_code, 'uiOutput("workflow_header")', fixed = TRUE)
+  testthat::expect_match(
+    style_html,
+    "body.bslib-page-navbar > nav.navbar",
+    fixed = TRUE
+  )
+  testthat::expect_match(ui_code, '"Build HE Dataset"', fixed = TRUE)
+  testthat::expect_match(ui_code, '"Explore Relationships"', fixed = TRUE)
+  testthat::expect_match(ui_code, '"Model and Export"', fixed = TRUE)
+  testthat::expect_false(grepl('nav_panel("Analysis"', ui_code, fixed = TRUE))
+})
+
 testthat::test_that("selected Task renders one shared five-stage navigation", {
   html <- render_workflow_html(workflow_shell_ui("generate_hev", 4L))
 
   testthat::expect_length(gregexpr("workflow_stage_", html, fixed = TRUE)[[1]], 5L)
-  testthat::expect_match(html, "Current stage · 4 of 5", fixed = TRUE)
-  testthat::expect_match(html, "Produce HEV plots with daily flows or flow statistics", fixed = TRUE)
-  testthat::expect_match(html, "Open HEV Plots", fixed = TRUE)
+  testthat::expect_match(
+    html,
+    "Stage 4 · Explore and Refine Relationships",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    html,
+    "Explore the Joined HE dataset and record non-destructive filtering decisions",
+    fixed = TRUE
+  )
+  testthat::expect_match(html, "Current HEV plots", fixed = TRUE)
 })
 
 testthat::test_that("navigation targets existing Shiny panels", {
   testthat::expect_identical(workflow_nav_target("generate_hev", 1L), "Data Import")
   testthat::expect_identical(workflow_nav_target("flow_regime", 2L), "Process Flow")
   testthat::expect_identical(workflow_nav_target("ecological_condition", 2L), "Process Biology")
-  testthat::expect_identical(workflow_nav_target("build_he_dataset", 3L), "Analysis")
+  testthat::expect_identical(workflow_nav_target("build_he_dataset", 3L), "Build HE Dataset")
   testthat::expect_identical(workflow_nav_target("generate_hev", 4L), "HEV Plots")
-  testthat::expect_identical(workflow_nav_target("he_modelling", 5L), "Analysis")
+  testthat::expect_identical(workflow_nav_target("he_modelling", 5L), "Model and Export")
 })
 
 testthat::test_that("not-used stages are disabled", {
