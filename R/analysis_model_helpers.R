@@ -162,3 +162,51 @@ run_analysis_model <- function(analysis_dataset, model_spec,
       diagnostics = diagnostics
     ))))
 }
+
+# turn a model result into flat tables the user can download.
+# returns a list with:
+#   summary: a two-column table (field, value) with the main numbers and the
+#            provenance (what data, what formula, software, time, etc.)
+#   coefficients: the fixed-effects table, or NULL if the model didn't fit
+model_result_export <- function(result) {
+  fm <- result$fit_metrics
+  get <- function(x, default = NA) if (is.null(x)) default else x
+
+  # start with the main fields
+  fields <- list(
+    status = result$status,
+    model_path = get(result$model_path),
+    formula = get(result$formula),
+    n_input = get(result$n_input),
+    n_complete = get(result$n_complete),
+    n_excluded = get(result$n_excluded),
+    site_count = get(result$site_count),
+    year_range = get(result$year_range),
+    year_center = get(result$year_center),
+    r_squared = if (is.null(fm)) NA else fm$r_squared,
+    adj_r_squared = if (is.null(fm)) NA else fm$adj_r_squared,
+    sigma = if (is.null(fm)) NA else fm$sigma,
+    convergence_status = get(result$convergence_status),
+    singularity_status = get(result$singularity_status),
+    messages = get(result$messages)
+  )
+
+  # add every provenance item too (response, predictors, software, time, and
+  # anything the caller passed in like source dataset or filter version)
+  prov <- result$provenance
+  if (!is.null(prov)) {
+    for (nm in names(prov)) {
+      val <- prov[[nm]]
+      fields[[paste0("provenance_", nm)]] <- paste(val, collapse = "; ")
+    }
+  }
+
+  summary <- data.frame(
+    field = names(fields),
+    value = vapply(fields, function(v) paste(as.character(v), collapse = "; "), character(1)),
+    row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+
+  list(summary = summary, coefficients = result$fixed_effects)
+}
