@@ -295,6 +295,15 @@ function(input, output, session){
     workflow_begin_artifact("oe_result", "Complete the O:E calculation.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$calc_flow_stats, {
+    if (!workflow_artifact_is_current("flow_input")) {
+      workflow_set_artifact(
+        "flow_statistics",
+        "blocked",
+        blocking_reason = "Flow statistics require current validated Flow data.",
+        next_action = "Upload or import Flow data, then calculate Flow statistics again."
+      )
+      return()
+    }
     workflow_begin_artifact("flow_statistics", "Complete the Flow-statistics calculation.")
   }, ignoreInit = TRUE, priority = 100)
   # Snapshot controls at click time so lazy output consumers cannot run a new
@@ -1950,19 +1959,58 @@ function(input, output, session){
   })
   
   flow_stats_result <- eventReactive(input$calc_flow_stats, {
+    if (!workflow_artifact_is_current("flow_input")) {
+      return(NULL)
+    }
+
     flow_data_final <- flow_data_final()
     
     flow_data_final$flow[flow_data_final$flow <= 0] <- NA
     
-    result <- calc_flowstats(data = flow_data_final, site_col = "flow_site_id", date_col = "date",
-                             flow_col = "flow", win_width = paste(input$win_width_selector, "months"),
-                             win_step = paste(input$win_step_selector, "months"))
+    result <- tryCatch(
+      calc_flowstats(
+        data = flow_data_final,
+        site_col = "flow_site_id",
+        date_col = "date",
+        flow_col = "flow",
+        win_width = paste(input$win_width_selector, "months"),
+        win_step = paste(input$win_step_selector, "months")
+      ),
+      error = function(error) {
+        flow_stats_revision(NULL)
+        workflow_set_artifact(
+          "flow_statistics",
+          "failed",
+          blocking_reason = paste(
+            "Flow statistics could not be calculated from the current",
+            "Flow data and window settings."
+          ),
+          next_action = paste(
+            "Review Flow coverage, dates and values or change the window settings,",
+            "then calculate Flow statistics again."
+          )
+        )
+        showNotification(
+          paste(
+            "Flow statistics could not be calculated.",
+            "Review the Flow data and window settings, then try again."
+          ),
+          type = "error",
+          duration = NULL
+        )
+        NULL
+      }
+    )
+    if (is.null(result)) {
+      return(NULL)
+    }
     flow_stats_revision(isolate(flow_source_revision()))
     result
   })
 
   flow_stats <- reactive({
     result <- flow_stats_result()
+    req(!is.null(result))
     req(identical(flow_stats_revision(), flow_source_revision()))
     result
   })

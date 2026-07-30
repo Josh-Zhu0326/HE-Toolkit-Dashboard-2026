@@ -5,6 +5,10 @@
 > Status: **FROZEN**
 > Owner: Lin (UX/Workflow)
 > Reviewer: Bo (Architecture/State)
+> Baseline reviewed implementation commit: `7b200c1`
+> Follow-up review scope: Required route Stages without standalone artifacts
+> Follow-up implementation diff SHA-256: `80abaa681f61edc1619f89887558ca97367f51bb0a3d26e2f2c4837f55b50ad4`
+> Follow-up review decision: Approved by Bo on 29 July 2026
 
 ## 1. Purpose and authority
 
@@ -26,13 +30,13 @@ values are not implementation evidence.
 | Current Task | `workflow_session$task_id` plus Task config | `workflow_header_ui()` renders the global Task context, primary output, Utilities, and five-Stage navigation above every work page | Task selection sets `task_id`, derives Resume, and opens the real Stage workspace; Change Task clears only the current Task and Stage | `tests/testthat/test-workflow-ui.R` — global Header contract; `tests/testthat/test-workflow-server.R` — selection and Change Task tests | Complete |
 | Task cards | Task config plus artifact registry | `workflow_task_selector_ui()` renders all five cards, required Stages, current reusable outputs, and the `workflow_resume_stage()` result | Start/Resume selects the configured Task and derives its Stage from current artifacts | `tests/testthat/test-workflow-ui.R` — five-card, metadata, completion, state-attribute, and prototype-structure tests | Complete |
 | Five-stage navigation | `he_workflow_stages` plus each Task's `stage_path` | `workflow_stage_nav_ui()` is the only primary navigation; the legacy Navbar is hidden and Stage 2 exposes Biology/Flow work areas only when both are needed | Stage observers accept only Stages used by the current Task and switch the single existing real work page instance | `tests/testthat/test-workflow-ui.R` and `tests/testthat/test-workflow-server.R` — route, sub-navigation, disabled Stage, and inaccessible Stage tests | Complete |
-| Required steps | Task `required_artifacts`, `he_artifact_stage_index`, and registry | `workflow_required_steps_ui()` renders only the current Stage's required artifacts and real states | Existing artifact adapters update the shared registry after business outcomes | `tests/testthat/test-workflow-ui.R` — required-step and optional-enrichment isolation tests; `tests/testthat/test-workflow-state.R` | Complete |
-| Checkpoint | Required artifact metadata in the registry | `workflow_checkpoint_ui()` renders each required artifact's `status`, `data_source`, `history_summary`, `blocking_reason`, and `next_action` | No checkpoint state is fabricated; it reads the same registry updated by business-result adapters | `tests/testthat/test-workflow-ui.R` — real metadata, recovery guidance, state attributes, and placeholder-removal tests | Complete |
+| Required steps | Task `stage_path`, `required_artifacts`, `reusable_artifacts`, dependency graph, Stage mapping, and registry | `workflow_required_steps_ui()` renders direct required artifacts and real states; a Required Stage without a standalone artifact renders explicit required-route guidance and never describes itself as optional | Resume uses downstream progress to locate recovery work, while displayed completion uses `workflow_required_stage_completion_evidence()`: current causal required evidence or a current validated reusable output allowed by the Task contract | `tests/testthat/test-workflow-ui.R` — status matrix, causal evidence, reusable evidence, direct-artifact, optional-enrichment isolation, and Task 3–5 route-only Stage tests; `tests/testthat/test-workflow-state.R` — progress/completion separation tests | Complete |
+| Checkpoint | Required artifact metadata plus Task path and validated completion evidence in the registry | `workflow_checkpoint_ui()` renders each direct required artifact's `status`, `data_source`, `history_summary`, `blocking_reason`, and concrete `next_action`; route-only Required Stages identify causal or contract-allowed reusable evidence and the absence of a standalone artifact | Untouched artifacts remain `not_started`; an attempted Flow-statistics calculation without required Flow input becomes `blocked`; calculation exceptions become recoverable `failed` state | UI/state/server matrix tests plus real browser captures `ui-parity-08-blocked-retest.png`, `ui-parity-09-stale-retest.png`, and `ui-parity-11-flowstats-failed-recovery.png` | Complete |
 | Primary action | `workflow_nav_target(task_id, stage_index)` plus each real page's existing Run/Import/Join/Generate handler | The separate `Open X` button is removed because the selected Stage already contains the real work page; calculation buttons remain explicit inside that page | Stage selection changes only the visible work page; it never completes an artifact or runs a calculation | `tests/testthat/test-workflow-ui.R` route tests and `tests/testthat/test-workflow-server.R` Stage-routing tests | Complete |
-| Change Task | `workflow_session` reset policy | `change_task` is rendered in the global Workflow Header | Clears `task_id`, resets Stage to 1, returns to the Task Selector, and preserves `workflow_artifacts` | `tests/testthat/test-workflow-server.R` — non-destructive Change Task regression | Complete |
+| Change Task | `workflow_session` reset policy | `change_task` is rendered in the global Workflow Header | Clears `task_id`, resets Stage to 1, returns to the Task Selector, and preserves `workflow_artifacts` | `tests/testthat/test-workflow-server.R` plus real browser capture `ui-parity-10-change-task-reusable.png`, showing preserved `Processed flow` and `Flow statistics` completion artifacts | Complete |
 | Core-only scope | Explicit WQ/RHS file-selection state plus Task config | `workflow_core_scope_ui()` shows an informational `role="note"` for Tasks 3–5 when neither enrichment is selected | Does not mutate or block `joined_core`; selected/attempted WQ or RHS follows its own artifact state | `tests/testthat/test-workflow-ui.R` — informational visibility/accessibility test; `tests/testthat/test-workflow-state.R` — WQ never stales core | Complete |
 | Advanced controls | Submitted Join request plus canonical `choose_lags`/`choose_join_method` signature | `Build HE Dataset` controls remain the only Join-setting inputs | Controls are snapshotted only on Join; later semantic changes stale `joined_core` and current descendants, preserve cached metadata/output revisions, clear current revision gates, and never trigger a Join | `tests/testthat/test-workflow-server.R` — initialization guard, canonical setting, exact stale boundary, preserved revisions, and no-recalculation test | Complete |
-| Status announcement | Current Task, Stage, required artifact states, and next actions | Hidden `aria-live="polite"` / `aria-atomic="true"` output uses `workflow_status_announcement_text()` | Re-renders when Task, Stage, artifact state, or next action changes | `tests/testthat/test-workflow-ui.R` accessibility test and `tests/testthat/test-workflow-server.R` reactive announcement test | Complete |
+| Status announcement | Current Task, Stage path, required artifact states, downstream route evidence, and next actions | Hidden `aria-live="polite"` / `aria-atomic="true"` output uses `workflow_status_announcement_text()` | Re-renders when Task, Stage, artifact state, or next action changes; a route-only Required Stage announces an actionable next step until downstream evidence exists | `tests/testthat/test-workflow-ui.R` accessibility and route-only announcement tests; `tests/testthat/test-workflow-server.R` reactive announcement test | Complete |
 
 ## 3. Controlled differences from v2.2
 
@@ -68,6 +72,12 @@ authority. The following differences are accepted and intentional:
 5. `filter_selection` and `model_spec` are independent inputs and remain current
    when only Join settings change.
 6. Change Task never clears reusable artifacts.
+7. Non-current progress (`ready`, `running`, `blocked`, `failed`, or `stale`)
+   may guide Resume but never makes a route-only Required Stage display
+   `Complete`.
+8. Untouched artifacts remain `not_started` and expose a concrete next action.
+   An attempted action with missing prerequisites uses `blocked`; a handled
+   calculation exception uses `failed`, with a safe reason and retry action.
 
 ## 5. Automated verification
 
@@ -76,10 +86,13 @@ The controlled acceptance evidence is provided by the automated test suite:
 - `tests/testthat/test-workflow-ui.R` — Task cards, five-stage navigation,
   required steps, Checkpoint metadata, accessibility, terminology, and routing.
 - `tests/testthat/test-workflow-server.R` — Task selection, Stage routing,
-  Change Task, announcements, Join-setting stale behaviour, and explicit-run
-  protection.
+  Change Task, announcements, missing-input blocking, Join-setting stale
+  behaviour, and explicit-run protection.
+- `tests/testthat/test-server-local-flow-source.R` — valid/replaced Local Flow
+  sources, transitive stale propagation, and recoverable Flow-statistics
+  exceptions.
 - `tests/testthat/test-workflow-state.R` — artifact dependencies, completion,
-  stale propagation, and Core-only invariants.
+  causal/reusable route evidence, stale propagation, and Core-only invariants.
 
 Run the complete verification suite with:
 
@@ -87,8 +100,10 @@ Run the complete verification suite with:
 R_USER_CACHE_DIR=/tmp/he-toolkit-r-cache Rscript tests/testthat.R
 ```
 
-Acceptance requires zero failures, errors, and warnings. Browser screenshots are
-not controlled release evidence.
+Acceptance requires zero failures, errors, and warnings. Real browser follow-up
+evidence for blocked, stale, Change Task reuse, and recoverable failure is
+indexed in
+[`docs/week09/ui-parity-evidence/README.md`](../week09/ui-parity-evidence/README.md).
 
 ## 6. Completion and review record
 
@@ -98,5 +113,7 @@ to those contracts requires a controlled change decision before implementation.
 
 | Role | Name | Review date | Decision |
 |---|---|---|---|
-| Owner — UX/Workflow | Lin | `2026-07-22` | Implementation complete; submitted for independent review |
-| Reviewer — Architecture/State | Bo | `2026-07-23` | Approved |
+| Owner — UX/Workflow | Lin | `2026-07-29` | Follow-up corrections, exact-state tests, and browser revalidation complete |
+| Reviewer — Architecture/State | Bo | `2026-07-29` | Approved follow-up implementation and verification |
+
+Status: **FROZEN**

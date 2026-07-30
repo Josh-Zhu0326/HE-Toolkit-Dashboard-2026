@@ -29,6 +29,40 @@ he_artifact_ids <- function(dependencies = he_artifact_dependencies) {
   names(dependencies)
 }
 
+he_artifact_default_next_actions <- c(
+  biology_input = "Upload or import Biology data.",
+  environment_input = "Import Environmental data for the mapped Biology sites.",
+  flow_input = "Upload Local Flow data or import Flow data for the mapped sites.",
+  site_mapping = "Upload or enter site metadata, then validate the site mapping.",
+  wq_input = "Upload or import Water-quality data if enrichment is required.",
+  rhs_input = "Upload or import River Habitat Survey data if enrichment is required.",
+  filter_selection = "Review the current records and apply any exclusions or restorations.",
+  model_spec = "Choose an eligible model specification.",
+  processed_biology = "Process the current Biology data.",
+  processed_environment = "Run the environmental-data processing.",
+  processed_flow = "Prepare the current Flow data.",
+  oe_result = "Calculate Expected values and O:E ratios.",
+  flow_statistics = "Calculate Flow statistics from the current Flow data.",
+  joined_core = "Build the Core Joined HE dataset.",
+  joined_enriched = "Select and process any optional WQ or RHS enrichment.",
+  exclusion_log = "Review the exclusion and restore log.",
+  analysis_dataset = "Apply the current analysis selection.",
+  processed_dataset_checkpoint = "Download the current Joined HE dataset checkpoint.",
+  hev_result = "Generate HEV plots from the current analysis selection.",
+  model_result = "Fit the current model and review its diagnostics."
+)
+
+workflow_artifact_default_next_action <- function(artifact_id) {
+  next_action <- unname(he_artifact_default_next_actions[artifact_id])
+  if (length(next_action) != 1L || is.na(next_action) || !nzchar(next_action)) {
+    stop(
+      sprintf("Missing default next action for workflow artifact: %s", artifact_id),
+      call. = FALSE
+    )
+  }
+  next_action
+}
+
 new_he_artifact <- function(artifact_id) {
   if (!artifact_id %in% he_artifact_ids()) {
     stop(sprintf("Unknown workflow artifact ID: %s", artifact_id), call. = FALSE)
@@ -45,7 +79,7 @@ new_he_artifact <- function(artifact_id) {
     data_source = NULL,
     history_summary = NULL,
     blocking_reason = NULL,
-    next_action = NULL
+    next_action = workflow_artifact_default_next_action(artifact_id)
   )
 }
 
@@ -223,12 +257,141 @@ artifact_has_workflow_progress <- function(artifact) {
   !identical(artifact$status, "not_started") || artifact$output_revision > 0L
 }
 
+workflow_artifact_ancestors <- function(
+    artifact_id,
+    dependencies = he_artifact_dependencies) {
+  if (!artifact_id %in% names(dependencies)) {
+    stop(sprintf("Unknown workflow artifact ID: %s", artifact_id), call. = FALSE)
+  }
+
+  ancestors <- character()
+  frontier <- dependencies[[artifact_id]]
+
+  while (length(frontier) > 0L) {
+    new_ids <- setdiff(frontier, ancestors)
+    if (length(new_ids) == 0L) {
+      break
+    }
+    ancestors <- c(ancestors, new_ids)
+    frontier <- unique(unlist(dependencies[new_ids], use.names = FALSE))
+  }
+
+  unique(ancestors)
+}
+
+workflow_artifact_has_stage_ancestor <- function(
+    artifact_id,
+    stage_index,
+    dependencies = he_artifact_dependencies,
+    artifact_stage_index = he_artifact_stage_index) {
+  ancestors <- workflow_artifact_ancestors(artifact_id, dependencies)
+  length(ancestors) > 0L && any(
+    unname(artifact_stage_index[ancestors]) == stage_index
+  )
+}
+
 workflow_required_stage_artifact_ids <- function(
     task,
     stage_index,
     artifact_stage_index = he_artifact_stage_index) {
   required_ids <- task$required_artifacts
   required_ids[artifact_stage_index[required_ids] == stage_index]
+}
+
+workflow_required_stage_has_downstream_progress <- function(
+    task,
+    stage_index,
+    registry,
+    artifact_stage_index = he_artifact_stage_index) {
+  task_artifact_ids <- unique(c(task$required_artifacts, task$reusable_artifacts))
+  later_artifact_ids <- task_artifact_ids[
+    artifact_stage_index[task_artifact_ids] > stage_index
+  ]
+
+  length(later_artifact_ids) > 0L && any(vapply(
+    registry[later_artifact_ids],
+    artifact_has_workflow_progress,
+    logical(1)
+  ))
+}
+
+workflow_required_stage_completion_evidence <- function(
+    task,
+    stage_index,
+    registry,
+    dependencies = he_artifact_dependencies,
+    artifact_stage_index = he_artifact_stage_index) {
+  later_required_ids <- task$required_artifacts[
+    artifact_stage_index[task$required_artifacts] > stage_index
+  ]
+
+  if (length(later_required_ids) > 0L) {
+    earliest_required_stage <- min(
+      artifact_stage_index[later_required_ids],
+      na.rm = TRUE
+    )
+    causal_required_ids <- later_required_ids[
+      artifact_stage_index[later_required_ids] == earliest_required_stage
+    ]
+    causal_required_ids <- causal_required_ids[vapply(
+      causal_required_ids,
+      workflow_artifact_has_stage_ancestor,
+      logical(1),
+      stage_index = stage_index,
+      dependencies = dependencies,
+      artifact_stage_index = artifact_stage_index
+    )]
+
+    if (length(causal_required_ids) > 0L &&
+        all(vapply(
+          registry[causal_required_ids],
+          artifact_is_current,
+          logical(1)
+        ))) {
+      return(list(
+        satisfied = TRUE,
+        evidence_type = "causal-required",
+        artifact_ids = causal_required_ids
+      ))
+    }
+  }
+
+  later_reusable_ids <- task$reusable_artifacts[
+    artifact_stage_index[task$reusable_artifacts] > stage_index
+  ]
+  current_reusable_ids <- later_reusable_ids[vapply(
+    registry[later_reusable_ids],
+    artifact_is_current,
+    logical(1)
+  )]
+  if (length(current_reusable_ids) > 0L) {
+    return(list(
+      satisfied = TRUE,
+      evidence_type = "validated-reusable",
+      artifact_ids = current_reusable_ids
+    ))
+  }
+
+  list(
+    satisfied = FALSE,
+    evidence_type = "none",
+    artifact_ids = character()
+  )
+}
+
+workflow_required_stage_is_satisfied <- function(
+    task,
+    stage_index,
+    registry,
+    dependencies = he_artifact_dependencies,
+    artifact_stage_index = he_artifact_stage_index) {
+  isTRUE(workflow_required_stage_completion_evidence(
+    task,
+    stage_index,
+    registry,
+    dependencies,
+    artifact_stage_index
+  )$satisfied)
 }
 
 workflow_resume_stage <- function(
@@ -285,16 +448,12 @@ workflow_resume_stage <- function(
       next
     }
 
-    later_artifact_ids <- task_artifact_ids[
-      artifact_stage_index[task_artifact_ids] > stage_index
-    ]
-    later_progress_exists <- length(later_artifact_ids) > 0L && any(vapply(
-      registry[later_artifact_ids],
-      artifact_has_workflow_progress,
-      logical(1)
-    ))
-
-    if (!later_progress_exists) {
+    if (!workflow_required_stage_has_downstream_progress(
+      task,
+      stage_index,
+      registry,
+      artifact_stage_index
+    )) {
       return(as.integer(stage_index))
     }
   }
