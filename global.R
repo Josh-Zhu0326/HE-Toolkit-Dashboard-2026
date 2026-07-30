@@ -48,6 +48,8 @@ source(file.path("R", "workflow_ui.R"))
 source(file.path("R", "filtering_helpers.R"))
 source(file.path("R", "exclusion_log_helpers.R"))
 source(file.path("R", "model_interface_helpers.R"))
+source(file.path("R", "analysis_filter_helpers.R"))
+source(file.path("R", "analysis_model_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
