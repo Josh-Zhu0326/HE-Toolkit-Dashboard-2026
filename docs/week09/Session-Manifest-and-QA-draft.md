@@ -1,4 +1,4 @@
-# Formal Session Manifest + Daily QA (draft) — WK9-11
+# Formal Session Manifest + Daily QA
 
 Rule: de-identified IDs only. No names, emails, signatures, audio, or screen
 recordings go into the public repository. Consent and any personal data stay in
