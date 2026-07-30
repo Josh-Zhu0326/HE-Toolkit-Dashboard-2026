@@ -124,6 +124,37 @@ testthat::test_that("Status announcement reacts to artifact state and next actio
   })
 })
 
+testthat::test_that("Flow-statistics attempt without Flow input becomes recoverably blocked", {
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(
+      workflow_artifacts()$flow_statistics$status,
+      "not_started"
+    )
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      win_width_selector = 6,
+      win_step_selector = 6,
+      calc_flow_stats = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    artifact <- workflow_artifacts()$flow_statistics
+    testthat::expect_identical(artifact$status, "blocked")
+    testthat::expect_match(
+      artifact$blocking_reason,
+      "require current validated Flow data",
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      artifact$next_action,
+      "Upload or import Flow data",
+      fixed = TRUE
+    )
+    testthat::expect_null(flow_stats_revision())
+  })
+})
+
 testthat::test_that("Join-setting changes stale current outputs without rerunning them", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())

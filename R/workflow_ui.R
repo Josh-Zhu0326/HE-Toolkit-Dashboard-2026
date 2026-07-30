@@ -449,9 +449,44 @@ workflow_required_steps_ui <- function(task, stage_index, registry) {
   artifact_ids <- workflow_required_stage_artifact_ids(task, stage_index)
 
   if (length(artifact_ids) == 0L) {
+    stage_mark <- task$stage_path[[stage_index]]
+    if (identical(stage_mark, "R")) {
+      evidence <- workflow_required_stage_completion_evidence(
+        task,
+        stage_index,
+        registry
+      )
+      return(shiny::div(
+        class = "workflow-panel-empty",
+        `data-required-route` = "indirect",
+        `data-completion-evidence` = evidence$evidence_type,
+        shiny::strong("Required route stage"),
+        shiny::p(
+          "This Stage has no standalone completion artifact. Complete the relevant work in this workspace, ",
+          "or use a validated reusable output where this Task permits it."
+        ),
+        shiny::p(switch(
+          evidence$evidence_type,
+          `causal-required` = paste(
+            "Current downstream evidence causally linked to this Stage records the route as satisfied.",
+            "This does not claim that unrelated or stale upstream calculations ran in this session."
+          ),
+          `validated-reusable` = paste(
+            "A current validated reusable output allowed by this Task records the route as satisfied.",
+            "This does not claim that skipped upstream calculations ran in this session."
+          ),
+          "No current causal or contract-allowed reusable completion evidence is recorded yet."
+        ))
+      ))
+    }
+
     return(shiny::p(
       class = "workflow-panel-empty",
-      "This stage has no separate required output for the selected Task. Review it only if you need the optional capability."
+      if (identical(stage_mark, "O")) {
+        "This Stage is optional for the selected Task and has no separate required output."
+      } else {
+        "This Stage is not used by the selected Task."
+      }
     ))
   }
 
@@ -477,6 +512,14 @@ workflow_required_steps_ui <- function(task, stage_index, registry) {
 workflow_stage_status <- function(task, stage_index, registry) {
   artifact_ids <- workflow_required_stage_artifact_ids(task, stage_index)
   if (length(artifact_ids) == 0L) {
+    if (identical(task$stage_path[[stage_index]], "R") &&
+        workflow_required_stage_is_satisfied(
+          task,
+          stage_index,
+          registry
+        )) {
+      return("complete")
+    }
     return("not_started")
   }
   statuses <- vapply(registry[artifact_ids], `[[`, character(1), "status")
@@ -508,10 +551,42 @@ workflow_checkpoint_ui <- function(task, stage_index, registry) {
       )
     ),
     if (length(artifact_ids) == 0L) {
-      shiny::p(
-        class = "workflow-checkpoint-empty",
-        "No separate required artifact is recorded for this Stage."
-      )
+      if (identical(task$stage_path[[stage_index]], "R")) {
+        evidence <- workflow_required_stage_completion_evidence(
+          task,
+          stage_index,
+          registry
+        )
+        shiny::div(
+          class = "workflow-checkpoint-empty",
+          `data-checkpoint-evidence` = "downstream-artifact",
+          `data-completion-evidence` = evidence$evidence_type,
+          shiny::p(
+            "This required route Stage has no standalone artifact. Its status is derived only from current causal evidence or a validated reusable output allowed by the Task contract."
+          ),
+          shiny::p(switch(
+            evidence$evidence_type,
+            `causal-required` = paste(
+              "Current causally linked downstream evidence is recorded.",
+              "This confirms the route requirement; it does not claim that unrelated or stale calculations ran in this session."
+            ),
+            `validated-reusable` = paste(
+              "A current validated reusable output allowed by this Task is recorded.",
+              "This confirms the route requirement without claiming that skipped calculations ran in this session."
+            ),
+            "No current completion evidence is recorded yet. Complete the relevant work or provide a validated reusable output allowed by this Task."
+          ))
+        )
+      } else {
+        shiny::p(
+          class = "workflow-checkpoint-empty",
+          if (identical(task$stage_path[[stage_index]], "O")) {
+            "No separate required artifact is recorded for this optional Stage."
+          } else {
+            "This Stage is not used by the selected Task."
+          }
+        )
+      }
     } else {
       lapply(artifact_ids, function(artifact_id) {
         artifact <- registry[[artifact_id]]
@@ -542,7 +617,10 @@ workflow_checkpoint_ui <- function(task, stage_index, registry) {
             ),
             workflow_checkpoint_row(
               "Next action",
-              workflow_present_value(artifact$next_action, "No action recorded yet")
+              workflow_present_value(
+                artifact$next_action,
+                workflow_artifact_default_next_action(artifact_id)
+              )
             )
           )
         )
@@ -595,7 +673,17 @@ workflow_status_announcement_text <- function(task, stage_index, registry) {
     )
   ))
   next_text <- if (length(next_actions) == 0L) {
-    ""
+    if (length(artifact_ids) == 0L &&
+        identical(task$stage_path[[stage_index]], "R") &&
+        !workflow_required_stage_is_satisfied(
+          task,
+          stage_index,
+          registry
+        )) {
+      " Next action: Complete the required route work in this Stage or provide a validated reusable output."
+    } else {
+      ""
+    }
   } else {
     sprintf(" Next action: %s", paste(next_actions, collapse = " "))
   }
