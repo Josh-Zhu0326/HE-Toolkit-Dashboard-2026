@@ -1,28 +1,27 @@
 # analysis_filter_helpers.R
-# WK8-07 / DEC-07: filtering at the analysis_dataset layer, plus restore.
+# This is for WK8-07. It lets the user drop records from the analysis and add
+# them back later.
 #
-# What this does (in plain terms):
-# The user picks records to drop from the analysis. We keep those picks in a
-# "filter selection" object, and we build the analysis_dataset by removing the
-# currently-excluded records from a joined source. We never touch the joined
-# source itself, and every exclude/restore is written to a log so the user can
-# undo it. This follows the frozen artifact graph in workflow_state.R:
-#   filter_selection -> exclusion_log
-#   filter_selection + joined_core/joined_enriched -> analysis_dataset
+# How it works:
+# The user's choices are saved in a "filter selection". To get the
+# analysis_dataset, we take the joined data and remove the records that are
+# currently dropped. We never change the joined data itself. Every drop and
+# restore is written to a log so the user can undo it.
 #
-# ASSUMPTIONS (please confirm with Di/Bo, easy to change here):
-# - A record is identified by a single id column. Default is "SAMPLE_ID"
-#   (present in the joined biology data). If it is missing we fall back to the
-#   row number. Change `id_col` if the team picks another key.
-# - We do not decide the sample-level duplicate rule here (that is WK8-16/Di).
+# Things I assumed (please tell me if they should change):
+# - Each record is found by one id column. I used "SAMPLE_ID" (it's in the
+#   joined data). If that column is missing, I use the row number instead.
+# - I did not decide the same-day/same-month duplicate rule here. That one is
+#   Di's task (WK8-16).
 
-# the columns of the exclusion log (DC-07 minimum record)
+# the columns the exclusion log should have
 ANALYSIS_EXCLUSION_LOG_COLUMNS <- c(
   "record_id", "site_id", "sample_id",
   "exclusion_reason", "trigger", "user_comment", "timestamp", "current_status"
 )
 
-# an empty filter selection. `events` is an append-only log of exclude/restore.
+# start an empty filter selection. `events` just keeps a list of every
+# exclude/restore the user did, in order.
 new_filter_selection <- function() {
   list(events = data.frame(
     record_id = character(),
@@ -79,7 +78,8 @@ restore_record <- function(selection, record_id, user_comment = "", timestamp = 
   selection
 }
 
-# which record ids are currently excluded (last event per record is "exclude")
+# find which records are dropped right now. a record is dropped if its most
+# recent action was "exclude".
 active_excluded_ids <- function(selection) {
   ev <- selection$events
   if (nrow(ev) == 0) return(character())
@@ -88,16 +88,16 @@ active_excluded_ids <- function(selection) {
   names(last_action)[last_action == "exclude"]
 }
 
-# build the analysis_dataset by removing currently-excluded records.
-# non-destructive: `joined` is never changed, we return a new data.frame plus
-# a little provenance so the caller knows what happened.
+# make the analysis_dataset by removing the dropped records.
+# this does NOT change `joined` - it returns a new table, plus some numbers
+# so the caller knows what happened.
 apply_filter_selection <- function(joined, selection, id_col = "SAMPLE_ID") {
   if (is.null(joined) || nrow(joined) == 0) {
     return(list(analysis_dataset = joined, n_source = 0L, n_excluded = 0L,
                 n_kept = 0L, id_col = id_col, filter_version = nrow(selection$events)))
   }
 
-  # figure out the id for each row
+  # get the id for each row (use the row number if the id column isn't there)
   if (id_col %in% names(joined)) {
     ids <- as.character(joined[[id_col]])
   } else {
@@ -119,7 +119,8 @@ apply_filter_selection <- function(joined, selection, id_col = "SAMPLE_ID") {
   )
 }
 
-# build the exclusion log (DC-07 schema) with a current status per event.
+# build the log table. it lists every exclude/restore and whether the record
+# is dropped or restored right now.
 build_analysis_exclusion_log <- function(selection) {
   ev <- selection$events
   empty <- data.frame(matrix(character(0), nrow = 0,

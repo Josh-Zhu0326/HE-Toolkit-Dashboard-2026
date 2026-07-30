@@ -1,25 +1,23 @@
 # analysis_model_helpers.R
-# WK8-08: modelling on the analysis_dataset, following modelling-contract-v1.md.
+# This is for WK8-08. It runs the model on the analysis_dataset.
 #
-# IMPORTANT scope note:
-# The modelling contract is still a REVIEW BASELINE (not frozen), and OPEN-06 is
-# open. So this file only implements the CONFIRMED single-site additive path.
-# For two or more sites we return status = "not_ready" and never fit a mixed
-# model or fall back to a pooled lm() (MC-R05). We also do not invent any
-# threshold that the contract leaves open (MC-R08).
+# Important: the modelling contract is not final yet, so for now I only do the
+# single-site model. If there are two or more sites I return "not_ready" and do
+# NOT run a mixed model or a pooled lm(). I also don't set any number the
+# contract hasn't decided yet.
 #
-# model_spec is a list, e.g.:
+# model_spec is a list, for example:
 #   list(response = "LIFE_F_OE",
-#        flow_predictors = c("Q95_lag0", "Q10_lag0"),   # at most 2
-#        wq_predictor = NULL,                            # at most 1
-#        rhs_predictor = NULL)                           # at most 1
+#        flow_predictors = c("Q95_lag0", "Q10_lag0"),   # up to 2
+#        wq_predictor = NULL,                            # up to 1
+#        rhs_predictor = NULL)                           # up to 1
 #
-# ASSUMPTIONS (confirm with Lin/Di, easy to change):
+# Things I assumed (please tell me if they should change):
 # - site column is "biol_site_id", year column is "Year".
-# - single-site R2 is the ordinary lm R2 (the mixed-model marginal/conditional
-#   R2 is gated by MC-O09 and is not produced here).
+# - the single-site R2 is the normal lm R2.
 
-# a result shell with all the contract fields, so every path returns the same shape
+# a result with all the fields filled in with defaults, so every path returns
+# the same shape
 .model_result <- function(status, messages, ...) {
   base <- list(
     status = status, messages = messages,
@@ -46,14 +44,14 @@ run_analysis_model <- function(analysis_dataset, model_spec,
   predictors  <- c(flow_preds, wq_pred, rhs_pred)
   predictors  <- predictors[!is.null(predictors) & nzchar(predictors)]
 
-  # --- basic checks, friendly messages ------------------------------------
+  # basic checks. if something is wrong we return a friendly message.
   if (is.null(analysis_dataset) || !is.data.frame(analysis_dataset) || nrow(analysis_dataset) == 0) {
     return(.model_result("blocked", "No analysis data available. Build the analysis dataset first."))
   }
   if (is.null(response) || !nzchar(response) || length(predictors) == 0) {
     return(.model_result("blocked", "Select a response variable and at least one predictor."))
   }
-  # predictor limits (MC-R02)
+  # limits on how many predictors of each kind
   if (length(flow_preds) > 2) return(.model_result("blocked", "At most two flow predictors are allowed."))
   if (length(wq_pred)  > 1)   return(.model_result("blocked", "At most one WQ predictor is allowed."))
   if (length(rhs_pred) > 1)   return(.model_result("blocked", "At most one RHS predictor is allowed."))
@@ -65,7 +63,7 @@ run_analysis_model <- function(analysis_dataset, model_spec,
       paste0("These columns are not in the analysis data: ", paste(missing, collapse = ", "), ".")))
   }
 
-  # --- year centring (MC-R03), only if we have a usable year column --------
+  # centre the year, but only if there's a year column with at least 2 years
   df <- analysis_dataset
   year_center <- NA_real_; year_range <- NA_character_; use_year <- FALSE
   if (year_col %in% names(df)) {
@@ -86,7 +84,7 @@ run_analysis_model <- function(analysis_dataset, model_spec,
   n_complete <- nrow(model_df)
   n_excluded <- n_input - n_complete
 
-  # --- routing by number of valid sites (MC-R01) ---------------------------
+  # count how many sites we have. this decides which model to use.
   sites <- unique(as.character(model_df[[site_col]]))
   site_count <- length(sites)
 
@@ -104,7 +102,7 @@ run_analysis_model <- function(analysis_dataset, model_spec,
       "No valid sites after removing incomplete rows. Check the data or the filter."), base_fields)))
   }
 
-  # two or more sites -> candidate multi-site path, but NOT allowed to run yet
+  # two or more sites: we can't run the multi-site model yet, so stop here
   if (site_count >= 2) {
     return(do.call(.model_result, c(list("not_ready",
       paste0("Multiple sites detected (", site_count, "). The multi-site / mixed-effects ",
@@ -113,8 +111,8 @@ run_analysis_model <- function(analysis_dataset, model_spec,
       c(base_fields, list(model_path = "multi_site_candidate")))))
   }
 
-  # --- single-site additive path (the confirmed one) -----------------------
-  # need enough rows to fit: at least (number of terms) + 1
+  # one site: run the normal single-site model.
+  # we need enough rows to fit it - at least (number of terms) + 1
   n_terms <- length(model_vars) - 1 + 1   # predictors (+year) + intercept
   if (n_complete < n_terms + 1) {
     return(do.call(.model_result, c(list("blocked",
