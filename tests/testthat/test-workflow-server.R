@@ -422,5 +422,54 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+
+    joined_before_filter <- join_data()
+    if ("SAMPLE_ID" %in% names(joined_before_filter)) {
+      record_ids <- as.character(joined_before_filter$SAMPLE_ID)
+      record_id <- record_ids[[1L]]
+    } else {
+      record_ids <- as.character(seq_len(nrow(joined_before_filter)))
+      record_id <- "1"
+    }
+    excluded_row_count <- sum(record_ids == record_id)
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      analysis_record_id = record_id,
+      exclude_analysis_record = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_equal(
+      nrow(analysis_filter_result()$analysis_dataset),
+      nrow(joined_before_filter) - excluded_row_count
+    )
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$filter_selection))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$exclusion_log))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_identical(basic_model_result()$status, "info")
+    exclusion_log_after_exclude <- analysis_exclusion_log()
+    testthat::expect_equal(nrow(exclusion_log_after_exclude), 1L)
+    testthat::expect_identical(exclusion_log_after_exclude$record_id, record_id)
+    testthat::expect_identical(exclusion_log_after_exclude$current_status, "excluded")
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      restore_analysis_record = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_equal(
+      nrow(analysis_filter_result()$analysis_dataset),
+      nrow(joined_before_filter)
+    )
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$filter_selection))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$exclusion_log))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    exclusion_log_after_restore <- analysis_exclusion_log()
+    testthat::expect_equal(nrow(exclusion_log_after_restore), 2L)
+    testthat::expect_true(all(exclusion_log_after_restore$current_status == "restored"))
   })
 })

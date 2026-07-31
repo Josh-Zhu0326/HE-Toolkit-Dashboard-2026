@@ -11,7 +11,10 @@
 #   does  : lm(ecology ~ flow) on the complete numeric rows
 #   output: list(status, messages, plot, summary)
 #
-# run_model() just wraps it:
+# run_model() validates the request and only permits the basic model when the
+# effective modelling rows belong to exactly one site. Multi-site data must not
+# fall through to a pooled lm() while the mixed-effects path is not ready.
+# It then wraps the existing basic model:
 #   input : data = the joined data, params = list(flow_var, ecology_var, model_type)
 #   output: list(status, messages, plot, summary)  (same shape)
 #
@@ -22,6 +25,10 @@ SUPPORTED_MODEL_TYPES <- c("linear")
 # a standard error result, so the caller never has to deal with raw errors
 model_error <- function(msg) {
   list(status = "error", messages = msg, plot = NULL, summary = NULL)
+}
+
+model_not_ready <- function(msg) {
+  list(status = "not_ready", messages = msg, plot = NULL, summary = NULL)
 }
 
 run_model <- function(data, params = list()) {
@@ -59,12 +66,46 @@ run_model <- function(data, params = list()) {
     return(model_error("The selected variables were not found in the data. Please reselect."))
   }
 
+  # The current basic model is a single-site lm(). Count sites only across rows
+  # that can actually enter that model, so incomplete/non-numeric rows cannot
+  # create a false multi-site classification. Never discard the site identifier
+  # before this eligibility decision has been made.
+  site_col <- if (is.null(params$site_col)) "biol_site_id" else params$site_col
+  if (!is.character(site_col) || length(site_col) != 1L ||
+      is.na(site_col) || !nzchar(site_col) || !site_col %in% names(data)) {
+    return(model_error(
+      "The joined data do not contain a valid site identifier. Rebuild the joined dataset before modelling."
+    ))
+  }
+
+  site_id <- trimws(as.character(data[[site_col]]))
+  flow_value <- suppressWarnings(as.numeric(data[[flow_var]]))
+  ecology_value <- suppressWarnings(as.numeric(data[[ecology_var]]))
+  eligible <- !is.na(site_id) & nzchar(site_id) &
+    stats::complete.cases(flow_value, ecology_value)
+  model_data <- data[eligible, , drop = FALSE]
+  sites <- unique(site_id[eligible])
+
+  if (length(sites) == 0L) {
+    return(model_error(
+      "No complete model rows have a valid site identifier. Check the selected variables and site mapping."
+    ))
+  }
+
+  if (length(sites) > 1L) {
+    return(model_not_ready(paste0(
+      "Multiple sites detected (", length(sites), "). ",
+      "Multi-site modelling is not available yet. ",
+      "Use a single-site analysis dataset before running this model."
+    )))
+  }
+
   # run the model. tryCatch catches any error so nothing raw reaches the user.
   result <- tryCatch(
     switch(
       model_type,
       linear = build_basic_flow_ecology_model(
-        data = data, flow_var = flow_var, ecology_var = ecology_var
+        data = model_data, flow_var = flow_var, ecology_var = ecology_var
       )
     ),
     error = function(e) {
