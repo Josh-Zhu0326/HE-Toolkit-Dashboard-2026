@@ -101,30 +101,8 @@ tagList(
         border-left-color: #5c6770;
         background: #f4f6f7;
       }
-      .introduction-page {
-        font-size: 17px;
-        line-height: 1.5;
-      }
-      .home-summary {
-        max-width: 1040px;
-        margin: 1rem auto 0 auto;
-        padding: 0 15px;
-      }
-      .introduction-page .dataTables_wrapper {
-        font-size: 14px;
-      }
-      .introduction-page .wq-rhs-mapping-example {
-        width: 100%;
-        max-width: 940px;
-        margin: 1.25rem auto 2rem auto;
-        padding-right: 15px;
-        padding-left: 15px;
-      }
       .wq-rhs-action-button,
-      .client-action-button,
-      .wq-rhs-mapping-example .dt-buttons button,
-      .wq-rhs-mapping-example .dt-buttons .btn,
-      .wq-rhs-mapping-example .buttons-copy {
+      .client-action-button {
         --bs-btn-color: #333;
         --bs-btn-bg: #e9e9e9;
         --bs-btn-border-color: #999;
@@ -142,29 +120,15 @@ tagList(
         box-shadow: none !important;
       }
       .wq-rhs-action-button:hover,
-      .client-action-button:hover,
-      .wq-rhs-mapping-example .dt-buttons button:hover,
-      .wq-rhs-mapping-example .dt-buttons .btn:hover,
-      .wq-rhs-mapping-example .buttons-copy:hover {
+      .client-action-button:hover {
         color: #111 !important;
         background: linear-gradient(to bottom, #f5f5f5 0%, #dcdcdc 100%) !important;
         background-color: #dcdcdc !important;
         border-color: #777 !important;
       }
       .wq-rhs-action-button:focus,
-      .client-action-button:focus,
-      .wq-rhs-mapping-example .dt-buttons button:focus,
-      .wq-rhs-mapping-example .dt-buttons .btn:focus,
-      .wq-rhs-mapping-example .buttons-copy:focus {
+      .client-action-button:focus {
         box-shadow: 0 0 0 0.2rem rgba(0, 137, 56, 0.2) !important;
-      }
-      .wq-rhs-mapping-example .dt-buttons button:active,
-      .wq-rhs-mapping-example .dt-buttons .btn:active,
-      .wq-rhs-mapping-example .buttons-copy:active {
-        color: #111 !important;
-        background: linear-gradient(to bottom, #ededed 0%, #d4d4d4 100%) !important;
-        background-color: #d4d4d4 !important;
-        border-color: #666 !important;
       }
       .site-metadata-upload .btn-file,
       .site-metadata-upload .btn-default,
@@ -288,8 +252,7 @@ page_navbar(
                 dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
                 actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
                 actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
-              ),
-              plotOutput("import_flow_bar")
+              )
             ),
             
   ## Main body ----
@@ -580,6 +543,35 @@ page_navbar(
   nav_panel(
     "Explore Relationships",
     navset_card_tab(
+      nav_panel(
+        "Analysis Selection",
+        div(
+          class = "dashboard-page",
+          card(
+            class = "dashboard-card",
+            card_header("Exclude or restore a record"),
+            textInput("analysis_record_id", "Record ID"),
+            div(
+              class = "action-stack",
+              actionButton(
+                "exclude_analysis_record",
+                "Exclude record",
+                class = "client-action-button"
+              ),
+              actionButton(
+                "restore_analysis_record",
+                "Restore record",
+                class = "client-action-button"
+              )
+            )
+          ),
+          card(
+            class = "dashboard-card",
+            card_header("Exclusion and restore log"),
+            DT::dataTableOutput("analysis_exclusion_log_table")
+          )
+        )
+      ),
       nav_panel(
         "Pairwise Correlations",
         div(

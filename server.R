@@ -9,6 +9,7 @@ function(input, output, session){
     task_id = NULL,
     stage_index = 1L
   )
+  analysis_filter_selection <- reactiveVal(new_filter_selection())
   selected_enrichments <- reactive({
     c(
       if (!is.null(input$wq_csv)) "wq",
@@ -110,52 +111,6 @@ function(input, output, session){
     )
   })
 
-  # INTRO PAGE ----
-
-  output$intro_page <- renderUI({
-    tags$iframe(
-      id = "intro-page-frame",
-      seamless = "seamless",
-      scrolling = "no",
-      src = "prefix/intro_page.html",
-      style = "border:0; display:block; width:100%; height:1000px; overflow:hidden;",
-      onload = paste(
-        "var frame = this;",
-        "var resizeFrame = function() {",
-        "frame.style.height = frame.contentWindow.document.documentElement.scrollHeight + 'px';",
-        "};",
-        "resizeFrame();",
-        "setTimeout(resizeFrame, 250);",
-        "setTimeout(resizeFrame, 1000);"
-      )
-    )
-  })
-  
-  # jump to cards
-  observeEvent(input$goto_hev,     {
-    updateNavbarPage(session, "main_nav", selected = "HEV Plots") 
-  })
-  
-  observeEvent(input$goto_oe,      {
-    updateNavbarPage(session, "main_nav", selected = "Process Biology")
-  })
-  
-  observeEvent(input$goto_flow,    {
-    updateNavbarPage(session, "main_nav", selected = "Process Flow")
-  })
-  
-  observeEvent(input$goto_import,  {
-    updateNavbarPage(session, "main_nav", selected = "Data Import")
-  })
-  
-  observeEvent(input$goto_wqrhs,   {
-    updateNavbarPage(session, "main_nav", selected = "Data Import")
-  })
-  
-  observeEvent(input$goto_analysis,{
-    updateNavbarPage(session, "main_nav", selected = "Build HE Dataset")
-  })
-  
   # WORKFLOW ARTIFACT ADAPTERS ----
   # Route real business outcomes through these adapters; never complete on click.
   workflow_set_artifact <- function(
@@ -2126,7 +2081,114 @@ function(input, output, session){
     result
   })
 
+  analysis_filter_result <- reactive({
+    apply_filter_selection(join_data(), analysis_filter_selection())
+  })
+
+  analysis_exclusion_log <- reactive({
+    build_analysis_exclusion_log(analysis_filter_selection())
+  })
+
+  output$analysis_exclusion_log_table <- DT::renderDataTable({
+    analysis_exclusion_log()
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  commit_analysis_selection <- function(next_selection, action_label) {
+    joined <- isolate(join_data())
+    current_selection <- isolate(analysis_filter_selection())
+    record_id <- tail(next_selection$events$record_id, 1L)
+    record_ids <- if ("SAMPLE_ID" %in% names(joined)) {
+      as.character(joined$SAMPLE_ID)
+    } else {
+      as.character(seq_len(nrow(joined)))
+    }
+
+    if (length(record_id) != 1L || !record_id %in% record_ids) {
+      showNotification(
+        "The selected record does not exist in the current Joined HE dataset.",
+        type = "error"
+      )
+      return(invisible(NULL))
+    }
+
+    if (identical(
+      sort(active_excluded_ids(current_selection)),
+      sort(active_excluded_ids(next_selection))
+    )) {
+      showNotification(
+        "The selected record already has that analysis status.",
+        type = "warning"
+      )
+      return(invisible(NULL))
+    }
+
+    filtered <- apply_filter_selection(joined, next_selection)
+    analysis_filter_selection(next_selection)
+
+    workflow_complete_artifact(
+      "filter_selection",
+      "User analysis selection",
+      sprintf(
+        "%s Selection version %d excludes %d of %d records.",
+        action_label,
+        filtered$filter_version,
+        filtered$n_excluded,
+        filtered$n_source
+      )
+    )
+    workflow_complete_artifact(
+      "exclusion_log",
+      "Exclusion and restore log",
+      sprintf("Recorded %d analysis-selection action(s).", filtered$filter_version)
+    )
+    workflow_complete_artifact(
+      "analysis_dataset",
+      "Current analysis selection",
+      sprintf(
+        "Current analysis dataset contains %d of %d records.",
+        filtered$n_kept,
+        filtered$n_source
+      )
+    )
+
+    basic_model_result(list(
+      status = "info",
+      messages = "The analysis selection changed. Run the model again.",
+      plot = NULL,
+      summary = NULL
+    ))
+
+    invisible(filtered)
+  }
+
+  observeEvent(input$exclude_analysis_record, {
+    record_id <- trimws(input$analysis_record_id)
+    req(nzchar(record_id))
+    next_selection <- exclude_record(
+      isolate(analysis_filter_selection()),
+      record_id = record_id
+    )
+    commit_analysis_selection(
+      next_selection,
+      sprintf("Excluded record %s.", record_id)
+    )
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$restore_analysis_record, {
+    record_id <- trimws(input$analysis_record_id)
+    req(nzchar(record_id))
+    next_selection <- restore_record(
+      isolate(analysis_filter_selection()),
+      record_id = record_id
+    )
+    commit_analysis_selection(
+      next_selection,
+      sprintf("Restored record %s.", record_id)
+    )
+  }, ignoreInit = TRUE)
+
   observeEvent(join_data(), {
+    analysis_filter_selection(new_filter_selection())
     result <- join_data()
     req(nrow(result) > 0L)
     join_settings_used(join_revision()$settings)
@@ -2144,6 +2206,11 @@ function(input, output, session){
       "filter_selection",
       "Default analysis selection",
       "Started with all joined records selected."
+    )
+    workflow_complete_artifact(
+      "exclusion_log",
+      "Exclusion and restore log",
+      "No analysis records are currently excluded."
     )
     workflow_complete_artifact(
       "analysis_dataset",
@@ -2308,7 +2375,10 @@ function(input, output, session){
   })
 
   output$basic_model_controls <- renderUI({
-    data <- tryCatch(join_data(), error = function(e) NULL)
+    data <- tryCatch(
+      analysis_filter_result()$analysis_dataset,
+      error = function(e) NULL
+    )
     numeric_cols <- wq_rhs_numeric_columns(data)
     flow_cols <- numeric_cols[stringr::str_detect(tolower(numeric_cols), "^q|flow")]
     ecology_cols <- numeric_cols[stringr::str_detect(tolower(numeric_cols), "oe$|life|whpt|psi|ntaxa|aspt")]
@@ -2335,7 +2405,10 @@ function(input, output, session){
   observeEvent(input$run_basic_model, {
     workflow_begin_artifact("model_spec", "Validate the selected model specification.")
     workflow_begin_artifact("model_result", "Complete model fitting and diagnostics.")
-    data <- tryCatch(join_data(), error = function(e) NULL)
+    data <- tryCatch(
+      analysis_filter_result()$analysis_dataset,
+      error = function(e) NULL
+    )
     # run_model() is the safe UI-facing interface: it validates inputs and
     # never lets a raw R error reach the user.
     result <- run_model(
@@ -2359,11 +2432,17 @@ function(input, output, session){
         "Fitted the current model and generated diagnostics."
       )
     } else {
+      workflow_status <- if (identical(result$status, "not_ready")) "blocked" else "failed"
+      next_action <- if (identical(result$status, "not_ready")) {
+        "Select a single-site analysis dataset, then run the model again."
+      } else {
+        "Correct the model inputs and run the model again."
+      }
       workflow_set_artifact(
         "model_result",
-        "failed",
+        workflow_status,
         blocking_reason = paste(result$messages, collapse = " "),
-        next_action = "Correct the model inputs and run the model again."
+        next_action = next_action
       )
     }
   })
@@ -2385,7 +2464,8 @@ function(input, output, session){
 
   output$basic_model_status <- renderUI({
     result <- basic_model_result()
-    format_validation_message(list(status = result$status, messages = result$messages))
+    display_status <- if (identical(result$status, "not_ready")) "warning" else result$status
+    format_validation_message(list(status = display_status, messages = result$messages))
   })
 
   output$basic_model_summary <- DT::renderDataTable({
