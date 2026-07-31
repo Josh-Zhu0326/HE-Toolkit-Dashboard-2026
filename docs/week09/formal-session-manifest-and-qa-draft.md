@@ -10,17 +10,18 @@ the authorised location.
 
 Fill one row as each session is scheduled, update as it runs.
 
-| session_id | date | facilitator | observer | task_order | status | valid? | notes |
-|---|---|---|---|---|---|---|---|
-| P01 | | | | A_first | scheduled/done | yes/no | |
-| P02 | | | | B_first | | | |
-| P03 | | | | A_first | | | |
-| … | | | | | | | |
+| session_id | date | facilitator | observer | sequence | Task B checkpoint | status | valid? | notes |
+|---|---|---|---|---|---|---|---|---|
+| P01 | | | | A_then_B | | scheduled/done | yes/no | |
+| P02 | | | | A_then_B | | | | |
+| P03 | | | | A_then_B | | | | |
+| … | | | | A_then_B | | | | |
 
 - `status`: scheduled → in_progress → done.
 - `valid?`: no if consent incomplete, wrong build/materials, blocking bug not the
   participant's fault, or key measurements missing (see protocol Section 2).
-- Keep task_order balanced (alternate A_first / B_first).
+- The sequence is fixed at A_then_B for every participant.
+- Enter the frozen Task B checkpoint ID/version used in the session.
 
 ## 2. Per-session manifest (one filled copy per participant)
 
@@ -31,7 +32,9 @@ facilitator
 observer
 build_tag             (frozen RC — must match everyone else's)
 material_version
-task_order            (A_first / B_first)
+task_sequence         (A_then_B; fixed)
+taskB_checkpoint_id   (frozen checkpoint version/checksum)
+taskB_checkpoint_ok   (yes / no)
 
 taskA_completion      (independent / with_help / not_completed)
 taskA_time_sec
@@ -60,6 +63,9 @@ Run once per participant, then a batch check at day end.
 Per participant:
 - [ ] Consent completed and stored in the authorised location (not the repo)
 - [ ] Manifest fully filled (no blank timing/completion unless truly missing)
+- [ ] Task A was scored before the Task B checkpoint transition
+- [ ] Frozen Task B checkpoint ID/version recorded and verified
+- [ ] Checkpoint loading was not counted as a facilitator intervention
 - [ ] All files use the de-identified naming pattern
 - [ ] No real name / email / signature in any file or file name
 - [ ] Recordings (if any) stored in the authorised location only
