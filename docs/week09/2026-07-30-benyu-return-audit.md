@@ -10,7 +10,7 @@
 - Syntax parsing passed and a clean R 4.6.1 local startup smoke returned HTTP 200. This proves startup only, not a browser E2E research path.
 - No unique RC commit/tag/manifest was found. No tag exists, and neither commit messages nor research records identify an RC.
 - No Gate D record or evidenced `GO`, `GO WITH DOCUMENTED SCOPE REDUCTION`, or `NO-GO` decision was found.
-- No repository evidence proves two real pilots. `docs/week08/pilot execution.md` is a blank session pack/template; branch `origin/zhaohang/week09-pilot-test-results` contains a task-script test result, not two de-identified participant session packets.
+- No repository evidence proves two real pilots. `docs/week08/pilot-execution.md` is a blank session pack/template; branch `origin/zhaohang/week09-pilot-test-results` contains a task-script test result, not two de-identified participant session packets.
 - No repository evidence proves formal sessions have started. Ethics approval is claimed in the decision log, but the same record requires an authoritative controlled ethics record, which is not present.
 - Task 4 filter/restore and the contract-aware single-site/multi-site model guard exist only as unmerged helper/tests on `origin/yutong/filtering`; even there they are not wired to Shiny runtime.
 - Main can mark Task 5 complete after fitting `stats::lm(ecology ~ flow)` without checking site count. On multi-site data this creates a material risk of presenting pooled `lm()` as the Task 5 result while the mixed path is contractually `not_ready`.
@@ -194,7 +194,7 @@ Status terms in this section are limited to the requested vocabulary. “Execute
 | `docs/testing/Test_2026-07-10/Smoke_test_execution_2026-07-10.md` | Browser/manual smoke evidence | Existing executed record, but baseline `7cf242f`, not current |
 | `docs/testing/Test_2026-07-10/Functional_Test_Execution_Record.md` | Manual/customer functional evidence | Existing record at `7cf242f`/`08b595a`; not current RC evidence |
 | `docs/testing/high-level-test-plan.md`, `docs/testing/Test_Plan.md`, `docs/week03/testing-checklist.md` | Research readiness / documentation-only checklist | Not execution evidence |
-| `docs/week08/pilot execution.md` | Pilot/manual research pack | Template only |
+| `docs/week08/pilot-execution.md` | Pilot/manual research pack | Template only |
 | `docs/week07/requirement-traceability-matrix-v1.md` | Research readiness/RTM | Exists but status/evidence links are incomplete |
 | `01_Update_Dashboard.cmd` | Operational updater | Not executed: network clone/pull and possible installer |
 | `02_Setup_R_and_Run_Dashboard.cmd` | Setup/start runner | Not executed: may install R/packages and access GitHub/CRAN; its syntax/startup substeps were reproduced safely |
@@ -276,7 +276,7 @@ No RAW row has a recorded owner/current status in the RAW definition file. The W
 | Materials manifest v1 | Not found | — |
 | Condition allocation | Not found | — |
 | Ethics/material cross-check | Claimed but evidence missing | `docs/client-decision-log-v1.md:130` says ethics approved but requires controlled authoritative record, which is absent |
-| Pilot 1 packet | Template only | `docs/week08/pilot execution.md` blank pack |
+| Pilot 1 packet | Template only | `docs/week08/pilot-execution.md` blank pack |
 | Pilot 2 packet | Template only | Same |
 | Pilot issue triage | Template only | Blank table in pack |
 | Blocker/major regression evidence | Exists but incomplete | Old July 10 defect/retest records; no current RC closure |
@@ -386,7 +386,7 @@ No RAW row has a recorded owner/current status in the RAW definition file. The W
 - `tests/test_backlog_helpers.R`, `tests/test_exclusion_log_helpers.R`, `tests/test_filtering_helpers.R`, `tests/test_model_interface_helpers.R`, `tests/test_server_site_import.R`, `tests/test_site_mapping.R`, `tests/test_wq_contract_helpers.R`, `tests/test_wq_rhs_plots.R`.
 - `tests/manual/generate_plot_smoke_tests.R`, `tests/manual_test_cases.md`, `tests/manual_test_matrix.csv`.
 - `docs/testing/Test_2026-07-10/Smoke_test_execution_2026-07-10.md`, `Functional_Test_Execution_Record.md`, `observation_log.md`.
-- `docs/week05/5.3_Error_List.md`, `docs/week08/WK8-09_Complete_Error_List.md`, `docs/week08/pilot execution.md`.
+- `docs/week05/5.3_Error_List.md`, `docs/week08/WK8-09_Complete_Error_List.md`, `docs/week08/pilot-execution.md`.
 - `docs/client-decision-log-v1.md`, Week 7 data/dependency/modelling/RTM contracts, Week 8 UI mapping.
 
 ### Commits, branches, tags

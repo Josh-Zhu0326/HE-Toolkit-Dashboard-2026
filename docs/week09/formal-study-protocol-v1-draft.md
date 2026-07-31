@@ -29,7 +29,8 @@
 
 ## 4. Tasks
 
-Two tasks. Order is counterbalanced (see Section 6).
+Two tasks. Every participant completes them in the fixed sequence A→B (see
+Section 6).
 
 - Task A — Produce an HEV result: choose a goal, upload the workbook, read the
   validation/checkpoint messages, build the dataset, produce and download HEV.
@@ -57,13 +58,24 @@ Two tasks. Order is counterbalanced (see Section 6).
   NA; do not fill it in. If a whole task's timing/completion is missing, exclude
   that task from the timing/completion analysis only.
 
-## 6. Condition allocation (counterbalancing)
+## 6. Fixed sequence and Task B transition
 
-- The only manipulated factor is task order (A→B or B→A).
-- Assign order by alternating as participants are scheduled: P01 A→B, P02 B→A,
-  P03 A→B, … Keep the two orders as balanced as the final count allows.
-- Record the assigned order in the session schema before the session starts;
-  do not change it afterwards.
+- All participants complete Task A followed by Task B. Task order is not an
+  experimental factor because Task B conceptually follows data preparation.
+- Score Task A and record its completion, timing, interventions and SEQ before
+  preparing Task B.
+- After Task A has been scored, the facilitator loads the same frozen Task B
+  checkpoint for every participant. Record its checkpoint ID/version in the
+  session manifest and verify it before reading the Task B instructions.
+- Loading the protocol-defined checkpoint is a standard task transition, not a
+  facilitator intervention. Task B timing starts only after the checkpoint has
+  been verified and the facilitator says "you can start".
+- A participant who does not complete Task A still attempts Task B from the
+  frozen checkpoint. Task A remains "not completed"; the checkpoint must not be
+  used to revise the Task A result.
+- If the checkpoint cannot be loaded or verified, do not run or score Task B.
+  Record the software/material failure and treat the affected Task B record as
+  invalid rather than as a participant failure.
 
 ## 7. Session schema (recorded per session)
 
@@ -74,7 +86,9 @@ facilitator
 observer
 build_tag             (frozen RC)
 material_version
-task_order            (A_first / B_first)
+task_sequence         (A_then_B; fixed)
+taskB_checkpoint_id   (frozen checkpoint version/checksum)
+taskB_checkpoint_ok   (yes / no)
 taskA_completion      (independent / with_help / not_completed)
 taskA_time_sec
 taskA_interventions
@@ -97,8 +111,12 @@ deviations
 - Secondary metrics: time on task, number of interventions, SEQ, SUS, confidence.
 - Analysis: report counts/percentages and simple summaries (mean, median, range).
   With 12–16 participants this is descriptive; no significance testing is claimed.
-  If comparing task orders, report the difference with an effect size and a
-  confidence interval, not a p-value claim.
+- Task A and Task B timing/SEQ results are reported separately and are not
+  interpreted as a direct comparison because the fixed sequence creates an
+  intentional learning/carry-over effect.
+- Task B results are analysed only when the frozen checkpoint was verified.
+  Task A completion does not determine whether an otherwise valid Task B result
+  is retained.
 - Qualitative: code interview notes and think-aloud quotes into themes
   (navigation, terminology, error understanding, trust).
 - Deviations: log any protocol deviation with reason; deviations do not change

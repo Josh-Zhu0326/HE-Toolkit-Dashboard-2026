@@ -22,7 +22,22 @@ Each session takes about 45–60 minutes.
 1. Task A — HEV flagship path
 2. Task B — filter + model refine path
 
-Record the start and end time of each task.
+The sequence is fixed at A→B for every participant. Record the start and end
+time of each task; do not compare the two task times as if task order had been
+randomised.
+
+### Transition from Task A to Task B
+- Finish scoring Task A, including completion, time, interventions and SEQ.
+- Load the frozen Task B checkpoint specified in the material manifest, even if
+  the participant completed Task A successfully.
+- Record and verify the checkpoint ID/version before reading Task B.
+- Loading this checkpoint is a standard protocol transition and is not counted
+  as facilitator help. Start Task B timing only after verification and after
+  saying "you can start".
+- If Task A was not completed, keep that result unchanged and continue to Task B
+  from the frozen checkpoint.
+- If the checkpoint cannot be loaded or verified, stop Task B and record a
+  software/material blocker rather than a participant failure.
 
 ### After each task
 - Ask the participant to complete the SEQ (single-question difficulty rating).
@@ -75,6 +90,10 @@ Please:
 
 One copy per participant. One column per task.
 
+- Fixed sequence: `A_then_B`
+- Task B checkpoint ID/version: __________
+- Checkpoint verified before Task B: yes / no
+
 | Item | Task A | Task B |
 |---|---|---|
 | Start time | | |
@@ -123,7 +142,8 @@ Extra notes:
 
 ### **Pilot 3 **decision rule
 - If the first two participants show the same major issue: Pilot 3 must verify the fix.
-- If the first two are stable: use Pilot 3 for a different background / task order.
+- If the first two are stable: use Pilot 3 for a participant with a different
+  background or to confirm that the frozen-checkpoint transition is repeatable.
 - If a fix has not passed testing yet: cancel Pilot 3 and restore system correctness first.
 
 ---
