@@ -2085,6 +2085,12 @@ function(input, output, session){
     apply_filter_selection(join_data(), analysis_filter_selection())
   })
 
+  # Single source of truth for every downstream analysis consumer. Filtering
+  # derives this dataset without mutating the Joined HE dataset.
+  current_analysis_data <- reactive({
+    analysis_filter_result()$analysis_dataset
+  })
+
   analysis_exclusion_log <- reactive({
     build_analysis_exclusion_log(analysis_filter_selection())
   })
@@ -2356,7 +2362,7 @@ function(input, output, session){
   ### plots ----
   #### correlations ----
   output$corr_plots <- renderPlot({
-    GGally::ggpairs(join_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"), 
+    GGally::ggpairs(current_analysis_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"),
                     upper = list(continuous = GGally::wrap("cor")),
                     diag = list(continuous = "densityDiag"),
                     lower = list(continuous = GGally::wrap("points")))+
@@ -2376,7 +2382,7 @@ function(input, output, session){
 
   output$basic_model_controls <- renderUI({
     data <- tryCatch(
-      analysis_filter_result()$analysis_dataset,
+      current_analysis_data(),
       error = function(e) NULL
     )
     numeric_cols <- wq_rhs_numeric_columns(data)
@@ -2406,7 +2412,7 @@ function(input, output, session){
     workflow_begin_artifact("model_spec", "Validate the selected model specification.")
     workflow_begin_artifact("model_result", "Complete model fitting and diagnostics.")
     data <- tryCatch(
-      analysis_filter_result()$analysis_dataset,
+      current_analysis_data(),
       error = function(e) NULL
     )
     # run_model() is the safe UI-facing interface: it validates inputs and
@@ -2521,6 +2527,15 @@ function(input, output, session){
       identical(hev_revision(), join_revision()),
       identical(hev_revision()$flow_revision, flow_source_revision())
     )
+
+    analysis_data <- current_analysis_data()
+    if ("SAMPLE_ID" %in% names(result) && "SAMPLE_ID" %in% names(analysis_data)) {
+      included_ids <- unique(as.character(analysis_data$SAMPLE_ID))
+      result_ids <- as.character(result$SAMPLE_ID)
+      keep <- is.na(result_ids) | !nzchar(result_ids) | result_ids %in% included_ids
+      result <- result[keep, , drop = FALSE]
+    }
+
     result
   })
   
@@ -2544,12 +2559,9 @@ function(input, output, session){
   })
   
   ### activate initial plot upon site selection
-  HEV_go <- reactive({
-    req(input$renderHEV)
-    
+  HEV_go <- eventReactive(input$renderHEV, {
     HEV_plot_data()
-    
-  }) 
+  }, ignoreInit = TRUE)
   
   ### error message for absent joined data ----
   

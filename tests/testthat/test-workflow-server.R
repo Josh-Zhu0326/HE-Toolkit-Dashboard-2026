@@ -320,6 +320,7 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       if (identical(join_type, "add_flows")) {
         return(data.frame(
           biol_site_id = "B1",
+          SAMPLE_ID = paste0("S", 1:3),
           Year = 2020:2022,
           Q95z_lag0 = c(-1, 0, 1),
           LIFE_F_OE = c(0.8, 1.1, 1.2)
@@ -327,6 +328,7 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       }
       data.frame(
         biol_site_id = "B1",
+        SAMPLE_ID = paste0("S", 1:3),
         date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01")),
         Year = 2020:2022,
         Season = "Spring",
@@ -443,6 +445,8 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       nrow(analysis_filter_result()$analysis_dataset),
       nrow(joined_before_filter) - excluded_row_count
     )
+    testthat::expect_identical(current_analysis_data(), analysis_filter_result()$analysis_dataset)
+    testthat::expect_false(record_id %in% as.character(HEV_data()$SAMPLE_ID))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$filter_selection))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$exclusion_log))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
@@ -463,6 +467,7 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       nrow(analysis_filter_result()$analysis_dataset),
       nrow(joined_before_filter)
     )
+    testthat::expect_true(record_id %in% as.character(HEV_data()$SAMPLE_ID))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$filter_selection))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$exclusion_log))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
