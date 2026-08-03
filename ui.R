@@ -686,8 +686,29 @@ page_navbar(
         card(
           class = "dashboard-card",
           card_header("Introduction"),
-          p("Use this page to quickly validate and preview local Water Quality (WQ) and River Habitat Survey (RHS) CSV files before moving them into the mapped supporting-data workflow."),
+          p("Use this page to validate local files before moving them into the mapped supporting-data workflow."),
           p("No RICT calculation, O:E calculation, or production modelling is run from this page.")
+        ),
+        card(
+          class = "dashboard-card",
+          card_header("DC-11 CSV checkpoint"),
+          p("Check a CSV against one frozen Data Contract v1 sheet schema. This reports validation results only and does not change the active dashboard data."),
+          div(class = "hint-text",
+              "Choose the DC-11 sheet type that this CSV represents. Column names and order must match the frozen contract."),
+          selectInput(
+            "dc11_csv_sheet",
+            "DC-11 dataset type",
+            choices = names(dc11_sheet_schemas()),
+            selected = "biology_samples"
+          ),
+          fileInput("dc11_csv", "Choose DC-11 CSV file", accept = c(".csv", "text/csv")),
+          h5("DC-11 checkpoint status"),
+          uiOutput("dc11_validation_status"),
+          h5("DC-11 issue report"),
+          dataTableOutput("dc11_validation_issues"),
+          h5("CSV preview"),
+          div(class = "hint-text", "This preview shows the first rows of the uploaded file. No import, joining, modelling, or HEV generation is run from this checkpoint."),
+          dataTableOutput("dc11_preview")
         ),
         card(
           class = "dashboard-card",
@@ -719,9 +740,9 @@ page_navbar(
           class = "dashboard-card",
           card_header("Notes / Next steps"),
           tags$ul(
-            tags$li("This page accepts CSV files only in this first implementation step."),
-            tags$li("Validation is intentionally friendly and non-blocking while the final WQ and RHS schemas are still being designed."),
-            tags$li("The next step is to define mapping columns and aggregation rules before joining WQ/RHS data to the HE workflow.")
+            tags$li("The DC-11 checkpoint is strict and reports schema/type issues without changing downstream data."),
+            tags$li("The older WQ/RHS previews remain separate and are still for quick supporting-data inspection only."),
+            tags$li("The next step is to connect stable checkpoint results to the production import flow after review.")
           )
         )
       )

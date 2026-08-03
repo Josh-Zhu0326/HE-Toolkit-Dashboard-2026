@@ -26,7 +26,7 @@ TC-024,Filtering normal,High,tests/fixtures/local_invertebrate.csv,Clean inverte
 TC-025,Filtering missing fields,High,invertebrate CSV with blank biol_site_id/taxon rows,Rows with missing required fields are excluded and listed with a clear reason
 TC-026,Filtering bad values,High,invertebrate CSV with negative and non-numeric abundance,Negative or non-numeric abundance rows are excluded with reason and app stays connected
 TC-027,Filtering bad date,Medium,invertebrate CSV with malformed date,Rows with invalid date format are excluded with a clear reason
-TC-028,Filtering duplicates,Medium,invertebrate CSV with duplicated rows,Duplicate rows are removed keeping the first copy and flagged in the log
+TC-028,Filtering duplicates,Medium,invertebrate CSV with duplicated rows,Duplicate rows are flagged as warnings and kept unless the user makes an explicit duplicate-resolution choice
 TC-029,Filtering empty file,Medium,empty invertebrate CSV,Empty file is handled without crash and shows an info/error message
 TC-030,Filtering boundary threshold,Medium,invertebrate CSV with a single-record site,Small-site rows are kept but flagged as a warning when min_records_per_site is raised
 TC-031,Exclusion log display,High,invertebrate CSV with mixed good/bad rows,Exclusion log table shows site_id date excluded_value rule severity timestamp for each affected row

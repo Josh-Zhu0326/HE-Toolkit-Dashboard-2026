@@ -9,16 +9,38 @@
 # restore is written to a log so the user can undo it.
 #
 # Things I assumed (please tell me if they should change):
-# - Each record is found by one id column. I used "SAMPLE_ID" (it's in the
-#   joined data). If that column is missing, I use the row number instead.
-# - I did not decide the same-day/same-month duplicate rule here. That one is
-#   Di's task (WK8-16).
+# - Each record is found by one stable id column. The DC-11 upload contract uses
+#   record_id or sample_id.
+# - Duplicate detection is handled outside this filtering helper. WK8-16 covers
+#   same-site, same-day biology duplicates only.
 
 # the columns the exclusion log should have
 ANALYSIS_EXCLUSION_LOG_COLUMNS <- c(
   "record_id", "site_id", "sample_id",
   "exclusion_reason", "trigger", "user_comment", "timestamp", "current_status"
 )
+
+analysis_record_id_column <- function(data, preferred = NULL, allow_row_number = FALSE) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(if (is.null(preferred)) "record_id" else preferred)
+  }
+
+  candidates <- unique(c(preferred, "record_id", "sample_id"))
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  match <- candidates[candidates %in% names(data)]
+  if (length(match) > 0) {
+    return(match[[1]])
+  }
+  NA_character_
+}
+
+analysis_record_ids <- function(data, preferred = NULL) {
+  id_col <- analysis_record_id_column(data, preferred = preferred)
+  if (is.na(id_col)) {
+    stop("Analysis data must contain record_id or sample_id for DC-11 filtering.", call. = FALSE)
+  }
+  as.character(data[[id_col]])
+}
 
 # start an empty filter selection. `events` just keeps a list of every
 # exclude/restore the user did, in order.
@@ -91,19 +113,28 @@ active_excluded_ids <- function(selection) {
 # make the analysis_dataset by removing the dropped records.
 # this does NOT change `joined` - it returns a new table, plus some numbers
 # so the caller knows what happened.
-apply_filter_selection <- function(joined, selection, id_col = "SAMPLE_ID") {
+apply_filter_selection <- function(joined, selection, id_col = NULL) {
   if (is.null(joined) || nrow(joined) == 0) {
+    id_col <- analysis_record_id_column(joined, preferred = id_col)
     return(list(analysis_dataset = joined, n_source = 0L, n_excluded = 0L,
                 n_kept = 0L, id_col = id_col, filter_version = nrow(selection$events)))
   }
 
-  # get the id for each row (use the row number if the id column isn't there)
-  if (id_col %in% names(joined)) {
-    ids <- as.character(joined[[id_col]])
-  } else {
-    id_col <- "row_number"
-    ids <- as.character(seq_len(nrow(joined)))
+  # get the id for each row using the canonical contract names.
+  id_col <- analysis_record_id_column(joined, preferred = id_col)
+  if (is.na(id_col)) {
+    return(list(
+      analysis_dataset = NULL,
+      n_source = nrow(joined),
+      n_excluded = NA_integer_,
+      n_kept = NA_integer_,
+      id_col = NA_character_,
+      filter_version = nrow(selection$events),
+      status = "error",
+      messages = "Analysis data must contain record_id or sample_id for DC-11 filtering."
+    ))
   }
+  ids <- analysis_record_ids(joined, preferred = id_col)
 
   excluded <- active_excluded_ids(selection)
   keep <- !ids %in% excluded
@@ -115,7 +146,9 @@ apply_filter_selection <- function(joined, selection, id_col = "SAMPLE_ID") {
     n_excluded = sum(!keep),
     n_kept = sum(keep),
     id_col = id_col,
-    filter_version = nrow(selection$events)   # how many filter actions so far
+    filter_version = nrow(selection$events),   # how many filter actions so far
+    status = "success",
+    messages = "Analysis filter selection applied."
   )
 }
 
