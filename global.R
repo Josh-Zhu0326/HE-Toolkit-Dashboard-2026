@@ -108,7 +108,7 @@ plot_sitepca_dash <- function(data = NULL,
   data <- data[complete.cases(data), ]
   
   # Run PCA (dropping column with site ID)
-  sitepca <- prcomp(data %>% dplyr::select(vars), center = TRUE, scale. = TRUE)
+  sitepca <- prcomp(data %>% dplyr::select(dplyr::all_of(vars)), center = TRUE, scale. = TRUE)
   
   # set label_id to rownames of sitepca output to use in plotting
   if(!is.null(label_by)){
@@ -116,31 +116,116 @@ plot_sitepca_dash <- function(data = NULL,
     row.names(sitepca$x) <- row.names(temp)
   }
   
-  # set plot characteristics according to parameters
-  shape = 19 ; label.size = NULL; colour = NULL
-  loadings = FALSE; loadings.label = FALSE; loadings.label.size = NULL; loadings.colour = NULL; loadings.label.colour = NULL
-  
-  # settings for using a label instead of a point
-  if(!is.null(label_by)) {shape = FALSE ; label.size = 5}
-  #if(plotly == TRUE) {z = label_by}
-  
-  # settings for adding eigenvector arrows
-  if(eigenvectors==TRUE) {loadings = TRUE; loadings.label = TRUE; loadings.label.size = 5; loadings.colour = 'blue'; loadings.label.colour = "blue";loadings.label.vjust= 1.5}
-  
-  p <- ggplot2::autoplot(sitepca, shape = shape, label.size = label.size, loadings = loadings, loadings.label = loadings.label, 
-                         loadings.label.size = loadings.label.size, loadings.colour = loadings.colour, loadings.label.colour = loadings.label.colour, 
-                         loadings.label.vjust = loadings.label.vjust) +
-                         theme(axis.text = element_text(size = 14), axis.title = element_text(size=15))
-    
-  
-  # settings for adding grouping via colour
-  if(!is.null(colour_by)){
-    
-    data<-data %>% dplyr::mutate_at(colour_by, as.character)
-    
-    cbbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-    loadings.colour = "black"; loadings.label.colour = "black"
-      p <- ggplot2::autoplot(sitepca, data=data, shape = shape, label.size = label.size, loadings = loadings, loadings.label = loadings.label, loadings.label.size = loadings.label.size, loadings.colour = loadings.colour, loadings.label.colour = loadings.label.colour, colour = colour_by) +
+  pc_variance <- round(100 * (sitepca$sdev^2 / sum(sitepca$sdev^2)), 2)
+  cbbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+  if(!is.null(label_by)){
+    scores <- as.data.frame(sitepca$x[, c("PC1", "PC2"), drop = FALSE])
+    scores$.label <- row.names(sitepca$x)
+    if(!is.null(colour_by)){
+      data <- data %>% dplyr::mutate_at(colour_by, as.character)
+      scores$.colour <- data[[colour_by]]
+    }
+
+    p <- ggplot2::ggplot(scores, ggplot2::aes(x = PC1, y = PC2)) +
+      ggplot2::geom_point(
+        ggplot2::aes(colour = if(!is.null(colour_by)) .colour else NULL),
+        size = 2.5,
+        alpha = 0.85
+      ) +
+      ggplot2::labs(
+        x = paste0("PC1 (", pc_variance[[1]], "%)"),
+        y = paste0("PC2 (", pc_variance[[2]], "%)")
+      ) +
+      ggplot2::theme_minimal() +
+      ggplot2::theme(axis.text = element_text(size = 12), axis.title = element_text(size = 12))
+
+    if (requireNamespace("ggrepel", quietly = TRUE)) {
+      p <- p +
+        ggrepel::geom_text_repel(
+          ggplot2::aes(label = .label, colour = if(!is.null(colour_by)) .colour else NULL),
+          size = 3.2,
+          max.overlaps = Inf,
+          min.segment.length = 0,
+          box.padding = 0.35,
+          point.padding = 0.25,
+          show.legend = FALSE
+        )
+    } else {
+      p <- p +
+        ggplot2::geom_text(
+          ggplot2::aes(label = .label, colour = if(!is.null(colour_by)) .colour else NULL),
+          size = 3.2,
+          check_overlap = TRUE,
+          vjust = -0.6,
+          show.legend = FALSE
+        )
+    }
+
+    if(eigenvectors==TRUE){
+      loadings <- as.data.frame(sitepca$rotation[, c("PC1", "PC2"), drop = FALSE])
+      loadings$.label <- row.names(loadings)
+      scale_factor <- min(diff(range(scores$PC1)), diff(range(scores$PC2))) * 0.35
+      loadings$PC1 <- loadings$PC1 * scale_factor
+      loadings$PC2 <- loadings$PC2 * scale_factor
+      p <- p +
+        ggplot2::geom_segment(
+          data = loadings,
+          ggplot2::aes(x = 0, y = 0, xend = PC1, yend = PC2),
+          arrow = ggplot2::arrow(length = ggplot2::unit(0.15, "cm")),
+          inherit.aes = FALSE,
+          colour = "black"
+        )
+      if (requireNamespace("ggrepel", quietly = TRUE)) {
+        p <- p +
+          ggrepel::geom_text_repel(
+            data = loadings,
+            ggplot2::aes(x = PC1, y = PC2, label = .label),
+            inherit.aes = FALSE,
+            size = 3,
+            colour = "black"
+          )
+      } else {
+        p <- p +
+          ggplot2::geom_text(
+            data = loadings,
+            ggplot2::aes(x = PC1, y = PC2, label = .label),
+            inherit.aes = FALSE,
+            size = 3,
+            colour = "black",
+            check_overlap = TRUE
+          )
+      }
+    }
+
+    if(!is.null(colour_by)){
+      p <- p +
+        ggplot2::labs(colour = stringr::str_to_title(sub("_", " ", colour_by))) +
+        ggplot2::scale_colour_manual(values = cbbPalette) +
+        ggplot2::theme(
+          legend.key = element_rect(fill = NA, color = NA),
+          legend.position = "bottom",
+          legend.direction = "horizontal",
+          legend.margin = margin(0, 0, 0, 0),
+          legend.box.margin = margin(-5, -5, 0, -5)
+        )
+    }
+  } else {
+    shape = 19
+    loadings = FALSE; loadings.label = FALSE; loadings.label.size = NULL; loadings.colour = NULL; loadings.label.colour = NULL
+    loadings.label.vjust <- NULL
+
+    if(eigenvectors==TRUE) {loadings = TRUE; loadings.label = TRUE; loadings.label.size = 5; loadings.colour = 'blue'; loadings.label.colour = "blue";loadings.label.vjust= 1.5}
+
+    p <- ggplot2::autoplot(sitepca, shape = shape, loadings = loadings, loadings.label = loadings.label,
+                           loadings.label.size = loadings.label.size, loadings.colour = loadings.colour, loadings.label.colour = loadings.label.colour,
+                           loadings.label.vjust = loadings.label.vjust) +
+                           theme(axis.text = element_text(size = 14), axis.title = element_text(size=15))
+
+    if(!is.null(colour_by)){
+      data<-data %>% dplyr::mutate_at(colour_by, as.character)
+      loadings.colour = "black"; loadings.label.colour = "black"
+      p <- ggplot2::autoplot(sitepca, data=data, shape = shape, loadings = loadings, loadings.label = loadings.label, loadings.label.size = loadings.label.size, loadings.colour = loadings.colour, loadings.label.colour = loadings.label.colour, colour = colour_by) +
         labs(colour = stringr::str_to_title(sub("_"," ",colour_by))) +
         theme(legend.key = element_rect(fill = NA, color = NA),
               axis.text = element_text(size = 12),
@@ -150,6 +235,7 @@ plot_sitepca_dash <- function(data = NULL,
               legend.margin=margin(0,0,0,0),
               legend.box.margin=margin(-10,-10,0,-10)) +
         scale_colour_manual(values=cbbPalette)
+    }
   }
   
   # p <- p + ggplot2::ggtitle("Bi-plot of principal components 1 and 2")
