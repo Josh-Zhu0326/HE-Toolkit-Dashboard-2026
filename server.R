@@ -534,6 +534,17 @@ function(input, output, session){
     list(status = status, messages = messages)
   }
 
+  dc11_csv_upload <- reactive({
+    read_result <- read_uploaded_csv_safely(input$dc11_csv, "DC-11")
+    validation <- if (identical(read_result$status, "ok")) {
+      validate_dc11_dataset(read_result$data, input$dc11_csv_sheet)
+    } else {
+      list(status = read_result$status, messages = read_result$messages, issues = dc11_empty_issues())
+    }
+
+    list(data = read_result$data, validation = validation)
+  })
+
   format_validation_message <- function(result) {
     status <- result$status
     if (isTRUE(status == "ok")) {
@@ -626,6 +637,34 @@ function(input, output, session){
   output$rhs_validation_status <- renderUI({
     format_validation_message(rhs_upload()$validation)
   })
+
+  output$dc11_validation_status <- renderUI({
+    result <- dc11_csv_upload()$validation
+    messages <- c(
+      result$messages,
+      "This checkpoint reports validation only. It has not changed the active import, join, model, or HEV data."
+    )
+    format_validation_message(list(status = result$status, messages = messages))
+  })
+
+  output$dc11_validation_issues <- DT::renderDataTable({
+    issues <- dc11_csv_upload()$validation$issues
+    if (is.null(issues) || nrow(issues) == 0) {
+      return(data.frame(
+        sheet = input$dc11_csv_sheet,
+        severity = "success",
+        code = "passed",
+        message = "No DC-11 issues found.",
+        stringsAsFactors = FALSE
+      ))
+    }
+    issues
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$dc11_preview <- DT::renderDataTable({
+    req(dc11_csv_upload()$data)
+    head(dc11_csv_upload()$data, 10)
+  }, options = list(scrollX = TRUE, pageLength = 10))
 
   output$wq_preview <- DT::renderDataTable({
     req(wq_upload()$data)
@@ -1607,8 +1646,8 @@ function(input, output, session){
              WHPT_NTAXA_O = WHPT_N_TAXA, WHPT_NTAXA_E = TL2_WHPT_NTAXA_AbW_DistFam, WHPT_NTAXA_OE = WHPT_NTAXA_O/WHPT_NTAXA_E,
              LIFE_F_O = LIFE_FAMILY_INDEX, LIFE_F_E = TL3_LIFE_Fam_DistFam, LIFE_F_OE = LIFE_F_O/LIFE_F_E,
              PSI_O = PSI_FAMILY_SCORE, PSI_E = TL3_PSI_Fam, PSI_OE = PSI_O/PSI_E, date = SAMPLE_DATE) %>% 
-      select(c(biol_site_id, SAMPLE_ID, date, Month, Year, Season, NGR_10_FIG, WFD_WATERBODY_ID:CALCIUM,
-               WHPT_ASPT_O:PSI_OE))
+      select(biol_site_id, sample_id = SAMPLE_ID, date, Month, Year, Season, NGR_10_FIG,
+             WFD_WATERBODY_ID:CALCIUM, WHPT_ASPT_O:PSI_OE)
     
 
   })
@@ -2103,11 +2142,7 @@ function(input, output, session){
     joined <- isolate(join_data())
     current_selection <- isolate(analysis_filter_selection())
     record_id <- tail(next_selection$events$record_id, 1L)
-    record_ids <- if ("SAMPLE_ID" %in% names(joined)) {
-      as.character(joined$SAMPLE_ID)
-    } else {
-      as.character(seq_len(nrow(joined)))
-    }
+    record_ids <- analysis_record_ids(joined)
 
     if (length(record_id) != 1L || !record_id %in% record_ids) {
       showNotification(
@@ -2529,9 +2564,11 @@ function(input, output, session){
     )
 
     analysis_data <- current_analysis_data()
-    if ("SAMPLE_ID" %in% names(result) && "SAMPLE_ID" %in% names(analysis_data)) {
-      included_ids <- unique(as.character(analysis_data$SAMPLE_ID))
-      result_ids <- as.character(result$SAMPLE_ID)
+    result_id_col <- analysis_record_id_column(result, allow_row_number = FALSE)
+    analysis_id_col <- analysis_record_id_column(analysis_data, allow_row_number = FALSE)
+    if (!is.na(result_id_col) && !is.na(analysis_id_col)) {
+      included_ids <- unique(as.character(analysis_data[[analysis_id_col]]))
+      result_ids <- as.character(result[[result_id_col]])
       keep <- is.na(result_ids) | !nzchar(result_ids) | result_ids %in% included_ids
       result <- result[keep, , drop = FALSE]
     }
