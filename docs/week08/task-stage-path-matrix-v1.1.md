@@ -86,7 +86,7 @@ Internal artifact names remain stable implementation terms; the UI uses the corr
 |---|---|
 | Client wording, scope, and extension decisions | [Client Decision Log](../client-decision-log-v1.md) |
 | Data layers, validation, duplicate handling, and source history | [Data Contract](../week07/data-contract-v1.md) and [v1.1 amendment](../week07/data-contract-v1.1.md) |
-| Artifact dependencies, runtime states, and invalidation | [Dependency/State Matrix](../week07/dependency-state-matrix-v1.md) |
+| Artifact dependencies, runtime states, and invalidation | [Dependency/State Matrix v1.1](../week10/dependency-state-matrix-v1.1.md) |
 | Model eligibility and failure behaviour | [Modelling Contract](../week07/modelling-contract-v1.md) |
 | Requirements, ownership, and test evidence | [Requirement Traceability Matrix](../week07/requirement-traceability-matrix-v1.md) |
 
