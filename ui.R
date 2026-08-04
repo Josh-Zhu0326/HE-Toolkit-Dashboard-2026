@@ -522,7 +522,22 @@ page_navbar(
             "Pair biology and flow data",
             class = "client-action-button",
             icon = shiny::icon("link", verify_fa = FALSE)
-          )
+          ),
+          tags$hr(),
+          h5("Processed dataset checkpoint"),
+          fileInput(
+            "processed_dataset_checkpoint_file",
+            "Upload checkpoint",
+            accept = c(".rds", "application/octet-stream")
+          ),
+          actionButton(
+            "load_processed_dataset_checkpoint",
+            "Load checkpoint",
+            class = "client-action-button",
+            icon = shiny::icon("file-arrow-up", verify_fa = FALSE)
+          ),
+          uiOutput("processed_dataset_checkpoint_status"),
+          uiOutput("processed_dataset_checkpoint_download")
         )
       ),
       nav_panel(

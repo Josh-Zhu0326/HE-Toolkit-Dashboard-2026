@@ -16,6 +16,17 @@ function(input, output, session){
     message = "No workspace has been saved in this session.",
     result = NULL
   ))
+  processed_checkpoint_data <- reactiveVal(NULL)
+  processed_checkpoint_manifest <- reactiveVal(NULL)
+  processed_checkpoint_load_status <- reactiveVal(list(
+    status = "info",
+    message = "No processed dataset checkpoint loaded."
+  ))
+  hev_plot_dependency_status <- reactiveVal(list(
+    status = "info",
+    message = "HEV plotting dependencies have not been checked in this session."
+  ))
+  active_join_source <- reactiveVal("generated")
   analysis_filter_selection <- reactiveVal(new_filter_selection())
   selected_enrichments <- reactive({
     c(
@@ -129,7 +140,11 @@ function(input, output, session){
       next_action = NULL,
       invalidate_downstream = FALSE) {
     registry <- isolate(workflow_artifacts())
-    if (invalidate_downstream) {
+    checkpoint_is_independent <- identical(
+      isolate(active_join_source()),
+      "checkpoint"
+    ) && "joined_core" %in% workflow_descendants(artifact_id)
+    if (invalidate_downstream && !checkpoint_is_independent) {
       registry <- invalidate_he_artifacts_from(registry, artifact_id)
     }
     registry <- set_he_artifact_status(
@@ -272,6 +287,7 @@ function(input, output, session){
   # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
     req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
+    active_join_source("generated")
     join_request(list(
       flow_revision = isolate(flow_source_revision()),
       settings = normalise_join_settings(
@@ -286,6 +302,18 @@ function(input, output, session){
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$renderHEV, {
+    dependency <- hev_dependency_check()
+    hev_plot_dependency_status(dependency)
+    if (identical(dependency$status, "error")) {
+      workflow_set_artifact(
+        "hev_result",
+        "blocked",
+        blocking_reason = dependency$message,
+        next_action = "Install the project dependencies, restart the dashboard, and create the HEV plot again."
+      )
+      showNotification(dependency$message, type = "error", duration = 10)
+      return()
+    }
     workflow_begin_artifact("hev_result", "Complete HEV plot generation.")
   }, ignoreInit = TRUE, priority = 100)
 
@@ -2114,6 +2142,9 @@ function(input, output, session){
   })
 
   join_data <- reactive({
+    if (identical(active_join_source(), "checkpoint")) {
+      return(req(processed_checkpoint_data()))
+    }
     result <- join_data_result()
     revision <- join_revision()
     req(
@@ -2126,6 +2157,101 @@ function(input, output, session){
     )
     result
   })
+
+  output$processed_dataset_checkpoint_status <- renderUI({
+    status <- processed_checkpoint_load_status()
+    tags$div(
+      class = paste("upload-status", paste0("upload-status-", status$status)),
+      status$message
+    )
+  })
+
+  output$processed_dataset_checkpoint_download <- renderUI({
+    if (!workflow_artifact_is_current("processed_dataset_checkpoint")) {
+      return(tags$p(
+        class = "hint-text",
+        "Download becomes available when the Joined HE dataset is current."
+      ))
+    }
+    downloadButton(
+      "download_processed_dataset_checkpoint",
+      "Download checkpoint",
+      class = "client-action-button",
+      icon = shiny::icon("file-arrow-down", verify_fa = FALSE)
+    )
+  })
+
+  output$download_processed_dataset_checkpoint <- downloadHandler(
+    filename = function() {
+      sprintf("joined-he-checkpoint-%s.rds", format(Sys.Date(), "%Y%m%d"))
+    },
+    content = function(file) {
+      validate(need(
+        workflow_artifact_is_current("processed_dataset_checkpoint"),
+        "The Joined HE dataset is stale. Regenerate or reload it before downloading."
+      ))
+      source_manifest <- isolate(processed_checkpoint_manifest())
+      provenance <- list(
+        source = if (identical(isolate(active_join_source()), "checkpoint")) {
+          "validated processed dataset checkpoint"
+        } else {
+          "dashboard biology-flow join"
+        },
+        join_settings = isolate(join_settings_used()),
+        source_checkpoint_checksum = if (is.null(source_manifest)) {
+          NULL
+        } else {
+          source_manifest$dataset_checksum
+        }
+      )
+      write_processed_dataset_checkpoint(
+        dataset = isolate(join_data()),
+        path = file,
+        provenance = provenance
+      )
+    }
+  )
+
+  processed_checkpoint_user_error_message <- function(error) {
+    message <- conditionMessage(error)
+    if (startsWith(message, "Processed dataset checkpoint")) {
+      return(message)
+    }
+    "Processed dataset checkpoint could not be loaded. Use a checkpoint downloaded from this dashboard."
+  }
+
+  observeEvent(input$load_processed_dataset_checkpoint, {
+    uploaded <- isolate(input$processed_dataset_checkpoint_file)
+    if (is.null(uploaded) || is.null(uploaded$datapath)) {
+      message <- "Choose a processed dataset checkpoint before loading."
+      processed_checkpoint_load_status(list(status = "error", message = message))
+      showNotification(message, type = "error")
+      return()
+    }
+
+    tryCatch({
+      checkpoint <- read_processed_dataset_checkpoint(uploaded$datapath)
+      processed_checkpoint_data(checkpoint$dataset)
+      processed_checkpoint_manifest(checkpoint$manifest)
+      active_join_source("checkpoint")
+      join_revision(NULL)
+      join_request(NULL)
+      join_settings_used(NULL)
+      analysis_filter_selection(new_filter_selection())
+
+      message <- sprintf(
+        "Loaded a verified Joined HE dataset with %d row(s); checksum %s.",
+        nrow(checkpoint$dataset),
+        substr(checkpoint$manifest$dataset_checksum, 1L, 12L)
+      )
+      processed_checkpoint_load_status(list(status = "success", message = message))
+      showNotification(message, type = "message", duration = 6)
+    }, error = function(error) {
+      message <- processed_checkpoint_user_error_message(error)
+      processed_checkpoint_load_status(list(status = "error", message = message))
+      showNotification(message, type = "error", duration = 8)
+    })
+  }, ignoreInit = TRUE)
 
   analysis_filter_result <- reactive({
     apply_filter_selection(join_data(), analysis_filter_selection())
@@ -2239,16 +2365,27 @@ function(input, output, session){
     analysis_filter_selection(new_filter_selection())
     result <- join_data()
     req(nrow(result) > 0L)
-    join_settings_used(join_revision()$settings)
+    is_checkpoint <- identical(active_join_source(), "checkpoint")
+    if (!is_checkpoint) {
+      join_settings_used(join_revision()$settings)
+    }
     workflow_complete_artifact(
       "joined_core",
-      "Biology–Flow join",
-      sprintf("Built a core Joined HE dataset with %d row(s).", nrow(result))
+      if (is_checkpoint) "Verified processed dataset checkpoint" else "Biology–Flow join",
+      sprintf(
+        "%s a core Joined HE dataset with %d row(s).",
+        if (is_checkpoint) "Loaded" else "Built",
+        nrow(result)
+      )
     )
     workflow_complete_artifact(
       "processed_dataset_checkpoint",
       "Joined HE dataset checkpoint",
-      "Made the current core Joined HE dataset available for download."
+      if (is_checkpoint) {
+        "Validated checksum and schema; made the reloaded dataset available for downstream work."
+      } else {
+        "Made the current core Joined HE dataset available for download."
+      }
     )
     workflow_complete_artifact(
       "filter_selection",
@@ -2564,6 +2701,11 @@ function(input, output, session){
   })
 
   HEV_data <- reactive({
+    if (identical(active_join_source(), "checkpoint")) {
+      checkpoint_data <- current_analysis_data()
+      req("date" %in% names(checkpoint_data))
+      return(processed_dataset_checkpoint_hev_data(checkpoint_data))
+    }
     result <- HEV_data_result()
     req(
       identical(hev_revision(), join_revision()),
@@ -2629,6 +2771,13 @@ function(input, output, session){
   ### render HEV plot with download option ----
   
   output$hev_status_message <- renderUI({
+    dependency <- hev_plot_dependency_status()
+    if (identical(dependency$status, "error")) {
+      return(format_validation_message(list(
+        status = "error",
+        messages = dependency$message
+      )))
+    }
     if (isTRUE(input$HEV_show_status)) {
       format_validation_message(list(
         status = "warning",
@@ -2638,6 +2787,7 @@ function(input, output, session){
   })
 
   HEV_plot <- reactive({
+    req(!identical(hev_plot_dependency_status()$status, "error"))
     hev_data <- HEV_go() %>% filter(Year >= input$HEV_date_range[1] & Year <= input$HEV_date_range[2])
     biol_metrics <- if (isTRUE(input$HEV_show_all_metrics)) {
       c("WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE")
