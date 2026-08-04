@@ -473,3 +473,44 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     testthat::expect_true(all(exclusion_log_after_restore$current_status == "restored"))
   })
 })
+
+testthat::test_that("the save button writes a named, restorable local workspace", {
+  workspace_root <- tempfile("server-workspace-storage-")
+  on.exit(unlink(workspace_root, recursive = TRUE, force = TRUE), add = TRUE)
+  old_options <- options(hetoolkit.workspace_root = workspace_root)
+  on.exit(options(old_options), add = TRUE)
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    workflow_session$task_id <- "generate_hev"
+    workflow_session$stage_index <- 1L
+    analysis_filter_selection(list(excluded_record_ids = "S1"))
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      workspace_name = "Customer review copy",
+      choose_join_method = "A",
+      save_workspace = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(workspace_save_status()$status, "success")
+    testthat::expect_identical(
+      workspace_save_status()$result$workspace_name,
+      "Customer review copy"
+    )
+
+    stored <- workspace_storage_load(
+      workspace_storage,
+      "Customer review copy",
+      dataset_names = character()
+    )
+    testthat::expect_identical(stored$state$workflow_session$task_id, "generate_hev")
+    testthat::expect_identical(stored$state$workflow_session$stage_index, 1L)
+    testthat::expect_identical(stored$state$input_values$choose_join_method, "A")
+    testthat::expect_false("local_flow_csv" %in% names(stored$state$input_values))
+    testthat::expect_identical(
+      stored$state$runtime_state$analysis_filter_selection$excluded_record_ids,
+      "S1"
+    )
+  })
+})

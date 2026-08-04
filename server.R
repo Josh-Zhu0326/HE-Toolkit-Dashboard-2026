@@ -9,6 +9,13 @@ function(input, output, session){
     task_id = NULL,
     stage_index = 1L
   )
+  workspace_storage <- new_local_workspace_storage()
+  workspace_save_in_progress <- reactiveVal(FALSE)
+  workspace_save_status <- reactiveVal(list(
+    status = "idle",
+    message = "No workspace has been saved in this session.",
+    result = NULL
+  ))
   analysis_filter_selection <- reactiveVal(new_filter_selection())
   selected_enrichments <- reactive({
     c(
@@ -2668,6 +2675,137 @@ function(input, output, session){
   }) 
   
   downloadServer("HEVPlot", HEV_plot)
+
+  # LOCAL WORKSPACE SAVE ----
+
+  workspace_try_collect <- function(collector) {
+    tryCatch(
+      isolate(collector()),
+      error = function(error) NULL,
+      shiny.silent.error = function(error) NULL
+    )
+  }
+
+  collect_workspace_named_values <- function(collectors) {
+    values <- lapply(collectors, workspace_try_collect)
+    values[!vapply(values, is.null, logical(1))]
+  }
+
+  collect_current_workspace_inputs <- function() {
+    input_values <- isolate(reactiveValuesToList(input))
+    selected_ids <- intersect(workspace_saved_input_ids, names(input_values))
+    selected <- input_values[selected_ids]
+    selected[!vapply(selected, is.null, logical(1))]
+  }
+
+  collect_current_workspace_runtime <- function() {
+    collect_workspace_named_values(list(
+      analysis_filter_selection = function() analysis_filter_selection(),
+      flow_source_revision = function() flow_source_revision(),
+      external_flow_loaded = function() external_flow_loaded(),
+      external_flow_revision = function() external_flow_revision(),
+      external_import_requested_revision = function() external_import_requested_revision(),
+      flow_stats_revision = function() flow_stats_revision(),
+      join_revision = function() join_revision(),
+      hev_revision = function() hev_revision(),
+      join_request = function() join_request(),
+      join_settings_used = function() join_settings_used(),
+      site_metadata_upload_result = function() site_metadata_upload_result(),
+      site_metadata_upload_flow_provenance = function() site_metadata_upload_flow_provenance(),
+      wq_site_import_result = function() wq_site_import_result(),
+      rhs_site_import_result = function() rhs_site_import_result(),
+      wq_contract_summary_status = function() wq_contract_summary_result()$status,
+      show_environment_plot = function() showEnvplot(),
+      show_flow_heatmap = function() showHeatmap(),
+      show_imputed_flow_heatmap = function() showHeatmapimp(),
+      flow_statistics_display = function() flowStatsDisplay(),
+      environment_data_exists = function() env_data_exist(),
+      biology_data_exists = function() biol_data_exist(),
+      prediction_data_exists = function() predict_data_exist(),
+      flow_data_exists = function() flow_data_exist(),
+      joined_biology_exists = function() biol_all_data_exist(),
+      flow_statistics_exist = function() flow_stats_exist(),
+      hev_data_exists = function() HEV_data_exist()
+    ))
+  }
+
+  collect_current_workspace_datasets <- function() {
+    collect_workspace_named_values(list(
+      uploaded_wq = function() wq_upload()$data,
+      uploaded_rhs = function() rhs_upload()$data,
+      site_metadata = function() metadata(),
+      mapped_wq = function() wq_site_import_data(),
+      mapped_rhs = function() rhs_site_import_data(),
+      wq_contract_summary = function() wq_contract_summary_result(),
+      local_biology_input = function() local_inv_upload()$data,
+      local_flow_input = function() local_flow_upload()$data,
+      biology_input = function() biol_data(),
+      environment_input = function() env_data(),
+      imported_flow = function() external_flow_data(),
+      active_flow = function() flow_data(),
+      environment_predictions = function() predict_data(),
+      oe_results = function() biol_all(),
+      additional_flow = function() flow_data_extra(),
+      imputed_flow = function() flow_data_imputed(),
+      final_flow = function() flow_data_final(),
+      flow_statistics = function() flow_stats(),
+      joined_core = function() join_data(),
+      analysis_dataset = function() current_analysis_data(),
+      analysis_exclusion_log = function() analysis_exclusion_log(),
+      joined_analysis = function() join_data_addbiol(),
+      model_result = function() basic_model_result(),
+      hev_data = function() HEV_data()
+    ))
+  }
+
+  workspace_user_error_message <- function(error) {
+    message <- conditionMessage(error)
+    safe_prefixes <- c(
+      "Workspace", "workspace", "A workspace", "Enter a workspace",
+      "Dataset", "Saved dataset", "Local workspace"
+    )
+    if (any(startsWith(message, safe_prefixes))) {
+      return(message)
+    }
+    "Workspace could not be saved. Check the name and local storage configuration."
+  }
+
+  observeEvent(input$save_workspace, {
+    if (isTRUE(workspace_save_in_progress())) {
+      showNotification("A workspace save is already in progress.", type = "warning")
+      return()
+    }
+
+    workspace_save_in_progress(TRUE)
+    on.exit(workspace_save_in_progress(FALSE), add = TRUE)
+
+    tryCatch({
+      snapshot <- new_workspace_snapshot(
+        workspace_name = input$workspace_name,
+        workflow_artifacts = isolate(workflow_artifacts()),
+        workflow_session = list(
+          task_id = isolate(workflow_session$task_id),
+          stage_index = isolate(workflow_session$stage_index)
+        ),
+        input_values = collect_current_workspace_inputs(),
+        runtime_state = collect_current_workspace_runtime(),
+        datasets = collect_current_workspace_datasets(),
+        current_panel = isolate(input$main_nav)
+      )
+      result <- workspace_storage_save(workspace_storage, snapshot)
+      message <- sprintf(
+        "Saved workspace '%s' locally with %d data object(s).",
+        result$workspace_name,
+        result$dataset_count
+      )
+      workspace_save_status(list(status = "success", message = message, result = result))
+      showNotification(message, type = "message", duration = 6)
+    }, error = function(error) {
+      message <- workspace_user_error_message(error)
+      workspace_save_status(list(status = "error", message = message, result = NULL))
+      showNotification(message, type = "error", duration = 8)
+    })
+  }, ignoreInit = TRUE)
   
   # CLEAR HISTORY OPTION ----
   

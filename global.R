@@ -41,9 +41,12 @@ source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
 source(file.path("R", "wq_contract_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
-# Keep this order: config defines the contract, state consumes it, then UI renders it.
+# Keep this order: workflow config/state define the contract, workspace modules
+# consume it, then the UI renders it.
 source(file.path("R", "workflow_config.R"))
 source(file.path("R", "workflow_state.R"))
+source(file.path("R", "workspace_state.R"))
+source(file.path("R", "workspace_storage.R"))
 source(file.path("R", "workflow_ui.R"))
 source(file.path("R", "filtering_helpers.R"))
 source(file.path("R", "duplicate_choice_helpers.R"))
