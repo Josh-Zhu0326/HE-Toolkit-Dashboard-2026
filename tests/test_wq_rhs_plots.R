@@ -42,6 +42,16 @@ stopifnot(inherits(wq_boxplot$plot, "ggplot"))
 wq_bar <- build_wq_plot(mapped_wq, "Mean bar chart by biological site ID", "phosphate", NULL, "biol_site_id")
 stopifnot(inherits(wq_bar$plot, "ggplot"))
 
+long_site_wq <- data.frame(
+  biol_site_id = sprintf("BIO_SITE_%02d_LONG_LABEL", 1:12),
+  date = "2024-01-01",
+  pH = seq(7, 8.1, length.out = 12),
+  stringsAsFactors = FALSE
+)
+long_site_wq_bar <- build_wq_plot(long_site_wq, "Mean bar chart by biological site ID", "pH", NULL, "biol_site_id")
+stopifnot(inherits(long_site_wq_bar$plot$coordinates, "CoordFlip"))
+stopifnot(grepl("Long biol_site_id values are truncated", long_site_wq_bar$plot$labels$caption, fixed = TRUE))
+
 wq_without_date <- mapped_wq[, setdiff(names(mapped_wq), "date"), drop = FALSE]
 wq_missing_date <- build_wq_plot(wq_without_date, "Time series", "pH", NULL, "biol_site_id")
 stopifnot(is.null(wq_missing_date$plot))
@@ -72,6 +82,20 @@ stopifnot(inherits(rhs_category$plot, "ggplot"))
 
 rhs_count <- build_rhs_plot(mapped_rhs, "Record count by biological site ID", NULL, "biol_site_id")
 stopifnot(inherits(rhs_count$plot, "ggplot"))
+
+long_site_rhs <- data.frame(
+  biol_site_id = rep(sprintf("BIO_SITE_%02d_LONG_LABEL", 1:12), each = 2),
+  rhs_survey_id = sprintf("RHS%03d", 1:24),
+  habitat_score = seq(40, 63),
+  channel_type = rep(sprintf("Category_%02d_LONG_LABEL", 1:12), each = 2),
+  stringsAsFactors = FALSE
+)
+long_site_rhs_count <- build_rhs_plot(long_site_rhs, "Record count by biological site ID", NULL, "biol_site_id")
+stopifnot(inherits(long_site_rhs_count$plot$coordinates, "CoordFlip"))
+stopifnot(grepl("Long biol_site_id values are truncated", long_site_rhs_count$plot$labels$caption, fixed = TRUE))
+long_category_rhs <- build_rhs_plot(long_site_rhs, "Categorical count/bar plot", "channel_type", "biol_site_id")
+stopifnot(inherits(long_category_rhs$plot$coordinates, "CoordFlip"))
+stopifnot(grepl("Long channel_type values are truncated", long_category_rhs$plot$labels$caption, fixed = TRUE))
 
 rhs_tbc_only_mapping <- parse_site_metadata("biol_site_id,rhs_survey_id\n291,TBC")
 stopifnot(is.null(rhs_tbc_only_mapping$error))

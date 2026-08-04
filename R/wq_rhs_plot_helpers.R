@@ -105,6 +105,20 @@ wq_rhs_as_numeric <- function(column) {
   suppressWarnings(as.numeric(trimws(as.character(column))))
 }
 
+wq_rhs_group_axis_labels <- function(values, max_width = 28L) {
+  labels <- stringr::str_trunc(as.character(values), width = max_width)
+  make.unique(labels, sep = "...")
+}
+
+wq_rhs_needs_horizontal_group_axis <- function(values, long_width = 14L, many_count = 8L) {
+  values <- unique(as.character(values))
+  length(values) > many_count || any(nchar(values, type = "width") > long_width, na.rm = TRUE)
+}
+
+wq_rhs_group_axis_caption <- function(group_col) {
+  paste0("Long ", group_col, " values are truncated in the plot; full values remain available in the mapped table and CSV.")
+}
+
 wq_rhs_default_group <- function(data) {
   if (is.null(data)) {
     return(character(0))
@@ -141,6 +155,13 @@ build_wq_plot <- function(data, plot_type, numeric_var, date_col = NULL, group_c
   plot_data$.numeric_value <- wq_rhs_as_numeric(plot_data[[numeric_var]])
   plot_data$.group_value <- as.factor(plot_data[[group_col]])
   plot_data <- plot_data[!is.na(plot_data$.numeric_value), , drop = FALSE]
+  group_levels <- unique(as.character(plot_data$.group_value))
+  group_labels <- wq_rhs_group_axis_labels(group_levels)
+  plot_data$.group_label <- factor(
+    group_labels[match(as.character(plot_data$.group_value), group_levels)],
+    levels = group_labels
+  )
+  horizontal_group_axis <- wq_rhs_needs_horizontal_group_axis(group_levels)
 
   if (nrow(plot_data) == 0) {
     return(list(plot = NULL, message = paste0("The selected WQ variable '", numeric_var, "' does not contain plottable numeric values.")))
@@ -171,22 +192,40 @@ build_wq_plot <- function(data, plot_type, numeric_var, date_col = NULL, group_c
   }
 
   if (identical(plot_type, "Boxplot by biological site ID")) {
-    plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .group_value, y = .numeric_value)) +
+    plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .group_label, y = .numeric_value)) +
       ggplot2::geom_boxplot(na.rm = TRUE, fill = "#d8efe2", colour = "#006b44") +
       ggplot2::labs(x = group_col, y = numeric_var, title = paste(numeric_var, "by", group_col)) +
-      ggplot2::theme_minimal()
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(size = if (horizontal_group_axis) 8 else 10),
+        axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = if (horizontal_group_axis) 12 else 0))
+      )
+    if (horizontal_group_axis) {
+      plot <- plot +
+        ggplot2::coord_flip() +
+        ggplot2::labs(caption = wq_rhs_group_axis_caption(group_col))
+    }
     return(list(plot = plot, message = NULL))
   }
 
-  summary_data <- stats::aggregate(.numeric_value ~ .group_value, data = plot_data, FUN = mean, na.rm = TRUE)
+  summary_data <- stats::aggregate(.numeric_value ~ .group_label, data = plot_data, FUN = mean, na.rm = TRUE)
   if (nrow(summary_data) == 0) {
     return(list(plot = NULL, message = "There are no WQ records available after summarising the selected numeric variable."))
   }
 
-  plot <- ggplot2::ggplot(summary_data, ggplot2::aes(x = .group_value, y = .numeric_value)) +
+  plot <- ggplot2::ggplot(summary_data, ggplot2::aes(x = .group_label, y = .numeric_value)) +
     ggplot2::geom_col(fill = "#008938") +
     ggplot2::labs(x = group_col, y = paste("Mean", numeric_var), title = paste("Mean", numeric_var, "by", group_col)) +
-    ggplot2::theme_minimal()
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(size = if (horizontal_group_axis) 8 else 10),
+      axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = if (horizontal_group_axis) 12 else 0))
+    )
+  if (horizontal_group_axis) {
+    plot <- plot +
+      ggplot2::coord_flip() +
+      ggplot2::labs(caption = wq_rhs_group_axis_caption(group_col))
+  }
   list(plot = plot, message = NULL)
 }
 
@@ -215,15 +254,31 @@ build_rhs_plot <- function(data, plot_type, variable = NULL, group_col = NULL) {
     plot_data$.numeric_value <- wq_rhs_as_numeric(plot_data[[variable]])
     plot_data$.group_value <- as.factor(plot_data[[group_col]])
     plot_data <- plot_data[!is.na(plot_data$.numeric_value), , drop = FALSE]
+    group_levels <- unique(as.character(plot_data$.group_value))
+    group_labels <- wq_rhs_group_axis_labels(group_levels)
+    plot_data$.group_label <- factor(
+      group_labels[match(as.character(plot_data$.group_value), group_levels)],
+      levels = group_labels
+    )
+    horizontal_group_axis <- wq_rhs_needs_horizontal_group_axis(group_levels)
     if (nrow(plot_data) == 0) {
       return(list(plot = NULL, message = paste0("The selected RHS variable '", variable, "' does not contain plottable numeric values.")))
     }
 
-    plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .group_value, y = .numeric_value)) +
+    plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .group_label, y = .numeric_value)) +
       ggplot2::geom_boxplot(na.rm = TRUE, fill = "#d8efe2", colour = "#006b44") +
       ggplot2::geom_point(position = ggplot2::position_jitter(width = 0.08, height = 0), alpha = 0.7, na.rm = TRUE) +
       ggplot2::labs(x = group_col, y = variable, title = paste(variable, "by", group_col)) +
-      ggplot2::theme_minimal()
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(size = if (horizontal_group_axis) 8 else 10),
+        axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = if (horizontal_group_axis) 12 else 0))
+      )
+    if (horizontal_group_axis) {
+      plot <- plot +
+        ggplot2::coord_flip() +
+        ggplot2::labs(caption = wq_rhs_group_axis_caption(group_col))
+    }
     return(list(plot = plot, message = NULL))
   }
 
@@ -238,18 +293,50 @@ build_rhs_plot <- function(data, plot_type, variable = NULL, group_col = NULL) {
 
     plot_data <- data
     plot_data$.category_value <- as.factor(plot_data[[variable]])
-    plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .category_value)) +
+    category_levels <- unique(as.character(plot_data$.category_value))
+    category_labels <- wq_rhs_group_axis_labels(category_levels)
+    plot_data$.category_label <- factor(
+      category_labels[match(as.character(plot_data$.category_value), category_levels)],
+      levels = category_labels
+    )
+    horizontal_category_axis <- wq_rhs_needs_horizontal_group_axis(category_levels)
+    plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .category_label)) +
       ggplot2::geom_bar(fill = "#008938") +
       ggplot2::labs(x = variable, y = "Record count", title = paste("RHS count by", variable)) +
-      ggplot2::theme_minimal()
+      ggplot2::theme_minimal() +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(size = if (horizontal_category_axis) 8 else 10),
+        axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = if (horizontal_category_axis) 12 else 0))
+      )
+    if (horizontal_category_axis) {
+      plot <- plot +
+        ggplot2::coord_flip() +
+        ggplot2::labs(caption = wq_rhs_group_axis_caption(variable))
+    }
     return(list(plot = plot, message = NULL))
   }
 
   plot_data <- data
   plot_data$.group_value <- as.factor(plot_data[[group_col]])
-  plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .group_value)) +
+  group_levels <- unique(as.character(plot_data$.group_value))
+  group_labels <- wq_rhs_group_axis_labels(group_levels)
+  plot_data$.group_label <- factor(
+    group_labels[match(as.character(plot_data$.group_value), group_levels)],
+    levels = group_labels
+  )
+  horizontal_group_axis <- wq_rhs_needs_horizontal_group_axis(group_levels)
+  plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = .group_label)) +
     ggplot2::geom_bar(fill = "#008938") +
     ggplot2::labs(x = group_col, y = "Record count", title = paste("RHS record count by", group_col)) +
-    ggplot2::theme_minimal()
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(size = if (horizontal_group_axis) 8 else 10),
+      axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = if (horizontal_group_axis) 12 else 0))
+    )
+  if (horizontal_group_axis) {
+    plot <- plot +
+      ggplot2::coord_flip() +
+      ggplot2::labs(caption = wq_rhs_group_axis_caption(group_col))
+  }
   list(plot = plot, message = NULL)
 }
