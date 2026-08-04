@@ -117,9 +117,15 @@ workflow_style_tags <- function() {
     .workflow-utilities summary { min-height:40px; padding:7px 11px; display:flex; align-items:center; border:1px solid rgba(255,255,255,.55); border-radius:6px; color:#fff; cursor:pointer; list-style:none; }
     .workflow-utilities summary::-webkit-details-marker { display:none; }
     .workflow-utilities[open] summary,.workflow-utilities summary:hover { border-color:#fff; background:rgba(255,255,255,.12); }
-    .workflow-utility-menu { position:absolute; z-index:20; top:calc(100% + 7px); right:0; min-width:210px; padding:6px; border:1px solid var(--wf-line); border-radius:8px; color:var(--wf-ink); background:#fff; box-shadow:0 3px 8px rgba(25,42,32,.12); }
+    .workflow-utility-menu { position:absolute; z-index:20; top:calc(100% + 7px); right:0; min-width:280px; padding:6px; border:1px solid var(--wf-line); border-radius:8px; color:var(--wf-ink); background:#fff; box-shadow:0 3px 8px rgba(25,42,32,.12); }
     .workflow-utility-menu a { padding:8px 10px; display:block; border-radius:5px; color:var(--wf-ink); text-decoration:none; }
     .workflow-utility-menu a:hover,.workflow-utility-menu a:focus { color:var(--wf-green-dark); background:var(--wf-green-soft); }
+    .workspace-save-controls { margin:4px 4px 7px; padding:10px; border-bottom:1px solid var(--wf-line); }
+    .workspace-save-controls .form-group { margin-bottom:8px; }
+    .workspace-save-controls label { margin-bottom:4px; color:var(--wf-ink); font-size:.76rem; font-weight:700; }
+    .workspace-save-controls .form-control { min-height:38px; border-color:var(--wf-line); border-radius:6px; font-size:.82rem; }
+    .workspace-save-button.btn { width:100%; min-height:38px; border-color:var(--wf-green); border-radius:6px; color:#fff; background:var(--wf-green); font-size:.8rem; font-weight:700; }
+    .workspace-save-button.btn:hover,.workspace-save-button.btn:focus { color:#fff; border-color:var(--wf-green-dark); background:var(--wf-green-dark); }
 
     .workflow-stagebar-shell { overflow-x:auto; border-bottom:1px solid var(--wf-line); background:var(--wf-surface); }
     .workflow-stagebar { max-width:1180px; min-width:750px; margin:0 auto; padding:0 clamp(16px,4vw,44px); display:grid; grid-template-columns:repeat(5,minmax(142px,1fr)); }
@@ -203,6 +209,17 @@ workflow_style_tags <- function() {
     @media (pointer:coarse) {
       .workflow-top-button.btn { min-height:44px; }
     }
+    @media (max-width:720px) {
+      .workflow-contextbar-inner { min-height:0; padding:8px 12px; display:flex; flex-wrap:wrap; gap:7px 8px; }
+      .workflow-brand { margin-right:auto; }
+      .workflow-brand strong { font-size:.86rem; }
+      .workflow-context-actions { order:2; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+      .workflow-context-copy { order:3; flex:0 0 100%; }
+      .workflow-context-copy strong { font-size:.76rem; overflow-wrap:anywhere; }
+      .workflow-context-meta,.workflow-agency-logo { display:none; }
+      .workflow-top-button.btn,.workflow-utilities summary { min-height:36px; padding:6px 8px; font-size:.74rem; }
+      .workflow-utility-menu { right:0; width:min(280px,calc(100vw - 24px)); min-width:0; }
+    }
     @media (prefers-reduced-motion:reduce) {
       .workflow-task-card { transition-duration:.01ms!important; transform:none!important; }
     }
@@ -244,6 +261,20 @@ workflow_context_bar_ui <- function(task = NULL, task_is_complete = FALSE) {
           shiny::tags$summary("Utilities"),
           shiny::div(
             class = "workflow-utility-menu",
+            shiny::div(
+              class = "workspace-save-controls",
+              shiny::textInput(
+                "workspace_name",
+                "Workspace name",
+                placeholder = "e.g. River Avon review"
+              ),
+              shiny::actionButton(
+                "save_workspace",
+                "Save workspace copy",
+                class = "workspace-save-button",
+                icon = shiny::icon("floppy-disk", verify_fa = FALSE)
+              )
+            ),
             shiny::actionLink("open_task_selector", "Task selector"),
             shiny::actionLink("open_csv_validation", "CSV validation"),
             shiny::tags$a(

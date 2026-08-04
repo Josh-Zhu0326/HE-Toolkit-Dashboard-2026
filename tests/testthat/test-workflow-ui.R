@@ -59,6 +59,9 @@ testthat::test_that("workflow header owns branding, utilities, and Stage 2 work 
     'id="workflow_stage_view_flow"',
     fixed = TRUE
   )
+  testthat::expect_match(header_html, 'id="workspace_name"', fixed = TRUE)
+  testthat::expect_match(header_html, 'id="save_workspace"', fixed = TRUE)
+  testthat::expect_match(header_html, "Save workspace copy", fixed = TRUE)
 })
 
 testthat::test_that("Task selector consumes completion artifact state", {
