@@ -67,6 +67,21 @@ The packet contains:
 The output directory must remain outside the repository and inside the approved
 project evidence location. Do not put participant or consent data in Git.
 
+### Candidate Record: 2026-08-04
+
+- Candidate commit: `76b0af32acc19ca1cfc1fdf0a189d197735e2487`.
+- Candidate base: `origin/main` at
+  `69327187cf83489f15bf608a888267d1eaa8cf18`.
+- Evidence directory: `E:\SummerProjectWorkingArea\gate-d-evidence\76b0af32acc1`.
+- Manifest result: clean worktree; 23 runtime/entrypoint files, 5 research
+  materials, and 21 synthetic fixtures recorded.
+- `gate-d-candidate-manifest.json` SHA-256:
+  `DA1FE33709C3FEA4DD2169157DCB23D30E2CFE80256143DE33FB866440B5DFC8`.
+- `checksums.csv` SHA-256:
+  `12C9BD4B44778C42D54E0B90FF7E9FCAA659BB1BBAA3358AD7C2CB96D9B59CD7`.
+- `session-info.txt` SHA-256:
+  `17F01A8173E01303C51CF13EBDC51979269B5F07501343D94B4FCF36AB123B64`.
+
 ## Gate D Decision Boundary
 
 Technical automation can establish the software candidate and reproducibility
