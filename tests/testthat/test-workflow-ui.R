@@ -64,6 +64,17 @@ testthat::test_that("workflow header owns branding, utilities, and Stage 2 work 
   testthat::expect_match(header_html, "Save workspace copy", fixed = TRUE)
 })
 
+testthat::test_that("Stage 3 exposes the processed dataset checkpoint round trip", {
+  ui_code <- paste(
+    readLines(testthat::test_path("..", "..", "ui.R"), warn = FALSE),
+    collapse = "\n"
+  )
+
+  testthat::expect_match(ui_code, '"processed_dataset_checkpoint_file"', fixed = TRUE)
+  testthat::expect_match(ui_code, '"load_processed_dataset_checkpoint"', fixed = TRUE)
+  testthat::expect_match(ui_code, '"processed_dataset_checkpoint_download"', fixed = TRUE)
+})
+
 testthat::test_that("Task selector consumes completion artifact state", {
   registry <- new_he_artifact_registry()
   registry <- set_he_artifact_status(registry, "biology_input", "complete")

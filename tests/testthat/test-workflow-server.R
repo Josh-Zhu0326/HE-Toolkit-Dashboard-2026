@@ -341,6 +341,10 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y))
     },
     plot_hev_dash = function(...) ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y)),
+    hev_dependency_check = function(...) list(
+      status = "success",
+      message = "HEV plotting dependencies are available."
+    ),
     .env = environment(workflow_dashboard_server)
   )
 
@@ -511,6 +515,142 @@ testthat::test_that("the save button writes a named, restorable local workspace"
     testthat::expect_identical(
       stored$state$runtime_state$analysis_filter_selection$excluded_record_ids,
       "S1"
+    )
+  })
+})
+
+testthat::test_that("a processed dataset checkpoint restores downstream state in a new session", {
+  checkpoint_path <- tempfile("joined-he-checkpoint-", fileext = ".rds")
+  on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
+  checkpoint_data <- data.frame(
+    biol_site_id = "B1",
+    sample_id = paste0("S", 1:3),
+    date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01")),
+    Year = 2020:2022,
+    Q95z_lag0 = c(-1, 0, 1),
+    LIFE_F_OE = c(0.8, 1.0, 1.2),
+    stringsAsFactors = FALSE
+  )
+  write_processed_dataset_checkpoint(
+    checkpoint_data,
+    checkpoint_path,
+    provenance = list(source = "first test session"),
+    app_version = "test-commit"
+  )
+  upload <- list(
+    name = basename(checkpoint_path),
+    size = file.info(checkpoint_path)$size,
+    type = "application/octet-stream",
+    datapath = normalizePath(checkpoint_path, winslash = "/", mustWork = TRUE)
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_match(
+      output$processed_dataset_checkpoint_download$html,
+      "Download becomes available",
+      fixed = TRUE
+    )
+    muffle_interrupted_workflow_promise(session$setInputs(
+      processed_dataset_checkpoint_file = upload,
+      load_processed_dataset_checkpoint = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(active_join_source(), "checkpoint")
+    testthat::expect_identical(join_data(), checkpoint_data)
+    testthat::expect_identical(current_analysis_data(), checkpoint_data)
+    testthat::expect_true("Q95z" %in% names(HEV_data()))
+    testthat::expect_s3_class(HEV_data()$date, "Date")
+    testthat::expect_identical(processed_checkpoint_load_status()$status, "success")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_true(artifact_is_current(
+      workflow_artifacts()$processed_dataset_checkpoint
+    ))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
+    testthat::expect_match(
+      output$processed_dataset_checkpoint_download$html,
+      'id="download_processed_dataset_checkpoint"',
+      fixed = TRUE
+    )
+
+    registry_before_flow_edit <- workflow_artifacts()
+    muffle_interrupted_workflow_promise(session$setInputs(meta_paste = "changed mapping"))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(join_data(), checkpoint_data)
+    testthat::expect_gte(
+      workflow_artifacts()$joined_core$output_revision,
+      registry_before_flow_edit$joined_core$output_revision
+    )
+  })
+})
+
+testthat::test_that("a failed checkpoint upload does not replace current data", {
+  valid_path <- tempfile("joined-he-checkpoint-", fileext = ".rds")
+  invalid_path <- tempfile("joined-he-checkpoint-invalid-", fileext = ".rds")
+  on.exit(unlink(c(valid_path, invalid_path), force = TRUE), add = TRUE)
+  checkpoint_data <- data.frame(
+    biol_site_id = "B1",
+    sample_id = "S1",
+    Year = 2020L,
+    Q95z_lag0 = 0,
+    LIFE_F_OE = 1,
+    stringsAsFactors = FALSE
+  )
+  write_processed_dataset_checkpoint(checkpoint_data, valid_path)
+  writeLines("not an R checkpoint", invalid_path, useBytes = TRUE)
+  upload <- function(path) list(
+    name = basename(path),
+    size = file.info(path)$size,
+    type = "application/octet-stream",
+    datapath = normalizePath(path, winslash = "/", mustWork = TRUE)
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(session$setInputs(
+      processed_dataset_checkpoint_file = upload(valid_path),
+      load_processed_dataset_checkpoint = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    current_data <- join_data()
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      processed_dataset_checkpoint_file = upload(invalid_path),
+      load_processed_dataset_checkpoint = 2
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(processed_checkpoint_load_status()$status, "error")
+    testthat::expect_identical(join_data(), current_data)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+  })
+})
+
+testthat::test_that("RAW-01 missing HEV dependency blocks safely and ends the request", {
+  rlang::local_bindings(
+    hev_dependency_check = function(...) list(
+      status = "error",
+      message = paste(
+        "The required package ggnewscale is missing.",
+        "Please install project dependencies before using the HEV plot feature."
+      )
+    ),
+    .env = environment(workflow_dashboard_server)
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(hev_plot_dependency_status()$status, "error")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_match(
+      output$hev_status_message$html,
+      "The required package ggnewscale is missing.",
+      fixed = TRUE
     )
   })
 })
