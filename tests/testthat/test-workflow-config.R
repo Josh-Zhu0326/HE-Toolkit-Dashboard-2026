@@ -1,6 +1,16 @@
 source(testthat::test_path("..", "..", "R", "workflow_config.R"))
 source(testthat::test_path("..", "..", "R", "workflow_state.R"))
 
+testthat::test_that("public workflow state vocabulary is frozen at eight states", {
+  testthat::expect_identical(
+    he_workflow_state_labels,
+    c(
+      "not_started", "blocked", "ready", "running",
+      "complete", "warning", "stale", "failed"
+    )
+  )
+})
+
 testthat::test_that("workflow config has five valid stages and Tasks", {
   testthat::expect_true(validate_he_workflow_config())
   testthat::expect_length(he_workflow_stages, 5L)
