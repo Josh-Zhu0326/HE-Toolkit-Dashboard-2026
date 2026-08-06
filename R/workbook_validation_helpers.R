@@ -50,6 +50,10 @@ dc11_sheet_schemas <- function() {
   )
 }
 
+dc11_metadata_sheets <- function() {
+  c("README", "field_dictionary", "validation_rules")
+}
+
 dc11_checkpoint_issue <- function(sheet, severity, code, message) {
   data.frame(
     sheet = sheet,
@@ -381,7 +385,7 @@ validate_dc11_workbook <- function(sheets) {
   })
   names(sheet_results) <- names(schemas)
 
-  provided_unknown <- setdiff(names(sheets), names(schemas))
+  provided_unknown <- setdiff(names(sheets), c(names(schemas), dc11_metadata_sheets()))
   issues <- do.call(rbind, lapply(sheet_results, `[[`, "issues"))
   if (length(provided_unknown) > 0) {
     issues <- rbind(issues, dc11_checkpoint_issue(
@@ -399,4 +403,94 @@ validate_dc11_workbook <- function(sheets) {
     issues$message
   }
   list(status = status, messages = messages, sheet_results = sheet_results, issues = issues)
+}
+
+read_dc11_workbook <- function(path) {
+  if (!is.character(path) || length(path) != 1L || is.na(path) || !file.exists(path)) {
+    return(list(
+      status = "error",
+      messages = "DC-11 workbook file was not found.",
+      sheets = list(),
+      issues = dc11_checkpoint_issue("workbook", "error", "file_not_found", "DC-11 workbook file was not found.")
+    ))
+  }
+
+  if (!requireNamespace("readxl", quietly = TRUE)) {
+    return(list(
+      status = "error",
+      messages = "The readxl package is required to read DC-11 Excel workbooks.",
+      sheets = list(),
+      issues = dc11_checkpoint_issue("workbook", "error", "readxl_missing", "The readxl package is required to read DC-11 Excel workbooks.")
+    ))
+  }
+
+  sheet_names <- tryCatch(
+    readxl::excel_sheets(path),
+    error = function(error) error
+  )
+  if (inherits(sheet_names, "error")) {
+    return(list(
+      status = "error",
+      messages = "The uploaded file could not be read as an Excel workbook.",
+      sheets = list(),
+      issues = dc11_checkpoint_issue("workbook", "error", "workbook_read_error", "The uploaded file could not be read as an Excel workbook.")
+    ))
+  }
+
+  sheets <- list()
+  read_issues <- dc11_empty_issues()
+  for (sheet_name in sheet_names) {
+    sheet_data <- tryCatch(
+      readxl::read_excel(
+        path,
+        sheet = sheet_name,
+        col_types = "text",
+        .name_repair = "minimal"
+      ),
+      error = function(error) error
+    )
+    if (inherits(sheet_data, "error")) {
+      read_issues <- rbind(read_issues, dc11_checkpoint_issue(
+        sheet_name,
+        "error",
+        "sheet_read_error",
+        paste0("Sheet could not be read from workbook: ", sheet_name, ".")
+      ))
+    } else {
+      sheets[[sheet_name]] <- as.data.frame(sheet_data, stringsAsFactors = FALSE)
+    }
+  }
+
+  status <- dc11_status_from_issues(read_issues)
+  messages <- if (nrow(read_issues) == 0) {
+    paste0("Read ", length(sheets), " workbook sheet(s).")
+  } else {
+    read_issues$message
+  }
+
+  list(status = status, messages = messages, sheets = sheets, issues = read_issues)
+}
+
+validate_dc11_workbook_file <- function(path) {
+  read_result <- read_dc11_workbook(path)
+  if (!identical(read_result$status, "success")) {
+    return(list(
+      status = read_result$status,
+      messages = read_result$messages,
+      sheets = read_result$sheets,
+      sheet_results = list(),
+      issues = read_result$issues
+    ))
+  }
+
+  validation <- validate_dc11_workbook(read_result$sheets)
+  validation$issues <- rbind(read_result$issues, validation$issues)
+  validation$status <- dc11_status_from_issues(validation$issues)
+  validation$messages <- if (nrow(validation$issues) == 0) {
+    "Workbook passed DC-11 validation."
+  } else {
+    validation$issues$message
+  }
+  validation$sheets <- read_result$sheets
+  validation
 }

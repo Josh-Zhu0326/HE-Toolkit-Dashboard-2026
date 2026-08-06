@@ -3,8 +3,8 @@ TC-001,Home,High,,Home page loads and states WQ/RHS are supporting mapped datase
 TC-002,Mapping,High,tests/fixtures/mapping.csv,Valid mapping uploads with warning for RHS TBC and no crash
 TC-003,Mapping,High,custom missing-column CSV,Missing required mapping columns show a clear error
 TC-004,Mapping,Medium,custom duplicate biol_site_id CSV,Duplicate biol_site_id shows warning and app remains connected
-TC-005,WQ validation,High,tests/fixtures/wq.csv,WQ CSV validates and previews without triggering modelling or O:E
-TC-006,RHS validation,High,tests/fixtures/rhs.csv,RHS CSV validates and previews without triggering modelling or O:E
+TC-005,WQ validation,High,tests/fixtures/wq.csv,WQ CSV validates and previews in File Validation Sandbox without triggering modelling or O:E
+TC-006,RHS validation,High,tests/fixtures/rhs.csv,RHS CSV validates and previews in File Validation Sandbox without triggering modelling or O:E
 TC-007,WQ plots,High,tests/fixtures/mapping.csv; tests/fixtures/wq.csv,WQ time series boxplot and mean bar chart render when suitable data exist
 TC-008,WQ downloads,High,mapped WQ data,Mapped WQ CSV and current WQ plot PNG download when data exist
 TC-009,RHS plots,High,tests/fixtures/mapping.csv; tests/fixtures/rhs.csv,RHS numeric categorical and record-count plots render when suitable data exist
@@ -38,4 +38,5 @@ TC-036,Model interface no selection,High,joined HE data,Running without selectin
 TC-037,Model interface no data,High,no joined data,Running before joining shows a friendly error and app stays connected
 TC-038,Model interface too few rows,Medium,joined data with fewer than 3 complete rows,Clear error states at least 3 observations are needed
 TC-039,Model interface invalid variable,Medium,joined data with a non-existent variable name,Selecting an invalid variable shows a friendly reselect message not a crash
-TC-040,Joined dataset boundary,High,joined_core with optional WQ/RHS summaries,joined_core remains unchanged optional failures do not invalidate core and analysis_dataset records whether it derives from core or enriched data
+TC-040,DC-11 workbook checkpoint,High,standard DC-11 multi-sheet XLSX template,Workbook upload validates all recognised sheets reports sheet-level issues and previews the selected sheet without triggering import join modelling or HEV
+TC-041,Joined dataset boundary,High,joined_core with optional WQ/RHS summaries,joined_core remains unchanged optional failures do not invalidate core and analysis_dataset records whether it derives from core or enriched data

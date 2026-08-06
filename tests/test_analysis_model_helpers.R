@@ -5,7 +5,7 @@
 source(file.path("R", "analysis_model_helpers.R"))
 
 joined <- read.csv(file.path("tests", "fixtures", "analysis_dataset.csv"),
-                   stringsAsFactors = FALSE, colClasses = c(SAMPLE_ID = "character"))
+                   stringsAsFactors = FALSE, colClasses = c(sample_id = "character"))
 
 # --- 1. Single-site additive model fits and returns the contract fields -----
 spec <- list(response = "LIFE_F_OE", flow_predictors = c("Q95_lag0", "Q10_lag0"))

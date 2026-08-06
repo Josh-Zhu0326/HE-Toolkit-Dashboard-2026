@@ -119,7 +119,7 @@ function(input, output, session){
   }, ignoreInit = TRUE)
 
   observeEvent(input$open_csv_validation, {
-    updateNavbarPage(session, "main_nav", selected = "CSV Validation Sandbox")
+    updateNavbarPage(session, "main_nav", selected = "File Validation Sandbox")
   }, ignoreInit = TRUE)
 
   output$workflow_status_announcement <- renderText({
@@ -583,6 +583,36 @@ function(input, output, session){
     list(data = read_result$data, validation = validation)
   })
 
+  dc11_workbook_upload <- reactive({
+    upload <- input$dc11_workbook
+    if (is.null(upload)) {
+      return(list(
+        sheets = list(),
+        validation = list(
+          status = "info",
+          messages = "No DC-11 workbook uploaded yet.",
+          issues = dc11_empty_issues(),
+          sheet_results = list()
+        )
+      ))
+    }
+
+    if (is.null(upload$datapath) || !file.exists(upload$datapath)) {
+      return(list(
+        sheets = list(),
+        validation = list(
+          status = "error",
+          messages = "Your DC-11 workbook could not be found after upload. Please try uploading it again.",
+          issues = dc11_checkpoint_issue("workbook", "error", "file_not_found", "Your DC-11 workbook could not be found after upload."),
+          sheet_results = list()
+        )
+      ))
+    }
+
+    validation <- validate_dc11_workbook_file(upload$datapath)
+    list(sheets = validation$sheets, validation = validation)
+  })
+
   format_validation_message <- function(result) {
     status <- result$status
     if (isTRUE(status == "ok")) {
@@ -684,6 +714,55 @@ function(input, output, session){
     )
     format_validation_message(list(status = result$status, messages = messages))
   })
+
+  output$dc11_workbook_validation_status <- renderUI({
+    result <- dc11_workbook_upload()$validation
+    messages <- c(
+      result$messages,
+      "This workbook checkpoint reports validation only. It has not changed the active import, join, model, or HEV data."
+    )
+    format_validation_message(list(status = result$status, messages = messages))
+  })
+
+  output$dc11_workbook_validation_issues <- DT::renderDataTable({
+    issues <- dc11_workbook_upload()$validation$issues
+    if (is.null(issues) || nrow(issues) == 0) {
+      return(data.frame(
+        sheet = "workbook",
+        severity = "success",
+        code = "passed",
+        message = "No DC-11 workbook issues found.",
+        stringsAsFactors = FALSE
+      ))
+    }
+    issues
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  observeEvent(dc11_workbook_upload(), {
+    sheets <- names(dc11_workbook_upload()$sheets)
+    if (length(sheets) == 0) {
+      sheets <- names(dc11_sheet_schemas())
+    }
+    selected <- if (input$dc11_workbook_preview_sheet %in% sheets) {
+      input$dc11_workbook_preview_sheet
+    } else {
+      sheets[[1L]]
+    }
+    updateSelectInput(
+      session,
+      "dc11_workbook_preview_sheet",
+      choices = sheets,
+      selected = selected
+    )
+  }, ignoreNULL = FALSE)
+
+  output$dc11_workbook_preview <- DT::renderDataTable({
+    sheets <- dc11_workbook_upload()$sheets
+    req(length(sheets) > 0)
+    sheet_name <- input$dc11_workbook_preview_sheet
+    req(sheet_name %in% names(sheets))
+    head(sheets[[sheet_name]], 10)
+  }, options = list(scrollX = TRUE, pageLength = 10))
 
   output$dc11_validation_issues <- DT::renderDataTable({
     issues <- dc11_csv_upload()$validation$issues
