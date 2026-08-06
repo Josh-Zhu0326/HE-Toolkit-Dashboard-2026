@@ -83,12 +83,21 @@ exclude_record <- function(selection, record_id,
   selection
 }
 
-# restore one record. just appends a "restore" event.
+# restore one record. appends a "restore" event, and carries the site_id /
+# sample_id from the record's most recent exclude event so the log keeps its
+# site and sample context instead of showing NA.
 restore_record <- function(selection, record_id, user_comment = "", timestamp = NULL) {
+  record_id <- as.character(record_id)
+
+  past <- selection$events
+  prior_excludes <- past[past$record_id == record_id & past$action == "exclude", , drop = FALSE]
+  site_id   <- if (nrow(prior_excludes) > 0) prior_excludes$site_id[nrow(prior_excludes)] else NA_character_
+  sample_id <- if (nrow(prior_excludes) > 0) prior_excludes$sample_id[nrow(prior_excludes)] else NA_character_
+
   ev <- data.frame(
-    record_id = as.character(record_id),
-    site_id = NA_character_,
-    sample_id = NA_character_,
+    record_id = record_id,
+    site_id = site_id,
+    sample_id = sample_id,
     exclusion_reason = "User restored record",
     trigger = "user",
     user_comment = as.character(user_comment),

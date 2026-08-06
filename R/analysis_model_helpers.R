@@ -13,7 +13,7 @@
 #        rhs_predictor = NULL)                           # up to 1
 #
 # Things I assumed (please tell me if they should change):
-# - site column is "biol_site_id", year column is "Year".
+# - site column is "biol_site_id", year column is "sampling_year".
 # - the single-site R2 is the normal lm R2.
 
 # a result with all the fields filled in with defaults, so every path returns
@@ -34,7 +34,7 @@
 }
 
 run_analysis_model <- function(analysis_dataset, model_spec,
-                               site_col = "biol_site_id", year_col = "Year",
+                               site_col = "biol_site_id", year_col = "sampling_year",
                                provenance = list()) {
 
   response    <- model_spec$response
