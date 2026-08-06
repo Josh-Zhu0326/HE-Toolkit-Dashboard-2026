@@ -56,6 +56,7 @@ source(file.path("R", "workbook_validation_helpers.R"))
 source(file.path("R", "exclusion_log_helpers.R"))
 source(file.path("R", "model_interface_helpers.R"))
 source(file.path("R", "analysis_filter_helpers.R"))
+source(file.path("R", "joined_dataset_boundary_helpers.R"))
 source(file.path("R", "analysis_model_helpers.R"))
 
 # runApp(launch.browser=TRUE)

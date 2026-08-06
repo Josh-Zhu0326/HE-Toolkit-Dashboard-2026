@@ -39,3 +39,4 @@ TC-037,Model interface no data,High,no joined data,Running before joining shows 
 TC-038,Model interface too few rows,Medium,joined data with fewer than 3 complete rows,Clear error states at least 3 observations are needed
 TC-039,Model interface invalid variable,Medium,joined data with a non-existent variable name,Selecting an invalid variable shows a friendly reselect message not a crash
 TC-040,DC-11 workbook checkpoint,High,standard DC-11 multi-sheet XLSX template,Workbook upload validates all recognised sheets reports sheet-level issues and previews the selected sheet without triggering import join modelling or HEV
+TC-041,Joined dataset boundary,High,joined_core with optional WQ/RHS summaries,joined_core remains unchanged optional failures do not invalidate core and analysis_dataset records whether it derives from core or enriched data
