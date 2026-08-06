@@ -33,6 +33,8 @@ library(leaflet)
 ## HE ----
 library(hetoolkit)
 library(rnrfa)
+library(lme4)
+library(performance)
 
 options(sass.cache = FALSE)
 
@@ -57,6 +59,7 @@ source(file.path("R", "exclusion_log_helpers.R"))
 source(file.path("R", "model_interface_helpers.R"))
 source(file.path("R", "analysis_filter_helpers.R"))
 source(file.path("R", "analysis_model_helpers.R"))
+source(file.path("R", "mixed_model_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
