@@ -1,6 +1,7 @@
 source(testthat::test_path("..", "..", "R", "workflow_config.R"))
 source(testthat::test_path("..", "..", "R", "workflow_state.R"))
 source(testthat::test_path("..", "..", "R", "workspace_state.R"))
+source(testthat::test_path("..", "..", "R", "workspace_auth.R"))
 source(testthat::test_path("..", "..", "R", "workspace_storage.R"))
 
 new_workspace_storage_fixture <- function(root, workspace_name, values = 1:1000) {
@@ -21,6 +22,69 @@ new_workspace_storage_fixture <- function(root, workspace_name, values = 1:1000)
   )
   list(storage = new_local_workspace_storage(root), snapshot = snapshot)
 }
+
+testthat::test_that("storage capabilities distinguish browser, server, and cloud", {
+  testthat::expect_error(
+    new_cloud_workspace_storage("https://storage.example.test", function() "token"),
+    "must implement the workspace auth interface",
+    fixed = TRUE
+  )
+  server_storage <- new_server_file_workspace_storage(tempfile("workspace-capabilities-"))
+  legacy_storage <- new_local_workspace_storage(tempfile("workspace-capabilities-"))
+  browser_storage <- new_browser_workspace_storage()
+  cloud_storage <- new_cloud_workspace_storage(
+    "https://storage.example.test",
+    new_anonymous_workspace_auth_provider()
+  )
+
+  server_capabilities <- workspace_storage_capabilities(server_storage)
+  testthat::expect_identical(server_capabilities$location, "server-file")
+  testthat::expect_true(server_capabilities$configured)
+  testthat::expect_false(server_capabilities$requires_auth)
+  testthat::expect_true(workspace_storage_operation_available(
+    server_storage,
+    "save"
+  ))
+  testthat::expect_s3_class(legacy_storage, "local_workspace_storage")
+
+  browser_capabilities <- workspace_storage_capabilities(browser_storage)
+  testthat::expect_identical(browser_capabilities$location, "browser")
+  testthat::expect_false(browser_capabilities$configured)
+  testthat::expect_false(browser_capabilities$requires_auth)
+  testthat::expect_false(workspace_storage_operation_available(
+    browser_storage,
+    "save"
+  ))
+  testthat::expect_error(
+    workspace_storage_list(browser_storage),
+    "IndexedDB bridge",
+    fixed = TRUE
+  )
+
+  cloud_capabilities <- workspace_storage_capabilities(cloud_storage)
+  testthat::expect_identical(cloud_capabilities$location, "cloud")
+  testthat::expect_false(cloud_capabilities$configured)
+  testthat::expect_true(cloud_capabilities$requires_auth)
+  testthat::expect_false(workspace_storage_operation_available(
+    cloud_storage,
+    "save"
+  ))
+})
+
+testthat::test_that("the default storage is local and alternative factories are injectable", {
+  default_storage <- workspace_storage_for_session(NULL)
+  testthat::expect_s3_class(default_storage, "server_file_workspace_storage")
+
+  old_options <- options(
+    hetoolkit.workspace_storage_factory = function(session) {
+      new_browser_workspace_storage()
+    }
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  injected <- workspace_storage_for_session(NULL)
+  testthat::expect_s3_class(injected, "browser_workspace_storage")
+})
 
 testthat::test_that("local storage saves and restores a complete named workspace", {
   root <- tempfile("workspace-storage-")

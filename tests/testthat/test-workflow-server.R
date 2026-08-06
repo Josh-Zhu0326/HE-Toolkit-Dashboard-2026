@@ -478,13 +478,45 @@ testthat::test_that("real business outputs advance the shared artifact registry"
   })
 })
 
-testthat::test_that("the save button writes a named, restorable local workspace", {
+testthat::test_that("an unavailable browser backend rejects forged save events", {
+  workspace_root <- tempfile("disabled-server-workspace-storage-")
+  old_options <- options(
+    hetoolkit.workspace_root = workspace_root,
+    hetoolkit.workspace_storage_factory = function(session) {
+      new_browser_workspace_storage()
+    }
+  )
+  on.exit(options(old_options), add = TRUE)
+
+  shiny::testServer(workflow_dashboard_server, {
+    testthat::expect_s3_class(workspace_storage, "browser_workspace_storage")
+    testthat::expect_false(workspace_save_available)
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(session$setInputs(
+      workspace_name = "Must not be written",
+      save_workspace = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(workspace_save_status()$status, "error")
+    testthat::expect_match(
+      workspace_save_status()$message,
+      "not configured",
+      fixed = TRUE
+    )
+    testthat::expect_false(dir.exists(workspace_root))
+  })
+})
+
+testthat::test_that("the default local backend writes a named, restorable workspace", {
   workspace_root <- tempfile("server-workspace-storage-")
   on.exit(unlink(workspace_root, recursive = TRUE, force = TRUE), add = TRUE)
   old_options <- options(hetoolkit.workspace_root = workspace_root)
   on.exit(options(old_options), add = TRUE)
 
   shiny::testServer(workflow_dashboard_server, {
+    testthat::expect_s3_class(workspace_storage, "server_file_workspace_storage")
+    testthat::expect_true(workspace_save_available)
     muffle_interrupted_workflow_promise(session$flushReact())
     workflow_session$task_id <- "generate_hev"
     workflow_session$stage_index <- 1L
@@ -501,6 +533,11 @@ testthat::test_that("the save button writes a named, restorable local workspace"
     testthat::expect_identical(
       workspace_save_status()$result$workspace_name,
       "Customer review copy"
+    )
+    testthat::expect_match(
+      workspace_save_status()$message,
+      "on this computer",
+      fixed = TRUE
     )
 
     stored <- workspace_storage_load(

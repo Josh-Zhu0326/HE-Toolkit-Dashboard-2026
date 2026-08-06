@@ -9,11 +9,23 @@ function(input, output, session){
     task_id = NULL,
     stage_index = 1L
   )
-  workspace_storage <- new_local_workspace_storage()
+  workspace_auth_provider <- workspace_auth_provider_for_session(session)
+  workspace_context <- workspace_auth_context(workspace_auth_provider, session)
+  workspace_storage <- workspace_storage_for_session(session)
+  workspace_storage_info <- workspace_storage_capabilities(workspace_storage)
+  workspace_save_available <- workspace_storage_operation_available(
+    workspace_storage,
+    "save",
+    workspace_context
+  )
   workspace_save_in_progress <- reactiveVal(FALSE)
   workspace_save_status <- reactiveVal(list(
     status = "idle",
-    message = "No workspace has been saved in this session.",
+    message = if (workspace_save_available) {
+      "No workspace has been saved in this session."
+    } else {
+      "Workspace saving is not configured for this session."
+    },
     result = NULL
   ))
   processed_checkpoint_data <- reactiveVal(NULL)
@@ -43,7 +55,8 @@ function(input, output, session){
       task_id = workflow_session$task_id,
       current_stage = workflow_session$stage_index,
       registry = workflow_artifacts(),
-      current_panel = input$main_nav
+      current_panel = input$main_nav,
+      show_workspace_save = workspace_save_available
     )
   })
 
@@ -3161,6 +3174,16 @@ function(input, output, session){
   }
 
   observeEvent(input$save_workspace, {
+    if (!workspace_storage_operation_available(
+      workspace_storage,
+      "save",
+      workspace_context
+    )) {
+      message <- "Workspace saving is not configured for this session."
+      workspace_save_status(list(status = "error", message = message, result = NULL))
+      showNotification(message, type = "error", duration = 8)
+      return()
+    }
     if (isTRUE(workspace_save_in_progress())) {
       showNotification("A workspace save is already in progress.", type = "warning")
       return()
@@ -3182,10 +3205,22 @@ function(input, output, session){
         datasets = collect_current_workspace_datasets(),
         current_panel = isolate(input$main_nav)
       )
-      result <- workspace_storage_save(workspace_storage, snapshot)
+      result <- workspace_storage_save(
+        workspace_storage,
+        snapshot,
+        context = workspace_context
+      )
+      location_phrase <- switch(
+        workspace_storage_info$location,
+        browser = "in this browser",
+        `server-file` = "on this computer",
+        cloud = "in the configured cloud service",
+        sprintf("in %s", workspace_storage_info$label)
+      )
       message <- sprintf(
-        "Saved workspace '%s' locally with %d data object(s).",
+        "Saved workspace '%s' %s with %d data object(s).",
         result$workspace_name,
+        location_phrase,
         result$dataset_count
       )
       workspace_save_status(list(status = "success", message = message, result = result))

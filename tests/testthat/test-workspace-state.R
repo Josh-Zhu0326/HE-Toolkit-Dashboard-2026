@@ -1,6 +1,7 @@
 source(testthat::test_path("..", "..", "R", "workflow_config.R"))
 source(testthat::test_path("..", "..", "R", "workflow_state.R"))
 source(testthat::test_path("..", "..", "R", "workspace_state.R"))
+source(testthat::test_path("..", "..", "R", "workspace_auth.R"))
 source(testthat::test_path("..", "..", "R", "workspace_storage.R"))
 
 workspace_test_snapshot <- function(
@@ -113,12 +114,21 @@ testthat::test_that("incompatible or malformed workspace state fails safely", {
 testthat::test_that("cloud storage constructor reserves the backend contract", {
   storage <- new_cloud_workspace_storage(
     "https://storage.example.test",
-    auth_provider = function() "token"
+    auth_provider = new_anonymous_workspace_auth_provider()
   )
 
   testthat::expect_s3_class(storage, "cloud_workspace_storage")
   testthat::expect_error(
     workspace_storage_list(storage),
+    "requires an authenticated user",
+    fixed = TRUE
+  )
+  authenticated_context <- new_workspace_access_context(
+    new_workspace_identity(authenticated = TRUE, subject = "provider|user-123"),
+    access_token = "test-token"
+  )
+  testthat::expect_error(
+    workspace_storage_list(storage, authenticated_context),
     "Cloud workspace storage is not configured",
     fixed = TRUE
   )
