@@ -695,7 +695,7 @@ page_navbar(
 ),
 
   # WQ/RHS UPLOAD DEMO ----
-    nav_panel("CSV Validation Sandbox",
+    nav_panel("File Validation Sandbox",
       layout_columns(
         col_widths = c(12),
         card(
@@ -706,7 +706,28 @@ page_navbar(
         ),
         card(
           class = "dashboard-card",
-          card_header("DC-11 CSV checkpoint"),
+          card_header("DC-11 workbook checkpoint"),
+          p("Check a multi-sheet Excel workbook against the frozen Data Contract v1 schemas. This reports validation results only and does not change the active dashboard data."),
+          div(class = "hint-text",
+              "Upload the standard DC-11 .xlsx template to validate all workbook sheets together."),
+          fileInput("dc11_workbook", "Choose DC-11 workbook", accept = c(".xlsx", ".xls")),
+          h5("DC-11 workbook status"),
+          uiOutput("dc11_workbook_validation_status"),
+          h5("DC-11 workbook issue report"),
+          dataTableOutput("dc11_workbook_validation_issues"),
+          h5("Workbook sheet preview"),
+          selectInput(
+            "dc11_workbook_preview_sheet",
+            "Preview sheet",
+            choices = names(dc11_sheet_schemas()),
+            selected = "site_mapping"
+          ),
+          div(class = "hint-text", "This preview shows the first rows of the selected workbook sheet. No import, joining, modelling, or HEV generation is run from this checkpoint."),
+          dataTableOutput("dc11_workbook_preview")
+        ),
+        card(
+          class = "dashboard-card",
+          card_header("DC-11 single CSV checkpoint"),
           p("Check a CSV against one frozen Data Contract v1 sheet schema. This reports validation results only and does not change the active dashboard data."),
           div(class = "hint-text",
               "Choose the DC-11 sheet type that this CSV represents. Column names and order must match the frozen contract."),
@@ -755,7 +776,7 @@ page_navbar(
           class = "dashboard-card",
           card_header("Notes / Next steps"),
           tags$ul(
-            tags$li("The DC-11 checkpoint is strict and reports schema/type issues without changing downstream data."),
+            tags$li("The DC-11 workbook and CSV checkpoints are strict and report schema/type issues without changing downstream data."),
             tags$li("The older WQ/RHS previews remain separate and are still for quick supporting-data inspection only."),
             tags$li("The next step is to connect stable checkpoint results to the production import flow after review.")
           )
