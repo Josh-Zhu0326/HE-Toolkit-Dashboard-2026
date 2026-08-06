@@ -46,6 +46,11 @@ log <- build_analysis_exclusion_log(sel)
 stopifnot(nrow(log) == 2)                          # exclude event + restore event
 stopifnot(all(log$current_status == "restored"))  # record is currently restored
 
+# the restore event keeps the site/sample context (not NA) - Di review point
+restore_row <- log[log$exclusion_reason == "User restored record", ]
+stopifnot(restore_row$site_id == "291")
+stopifnot(restore_row$sample_id == "S002")
+
 # --- 4. Re-excluding after restore works ------------------------------------
 sel <- exclude_record(sel, record_id = "S002", timestamp = "2026-07-23 10:10:00")
 r <- apply_filter_selection(joined, sel)

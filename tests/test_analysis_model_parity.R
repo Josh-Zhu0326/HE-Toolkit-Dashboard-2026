@@ -7,7 +7,7 @@
 source(file.path("R", "analysis_model_helpers.R"))
 
 joined <- read.csv(file.path("tests", "fixtures", "analysis_dataset.csv"),
-                   stringsAsFactors = FALSE, colClasses = c(SAMPLE_ID = "character"))
+                   stringsAsFactors = FALSE, colClasses = c(sample_id = "character"))
 
 spec <- list(response = "LIFE_F_OE", flow_predictors = c("Q95_lag0", "Q10_lag0"))
 res <- run_analysis_model(joined, spec)
@@ -16,7 +16,7 @@ stopifnot(identical(res$status, "success"))
 # --- 1. Numerical parity: independent OLS via the normal equations ----------
 # Rebuild the same model frame the function used:
 #   LIFE_F_OE ~ Q95_lag0 + Q10_lag0 + sampling_year_centered
-yr <- as.numeric(joined$Year)
+yr <- as.numeric(joined$sampling_year)
 year_center <- (min(unique(yr)) + max(unique(yr))) / 2
 X <- cbind(1, joined$Q95_lag0, joined$Q10_lag0, yr - year_center)
 y <- joined$LIFE_F_OE
