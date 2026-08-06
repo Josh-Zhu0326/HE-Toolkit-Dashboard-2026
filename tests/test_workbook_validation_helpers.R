@@ -103,9 +103,39 @@ workbook_result <- validate_dc11_workbook(workbook)
 stopifnot(identical(workbook_result$status, "success"))
 stopifnot(any(workbook_result$issues$code == "not_uploaded"))
 
+workbook_with_metadata <- c(
+  workbook,
+  list(
+    README = data.frame(note = "Template guidance", stringsAsFactors = FALSE),
+    field_dictionary = data.frame(field = "biol_site_id", stringsAsFactors = FALSE),
+    validation_rules = data.frame(rule = "DC-11", stringsAsFactors = FALSE)
+  )
+)
+metadata_result <- validate_dc11_workbook(workbook_with_metadata)
+stopifnot(identical(metadata_result$status, "success"))
+stopifnot(!any(metadata_result$issues$code == "unknown_sheet"))
+
 workbook$unexpected_sheet <- data.frame(x = 1)
 unknown_result <- validate_dc11_workbook(workbook)
 stopifnot(identical(unknown_result$status, "error"))
 stopifnot(any(unknown_result$issues$code == "unknown_sheet"))
+
+if (requireNamespace("openxlsx", quietly = TRUE) &&
+    requireNamespace("readxl", quietly = TRUE)) {
+  workbook_path <- tempfile("dc11-workbook-", fileext = ".xlsx")
+  openxlsx::write.xlsx(workbook, workbook_path, overwrite = TRUE)
+  workbook_file_result <- validate_dc11_workbook_file(workbook_path)
+  stopifnot(identical(workbook_file_result$status, "error"))
+  stopifnot(all(c("biology_samples", "flow_daily", "wq_long_standard") %in% names(workbook_file_result$sheets)))
+  stopifnot(any(workbook_file_result$issues$code == "unknown_sheet"))
+
+  workbook_valid <- workbook_with_metadata
+  workbook_valid_path <- tempfile("dc11-workbook-valid-", fileext = ".xlsx")
+  openxlsx::write.xlsx(workbook_valid, workbook_valid_path, overwrite = TRUE)
+  workbook_valid_result <- validate_dc11_workbook_file(workbook_valid_path)
+  stopifnot(identical(workbook_valid_result$status, "success"))
+  stopifnot(!any(workbook_valid_result$issues$code == "unknown_sheet"))
+  stopifnot(any(workbook_valid_result$issues$code == "not_uploaded"))
+}
 
 cat("test_workbook_validation_helpers.R: all checks passed\n")

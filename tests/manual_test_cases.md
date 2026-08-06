@@ -58,10 +58,10 @@ Expected result:
 - A warning is shown explaining the duplicate biology site IDs.
 - The app does not crash.
 
-## TC-005 WQ CSV Validation Sandbox
+## TC-005 WQ CSV File Validation
 
 Steps:
-1. Go to CSV Validation Sandbox.
+1. Go to File Validation Sandbox.
 2. Upload `tests/fixtures/wq.csv` in the WQ section.
 
 Expected result:
@@ -69,10 +69,10 @@ Expected result:
 - Preview table shows WQ rows.
 - No modelling or O:E calculation is triggered.
 
-## TC-006 RHS CSV Validation Sandbox
+## TC-006 RHS CSV File Validation
 
 Steps:
-1. Go to CSV Validation Sandbox.
+1. Go to File Validation Sandbox.
 2. Upload `tests/fixtures/rhs.csv` in the RHS section.
 
 Expected result:
@@ -80,11 +80,25 @@ Expected result:
 - Preview table shows RHS rows.
 - No modelling or O:E calculation is triggered.
 
+## TC-040 DC-11 Workbook Checkpoint
+
+Steps:
+1. Go to File Validation Sandbox.
+2. Upload a standard DC-11 multi-sheet XLSX workbook in the DC-11 workbook checkpoint section.
+3. Review the workbook validation status and issue report.
+4. Select at least one uploaded workbook sheet in the preview selector.
+
+Expected result:
+- Workbook sheets are validated against the frozen DC-11 schemas.
+- Sheet-level issues are shown clearly.
+- The selected sheet preview renders.
+- No import, join, modelling, O:E calculation, or HEV generation is triggered.
+
 ## TC-007 WQ Data Plot Controls
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload WQ CSV in CSV Validation Sandbox, or import WQ using site IDs if network/API access is available.
+2. Upload WQ CSV in File Validation Sandbox, or import WQ using site IDs if network/API access is available.
 3. Go to Data Import > WQ Data.
 4. Try WQ plot types:
    - Time series
@@ -112,7 +126,7 @@ Expected result:
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload RHS CSV in CSV Validation Sandbox, or import RHS using site IDs if available.
+2. Upload RHS CSV in File Validation Sandbox, or import RHS using site IDs if available.
 3. Go to Data Import > RHS Data.
 4. Try RHS plot types:
    - Numeric variable by biological site ID
