@@ -102,13 +102,13 @@ run_analysis_model <- function(analysis_dataset, model_spec,
       "No valid sites after removing incomplete rows. Check the data or the filter."), base_fields)))
   }
 
-  # two or more sites: we can't run the multi-site model yet, so stop here
+  # two or more sites: route to the mixed-effects model (frozen contract).
+  # run_mixed_model does its own data-sufficiency gating (needs >= 5 sites) and
+  # never falls back to a pooled lm().
   if (site_count >= 2) {
-    return(do.call(.model_result, c(list("not_ready",
-      paste0("Multiple sites detected (", site_count, "). The multi-site / mixed-effects ",
-             "path is not available yet (OPEN-06 / modelling contract not frozen). ",
-             "The single-site path was not used because this is multi-site data.")),
-      c(base_fields, list(model_path = "multi_site_candidate")))))
+    return(run_mixed_model(analysis_dataset, model_spec,
+                           site_col = site_col, year_col = year_col,
+                           provenance = provenance))
   }
 
   # one site: run the normal single-site model.

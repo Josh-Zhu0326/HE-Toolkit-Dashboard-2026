@@ -27,13 +27,14 @@ for (f in c("status","messages","formula","model_path","random_effect_structure"
   stopifnot(f %in% names(res))
 }
 
-# --- 2. Two or more sites -> not_ready, never fits a pooled model ------------
+# --- 2. Multi-site data is routed to the mixed model; too few sites -> blocked
+# (the mixed path needs >= 5 sites, MC-O01). It must never fit a pooled lm.
 multi <- joined
 multi$biol_site_id <- c("291","291","292","292","292")
-res_multi <- run_analysis_model(multi, spec)
-stopifnot(identical(res_multi$status, "not_ready"))
-stopifnot(res_multi$model_path == "multi_site_candidate")
-stopifnot(is.null(res_multi$fixed_effects))         # nothing was fitted
+res_multi <- run_analysis_model(multi, list(response = "LIFE_F_OE", flow_predictors = "Q95z_lag0"))
+stopifnot(identical(res_multi$status, "blocked"))     # only 2 sites, below the minimum
+stopifnot(res_multi$model_path == "multi_site_mixed") # routed to mixed, not single-site
+stopifnot(is.null(res_multi$fixed_effects))           # nothing was fitted
 
 # --- 3. Missing columns -> friendly blocked, not a crash --------------------
 stopifnot(identical(run_analysis_model(joined, list(response = "nope",

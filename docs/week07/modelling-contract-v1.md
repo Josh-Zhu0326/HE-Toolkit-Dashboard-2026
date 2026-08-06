@@ -1,21 +1,21 @@
-# Modelling Contract — v1 Review Baseline
+# Modelling Contract — v1 (Frozen)
 
-> Date: 14 July 2026  
-> Status: Review baseline — not frozen  
-> Owner: Lin (Modelling/Evaluation)  
-> Reviewer: Di (Data Pipeline)  
+> Date: 14 July 2026 (baseline); frozen 30 July 2026  
+> Status: **Frozen v1** — all `MC-O01`–`MC-O11` decided (see Section 3)  
+> Owner / decider: Yutong (Modelling/Evaluation), delegated by the team  
+> Reviewer: Di (Data Pipeline, data feasibility); Lin (Modelling)  
 > Decisions: `DEC-08`, `DEC-09`, `DEC-10`, `DEC-21`  
 > Requirements: `RTM-08A`, `RTM-08B`, `RTM-09`, `RTM-10`, `RTM-21`  
-> Open item: `OPEN-06`  
+> Closes: `OPEN-06`  
 > Sources: [Client Decision Log](../client-decision-log-v1.md) and [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
 
 ## 1. Purpose and Current State
 
-This document is the review baseline for Dashboard v1 modelling. It separates confirmed rules from thresholds and failure policies that still require Lin/Di review.
+This document defines the frozen v1 rules for Dashboard modelling. It records both the confirmed rules and the thresholds and failure policies that were still open in the review baseline, all of which are now decided in Section 3.
 
-The current Dashboard implementation and automated tests contain only the basic single-site additive `lm()` helper. Mixed-effects modelling is present in the requirements and delivery plan but is not yet implemented or verified. Until every `MC-O*` item in this document is closed and the readiness gate passes, multi-site modelling must remain `not_ready`.
+The single-site additive `lm()` path is implemented and verified. The multi-site mixed-effects path is now enabled and must be implemented and verified against the frozen rules below; until its automated tests pass in a clean environment, individual multi-site results must report their state honestly (`success`, `warning`, `failed`, or `blocked`) and must never be replaced by a pooled `lm()`.
 
-This baseline does not close `OPEN-06` and must not be cited as evidence that the mixed-model path is complete.
+This freeze closes `OPEN-06`. Any later change to a frozen value requires a change request and a contract revision.
 
 ## 2. Confirmed Rules
 
@@ -52,8 +52,8 @@ No alternative grouping factor, nested structure, uncorrelated-slope syntax, or 
 
 ### MC-R05 — Mixed-model execution gate
 
-- Mixed-model execution is disabled while this document remains a review baseline.
-- A mixed model that does not satisfy the frozen eligibility, convergence/singularity, or numerical-parity rules must stop with an explicit `not_ready`, `blocked`, or `failed` state as defined by the final contract.
+- Mixed-model execution is **enabled** under this frozen contract, subject to the data-sufficiency, structure, collinearity, and failure rules decided in Section 3.
+- A mixed model that does not satisfy the frozen eligibility, convergence/singularity, or numerical-parity rules must stop with an explicit `not_ready`, `blocked`, or `failed` state as defined by this contract.
 - A multi-site failure must never be silently replaced with a pooled `lm()`.
 - The independently verified single-site additive path may remain available, but it must not be presented as a model of the multi-site data.
 
@@ -94,32 +94,39 @@ provenance
 
 Implementation code must not choose an unresolved threshold, R² definition, tolerance, warning boundary, or failure fallback. Each unresolved choice must first close the corresponding `MC-O*` item and be reviewed in both language versions.
 
-## 3. Open Decisions Required Before Freeze
+## 3. Frozen Decisions (MC-O01 – MC-O11)
 
-| ID | Decision to freeze | Interim rule | Owner | Reviewer | Status |
-|---|---|---|---|---|---|
-| `MC-O01` | Minimum number of unique sites for a mixed model | Two or more sites identify only a candidate path; execution remains disabled | Lin | Di | Open |
-| `MC-O02` | Minimum total complete cases and parameter-to-record rule | Do not fit a mixed model | Lin | Di | Open |
-| `MC-O03` | Minimum observations and complete cases per site | Do not fit a mixed model | Lin | Di | Open |
-| `MC-O04` | Repeated years/observations and within-site variation required for a random slope | Do not offer or fit the random-slope form | Lin | Di | Open |
-| `MC-O05` | Scaling rules for flow and non-flow predictors | Enforce only the confirmed Q10z/Q95z multi-site flow rule; do not infer other scaling | Lin | Di | Open |
-| `MC-O06` | Complete-case, missingness, NA/Inf, and excluded-record policy beyond DEC-09 | Do not fit a mixed model | Lin | Di | Open |
-| `MC-O07` | Collinearity/high-correlation thresholds and blocking versus warning behaviour | Do not fit a mixed model | Lin | Di | Open |
-| `MC-O08` | Convergence failure, singular fit, and zero/near-zero random-effect variance state mapping | Treat the mixed path as unavailable; never fall back to pooled `lm()` | Lin | Di | Open |
-| `MC-O09` | Marginal/conditional R² definition, implementation, and package version | Do not report a contracted mixed-model R² | Lin | Di | Open |
-| `MC-O10` | Independent reference implementation, fixtures, metrics, and numerical tolerances | Do not mark numerical parity as passed | Lin | Di | Open |
-| `MC-O11` | Warning/error/export boundaries and user-facing messages | Do not expose the mixed path as ready or export a result | Lin | Di | Open |
+All items below are decided and frozen. Values were adopted as the recommended
+defaults, delegated to Yutong by the team; Di confirms data feasibility for the
+sample-size items. Any change requires a change request.
 
-## 4. Freeze and Readiness Gate
+| ID | Decision (frozen) | Status |
+|---|---|---|
+| `MC-O01` | A mixed model requires at least **5 unique valid sites**. With 2–4 valid sites the mixed path is `blocked` (too few sites); the single-site path is offered per site where eligible. | Frozen |
+| `MC-O02` | Total complete cases must be at least **10 × the number of fixed-effect parameters**, with an absolute floor of **20**. Otherwise `blocked`. | Frozen |
+| `MC-O03` | Each site needs at least **3 complete observations** to enter the mixed fit. Sites below this are excluded from the fit and their count is reported. | Frozen |
+| `MC-O04` | A random slope `(sampling_year_centered \| biol_site_id)` is allowed only when a majority of eligible sites have **≥ 3 distinct valid years** and non-zero within-site variation in the term; otherwise only a random intercept `(1 \| biol_site_id)` is used. | Frozen |
+| `MC-O05` | Multi-site flow predictors use the Z-score `Q10z/Q95z` fields (DEC-21). Other numeric predictors (e.g. WQ) are standardised to mean 0 / SD 1 over the analysis dataset; `sampling_year` is centred (DEC-09); categorical RHS predictors are not scaled. Scaling is recorded in provenance. | Frozen |
+| `MC-O06` | Complete-case analysis (listwise deletion). Any `NA`/`Inf` in a model variable drops that row; the excluded count is reported. If more than **20%** of rows are dropped, a `warning` is raised. | Frozen |
+| `MC-O07` | Collinearity: fixed-effect **VIF > 10 blocks** the fit; VIF **5–10 warns**; pairwise absolute correlation **> 0.9 warns**. | Frozen |
+| `MC-O08` | Non-convergence → `failed` with a clear message. Singular fit or near-zero random-effect variance → `warning` recommending a random-intercept-only or single-site analysis. A pooled `lm()` fallback is never used. | Frozen |
+| `MC-O09` | Report Nakagawa & Schielzeth **marginal and conditional R²** via `performance::r2_nakagawa` (fallback `MuMIn::r.squaredGLMM`); the package and version are recorded in provenance. | Frozen |
+| `MC-O10` | Numerical parity: fixed-effect estimates are checked against an independent reference (a second implementation or a hand-computed fixture) within a tolerance of **1e-4**; fixtures with known structure are provided. | Frozen |
+| `MC-O11` | Export boundaries: `blocked` → no export with a clear message; `warning` → export allowed with the warning recorded in provenance; `failed` → no export. Exports contain all MC-R06 / MC-R07 fields. | Frozen |
 
-This document may move to `Frozen v1`, and `OPEN-06` may close, only when all of the following are true:
+## 4. Freeze and Readiness Status
 
-1. Every `MC-O01`–`MC-O11` item has a reviewed decision with no placeholder threshold.
-2. English and Chinese contracts have identical rule IDs, formulas, states, and acceptance meaning.
-3. Lin approves the modelling rules and Di approves their data/validation feasibility.
-4. Tests cover path routing, data sufficiency, both permitted random-effects structures, missingness, scaling, collinearity, convergence failure, singular fit, near-zero variance, stale data, output/provenance, and prohibited pooled-`lm()` fallback.
-5. Single-site results match an independent `lm()` reference and mixed results match the frozen mixed-model reference within approved tolerances.
-6. `RTM-08B` and `RTM-10` link the reproducible evidence; status changes occur only after implementation and tests pass.
+**Decisions:** frozen. Every `MC-O01`–`MC-O11` item has a decided value with no
+placeholder threshold (Section 3), and `OPEN-06` is closed.
+
+**Remaining before the mixed path is marked `Verified`** (implementation gate, not
+a decision gate):
+
+1. Implement the mixed path in code per Section 3 (`R/mixed_model_helpers.R`).
+2. Tests cover path routing, data sufficiency, both permitted random-effects structures, missingness, scaling, collinearity, convergence failure, singular fit, near-zero variance, stale data, output/provenance, and the prohibited pooled-`lm()` fallback.
+3. Single-site results match an independent `lm()` reference and mixed results match an independent mixed-model reference within the 1e-4 tolerance (MC-O10).
+4. `RTM-08B` and `RTM-10` link the reproducible evidence; the readiness status changes to `Verified` only after implementation and tests pass in a clean environment.
+5. English and Chinese contracts keep identical rule IDs, values, and states.
 
 ## 5. Required Test Files
 
