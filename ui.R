@@ -537,7 +537,27 @@ page_navbar(
             icon = shiny::icon("file-arrow-up", verify_fa = FALSE)
           ),
           uiOutput("processed_dataset_checkpoint_status"),
-          uiOutput("processed_dataset_checkpoint_download")
+          uiOutput("processed_dataset_checkpoint_download"),
+          tags$hr(),
+          h5("Optional enrichment"),
+          checkboxGroupInput(
+            "selected_enrichments",
+            "Add supporting data",
+            choices = c("Water Quality" = "wq", "River Habitat Survey" = "rhs")
+          ),
+          actionButton(
+            "build_joined_enriched",
+            "Build enriched dataset",
+            class = "client-action-button",
+            icon = shiny::icon("layer-group", verify_fa = FALSE)
+          ),
+          checkboxInput(
+            "use_joined_enriched",
+            "Use enriched dataset for analysis",
+            value = FALSE
+          ),
+          uiOutput("joined_enrichment_status"),
+          uiOutput("analysis_source_status")
         )
       ),
       nav_panel(
@@ -548,6 +568,11 @@ page_navbar(
             class = "dashboard-card",
             card_header("Paired biology-flow data"),
             dataTableOutput("join_he_table")
+          ),
+          card(
+            class = "dashboard-card",
+            card_header("Optional enriched data"),
+            dataTableOutput("joined_enriched_table")
           )
         )
       )

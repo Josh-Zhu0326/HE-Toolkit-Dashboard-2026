@@ -283,3 +283,18 @@ Steps:
 Expected result:
 - Pages load without UI errors.
 - Section titles and help text are understandable for a non-technical environmental science reviewer.
+
+## TC-040 Joined Dataset Boundary
+
+Steps:
+1. Build or load a core Joined HE dataset.
+2. Attempt optional WQ/RHS enrichment using one successful source and one unavailable or invalid source.
+3. Derive the analysis dataset from either the core or enriched source.
+4. Apply a record exclusion.
+
+Expected result:
+- The original `joined_core` remains unchanged.
+- A separate `joined_enriched` is created only from successful enrichment sources.
+- Failed optional enrichment is recorded as a warning and does not invalidate `joined_core`.
+- The analysis dataset records whether it was derived from `joined_core` or `joined_enriched`.
+- Filtering changes only the analysis dataset and does not write back to either joined dataset.
