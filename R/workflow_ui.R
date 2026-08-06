@@ -226,7 +226,10 @@ workflow_style_tags <- function() {
   "))
 }
 
-workflow_context_bar_ui <- function(task = NULL, task_is_complete = FALSE) {
+workflow_context_bar_ui <- function(
+    task = NULL,
+    task_is_complete = FALSE,
+    show_workspace_save = FALSE) {
   shiny::div(
     class = "workflow-contextbar",
     shiny::div(
@@ -261,20 +264,22 @@ workflow_context_bar_ui <- function(task = NULL, task_is_complete = FALSE) {
           shiny::tags$summary("Utilities"),
           shiny::div(
             class = "workflow-utility-menu",
-            shiny::div(
-              class = "workspace-save-controls",
-              shiny::textInput(
-                "workspace_name",
-                "Workspace name",
-                placeholder = "e.g. River Avon review"
-              ),
-              shiny::actionButton(
-                "save_workspace",
-                "Save workspace copy",
-                class = "workspace-save-button",
-                icon = shiny::icon("floppy-disk", verify_fa = FALSE)
+            if (isTRUE(show_workspace_save)) {
+              shiny::div(
+                class = "workspace-save-controls",
+                shiny::textInput(
+                  "workspace_name",
+                  "Workspace name",
+                  placeholder = "e.g. River Avon review"
+                ),
+                shiny::actionButton(
+                  "save_workspace",
+                  "Save workspace copy",
+                  class = "workspace-save-button",
+                  icon = shiny::icon("floppy-disk", verify_fa = FALSE)
+                )
               )
-            ),
+            },
             shiny::actionLink("open_task_selector", "Task selector"),
             shiny::actionLink("open_csv_validation", "CSV validation"),
             shiny::tags$a(
@@ -328,13 +333,15 @@ workflow_header_ui <- function(
     task_id = NULL,
     current_stage = 1L,
     registry = new_he_artifact_registry(),
-    current_panel = NULL) {
+    current_panel = NULL,
+    show_workspace_save = FALSE) {
   task <- if (is.null(task_id)) NULL else get_he_workflow_task(task_id)
   shiny::div(
     class = "workflow-app-header",
     workflow_context_bar_ui(
       task,
-      if (is.null(task)) FALSE else workflow_task_is_complete(task, registry)
+      if (is.null(task)) FALSE else workflow_task_is_complete(task, registry),
+      show_workspace_save = show_workspace_save
     ),
     workflow_stage_nav_ui(task, if (is.null(task)) NULL else current_stage),
     workflow_stage_subnav_ui(task, current_stage, current_panel)

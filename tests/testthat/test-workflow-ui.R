@@ -59,9 +59,20 @@ testthat::test_that("workflow header owns branding, utilities, and Stage 2 work 
     'id="workflow_stage_view_flow"',
     fixed = TRUE
   )
-  testthat::expect_match(header_html, 'id="workspace_name"', fixed = TRUE)
-  testthat::expect_match(header_html, 'id="save_workspace"', fixed = TRUE)
-  testthat::expect_match(header_html, "Save workspace copy", fixed = TRUE)
+  testthat::expect_false(grepl('id="workspace_name"', header_html, fixed = TRUE))
+  testthat::expect_false(grepl('id="save_workspace"', header_html, fixed = TRUE))
+
+  enabled_header_html <- render_workflow_html(
+    workflow_header_ui(
+      "build_he_dataset",
+      2L,
+      current_panel = "Process Flow",
+      show_workspace_save = TRUE
+    )
+  )
+  testthat::expect_match(enabled_header_html, 'id="workspace_name"', fixed = TRUE)
+  testthat::expect_match(enabled_header_html, 'id="save_workspace"', fixed = TRUE)
+  testthat::expect_match(enabled_header_html, "Save workspace copy", fixed = TRUE)
 })
 
 testthat::test_that("Stage 3 exposes the processed dataset checkpoint round trip", {

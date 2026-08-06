@@ -2,6 +2,32 @@
 
 Implementation date: 2026-08-04
 
+## Interface-only follow-up (2026-08-06)
+
+The product is distributed for each user to run independently on their own
+computer. In that deployment model, the server-file implementation described
+below writes to that user's computer and is the application's default storage.
+The save controls are shown because this backend is configured and available.
+
+The default composition is an anonymous authentication provider plus the local
+server-file backend. Authentication and alternative storage implementations can
+still be supplied per Shiny session with:
+
+```r
+options(
+  hetoolkit.workspace_auth_factory = function(session) auth_provider,
+  hetoolkit.workspace_storage_factory = function(session) storage_backend
+)
+```
+
+`new_server_file_workspace_storage()` is the explicit name for the implementation
+documented below. `new_local_workspace_storage()` remains as a compatibility
+alias. The browser-storage descriptor remains available for a future IndexedDB
+bridge but is not the default. Existing files are not migrated or deleted by
+this interface change.
+
+The remaining sections document the original server-file implementation.
+
 ## Delivered Behaviour
 
 The dashboard now has a deliberately small UI for creating a named local copy of

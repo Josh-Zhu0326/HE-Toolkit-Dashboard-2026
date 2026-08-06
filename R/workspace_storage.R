@@ -1,28 +1,94 @@
-# Storage backends implement the generics in this file. The local backend uses
-# immutable, checksum-addressed RDS objects so named copies can share large data.
+# Storage backends implement the generics in this file. The server-file backend
+# uses immutable, checksum-addressed RDS objects so named copies can share data.
 
-workspace_storage_save <- function(storage, snapshot) {
+workspace_storage_save <- function(storage, snapshot, context = NULL) {
   UseMethod("workspace_storage_save")
 }
 
-workspace_storage_load <- function(storage, workspace_name, dataset_names = NULL) {
+workspace_storage_load <- function(
+    storage, workspace_name, dataset_names = NULL, context = NULL) {
   UseMethod("workspace_storage_load")
 }
 
-workspace_storage_list <- function(storage) {
+workspace_storage_list <- function(storage, context = NULL) {
   UseMethod("workspace_storage_list")
 }
 
-workspace_storage_get_manifest <- function(storage, workspace_name) {
+workspace_storage_get_manifest <- function(storage, workspace_name, context = NULL) {
   UseMethod("workspace_storage_get_manifest")
 }
 
-workspace_storage_delete <- function(storage, workspace_name) {
+workspace_storage_delete <- function(storage, workspace_name, context = NULL) {
   UseMethod("workspace_storage_delete")
 }
 
 workspace_storage_prune_objects <- function(storage) {
   UseMethod("workspace_storage_prune_objects")
+}
+
+workspace_storage_capabilities <- function(storage) {
+  UseMethod("workspace_storage_capabilities")
+}
+
+new_workspace_storage_capabilities <- function(
+    location,
+    configured,
+    requires_auth,
+    operations = c("save", "load", "list", "get_manifest", "delete"),
+    label = location) {
+  allowed_locations <- c("browser", "server-file", "cloud")
+  allowed_operations <- c(
+    "save", "load", "list", "get_manifest", "delete", "prune_objects"
+  )
+  if (!is.character(location) || length(location) != 1L ||
+      !location %in% allowed_locations) {
+    stop("Workspace storage location is invalid.", call. = FALSE)
+  }
+  for (field in c("configured", "requires_auth")) {
+    value <- get(field)
+    if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+      stop(sprintf("Workspace storage %s must be one logical value.", field), call. = FALSE)
+    }
+  }
+  if (!is.character(operations) || anyNA(operations) ||
+      any(!operations %in% allowed_operations)) {
+    stop("Workspace storage operations are invalid.", call. = FALSE)
+  }
+  if (!is.character(label) || length(label) != 1L || is.na(label) || !nzchar(label)) {
+    stop("Workspace storage label must be one non-empty text value.", call. = FALSE)
+  }
+
+  structure(
+    list(
+      location = location,
+      configured = configured,
+      requires_auth = requires_auth,
+      operations = unique(operations),
+      label = label
+    ),
+    class = "workspace_storage_capabilities"
+  )
+}
+
+normalize_workspace_access_context <- function(context) {
+  if (is.null(context)) {
+    context <- new_workspace_access_context()
+  }
+  validate_workspace_access_context(context)
+  context
+}
+
+workspace_storage_operation_available <- function(storage, operation, context = NULL) {
+  capabilities <- workspace_storage_capabilities(storage)
+  if (!is.character(operation) || length(operation) != 1L ||
+      is.na(operation) || !nzchar(operation)) {
+    stop("Workspace storage operation must be one text value.", call. = FALSE)
+  }
+  if (!isTRUE(capabilities$configured) || !operation %in% capabilities$operations) {
+    return(FALSE)
+  }
+  context <- normalize_workspace_access_context(context)
+  !isTRUE(capabilities$requires_auth) || isTRUE(context$identity$authenticated)
 }
 
 workspace_storage_root <- function() {
@@ -39,28 +105,141 @@ workspace_storage_root <- function() {
   file.path(tools::R_user_dir("he-toolkit-dashboard", which = "data"), "workspaces")
 }
 
-new_local_workspace_storage <- function(root_dir = workspace_storage_root()) {
+new_server_file_workspace_storage <- function(root_dir = workspace_storage_root()) {
   if (!is.character(root_dir) || length(root_dir) != 1L ||
       is.na(root_dir) || !nzchar(trimws(root_dir))) {
-    stop("Local workspace storage requires one root directory.", call. = FALSE)
+    stop("Server-file workspace storage requires one root directory.", call. = FALSE)
   }
 
   structure(
     list(root_dir = normalizePath(root_dir, winslash = "/", mustWork = FALSE)),
-    class = c("local_workspace_storage", "workspace_storage")
+    class = c(
+      "server_file_workspace_storage",
+      "local_workspace_storage",
+      "workspace_storage"
+    )
   )
 }
 
-new_cloud_workspace_storage <- function(endpoint, auth_provider = NULL) {
+new_local_workspace_storage <- function(root_dir = workspace_storage_root()) {
+  new_server_file_workspace_storage(root_dir)
+}
+
+new_browser_workspace_storage <- function(database_name = "he-toolkit-workspaces") {
+  if (!is.character(database_name) || length(database_name) != 1L ||
+      is.na(database_name) || !nzchar(trimws(database_name))) {
+    stop("Browser workspace storage requires one database name.", call. = FALSE)
+  }
+  structure(
+    list(database_name = trimws(database_name)),
+    class = c("browser_workspace_storage", "workspace_storage")
+  )
+}
+
+new_cloud_workspace_storage <- function(endpoint, auth_provider) {
   if (!is.character(endpoint) || length(endpoint) != 1L ||
       is.na(endpoint) || !nzchar(trimws(endpoint))) {
     stop("Cloud workspace storage requires one endpoint.", call. = FALSE)
   }
+  validate_workspace_auth_provider(auth_provider)
 
   structure(
-    list(endpoint = endpoint, auth_provider = auth_provider),
+    list(endpoint = trimws(endpoint), auth_provider = auth_provider),
     class = c("cloud_workspace_storage", "workspace_storage")
   )
+}
+
+workspace_storage_for_session <- function(session = NULL) {
+  factory <- getOption("hetoolkit.workspace_storage_factory", NULL)
+  if (is.null(factory)) {
+    return(new_server_file_workspace_storage())
+  }
+  if (!is.function(factory)) {
+    stop("The configured workspace storage factory must be a function.", call. = FALSE)
+  }
+  storage <- factory(session)
+  if (!inherits(storage, "workspace_storage")) {
+    stop("The workspace storage factory returned an invalid backend.", call. = FALSE)
+  }
+  workspace_storage_capabilities(storage)
+  storage
+}
+
+workspace_storage_capabilities.server_file_workspace_storage <- function(storage) {
+  new_workspace_storage_capabilities(
+    location = "server-file",
+    configured = TRUE,
+    requires_auth = FALSE,
+    operations = c(
+      "save", "load", "list", "get_manifest", "delete", "prune_objects"
+    ),
+    label = "this computer"
+  )
+}
+
+workspace_storage_capabilities.local_workspace_storage <- function(storage) {
+  workspace_storage_capabilities.server_file_workspace_storage(storage)
+}
+
+workspace_storage_capabilities.browser_workspace_storage <- function(storage) {
+  new_workspace_storage_capabilities(
+    location = "browser",
+    configured = FALSE,
+    requires_auth = FALSE,
+    label = "this browser"
+  )
+}
+
+workspace_storage_capabilities.cloud_workspace_storage <- function(storage) {
+  new_workspace_storage_capabilities(
+    location = "cloud",
+    configured = FALSE,
+    requires_auth = TRUE,
+    label = "configured cloud service"
+  )
+}
+
+workspace_browser_not_configured <- function() {
+  stop(
+    paste(
+      "Browser workspace storage is not configured.",
+      "Implement the IndexedDB bridge before enabling workspace actions."
+    ),
+    call. = FALSE
+  )
+}
+
+workspace_storage_save.browser_workspace_storage <- function(
+    storage, snapshot, context = NULL) {
+  normalize_workspace_access_context(context)
+  workspace_browser_not_configured()
+}
+
+workspace_storage_load.browser_workspace_storage <- function(
+    storage, workspace_name, dataset_names = NULL, context = NULL) {
+  normalize_workspace_access_context(context)
+  workspace_browser_not_configured()
+}
+
+workspace_storage_list.browser_workspace_storage <- function(storage, context = NULL) {
+  normalize_workspace_access_context(context)
+  workspace_browser_not_configured()
+}
+
+workspace_storage_get_manifest.browser_workspace_storage <- function(
+    storage, workspace_name, context = NULL) {
+  normalize_workspace_access_context(context)
+  workspace_browser_not_configured()
+}
+
+workspace_storage_delete.browser_workspace_storage <- function(
+    storage, workspace_name, context = NULL) {
+  normalize_workspace_access_context(context)
+  workspace_browser_not_configured()
+}
+
+workspace_storage_prune_objects.browser_workspace_storage <- function(storage) {
+  workspace_browser_not_configured()
 }
 
 workspace_cloud_not_configured <- function() {
@@ -73,25 +252,40 @@ workspace_cloud_not_configured <- function() {
   )
 }
 
-workspace_storage_save.cloud_workspace_storage <- function(storage, snapshot) {
+workspace_cloud_require_authenticated <- function(context) {
+  context <- normalize_workspace_access_context(context)
+  if (!isTRUE(context$identity$authenticated)) {
+    stop("Cloud workspace storage requires an authenticated user.", call. = FALSE)
+  }
+  context
+}
+
+workspace_storage_save.cloud_workspace_storage <- function(
+    storage, snapshot, context = NULL) {
+  workspace_cloud_require_authenticated(context)
   workspace_cloud_not_configured()
 }
 
 workspace_storage_load.cloud_workspace_storage <- function(
-    storage, workspace_name, dataset_names = NULL) {
+    storage, workspace_name, dataset_names = NULL, context = NULL) {
+  workspace_cloud_require_authenticated(context)
   workspace_cloud_not_configured()
 }
 
-workspace_storage_list.cloud_workspace_storage <- function(storage) {
+workspace_storage_list.cloud_workspace_storage <- function(storage, context = NULL) {
+  workspace_cloud_require_authenticated(context)
   workspace_cloud_not_configured()
 }
 
 workspace_storage_get_manifest.cloud_workspace_storage <- function(
-    storage, workspace_name) {
+    storage, workspace_name, context = NULL) {
+  workspace_cloud_require_authenticated(context)
   workspace_cloud_not_configured()
 }
 
-workspace_storage_delete.cloud_workspace_storage <- function(storage, workspace_name) {
+workspace_storage_delete.cloud_workspace_storage <- function(
+    storage, workspace_name, context = NULL) {
+  workspace_cloud_require_authenticated(context)
   workspace_cloud_not_configured()
 }
 
@@ -202,7 +396,9 @@ validate_workspace_manifest <- function(manifest) {
   invisible(TRUE)
 }
 
-workspace_storage_save.local_workspace_storage <- function(storage, snapshot) {
+workspace_storage_save.local_workspace_storage <- function(
+    storage, snapshot, context = NULL) {
+  normalize_workspace_access_context(context)
   validate_workspace_snapshot(snapshot)
   paths <- ensure_local_workspace_directories(storage)
   directory_name <- snapshot$workspace$directory_name
@@ -333,7 +529,8 @@ local_workspace_directory <- function(storage, workspace_name) {
 }
 
 workspace_storage_get_manifest.local_workspace_storage <- function(
-    storage, workspace_name) {
+    storage, workspace_name, context = NULL) {
+  normalize_workspace_access_context(context)
   workspace_dir <- local_workspace_directory(storage, workspace_name)
   manifest_path <- file.path(workspace_dir, "manifest.rds")
   if (!file.exists(manifest_path)) {
@@ -349,8 +546,9 @@ workspace_storage_get_manifest.local_workspace_storage <- function(
 }
 
 workspace_storage_load.local_workspace_storage <- function(
-    storage, workspace_name, dataset_names = NULL) {
-  manifest <- workspace_storage_get_manifest(storage, workspace_name)
+    storage, workspace_name, dataset_names = NULL, context = NULL) {
+  context <- normalize_workspace_access_context(context)
+  manifest <- workspace_storage_get_manifest(storage, workspace_name, context)
   workspace_dir <- local_workspace_directory(storage, workspace_name)
   state_path <- file.path(workspace_dir, manifest$state$file)
   if (!file.exists(state_path) ||
@@ -417,7 +615,8 @@ empty_workspace_index <- function() {
   )
 }
 
-workspace_storage_list.local_workspace_storage <- function(storage) {
+workspace_storage_list.local_workspace_storage <- function(storage, context = NULL) {
+  normalize_workspace_access_context(context)
   paths <- local_workspace_paths(storage)
   if (!dir.exists(paths$workspaces)) {
     return(empty_workspace_index())
@@ -490,7 +689,9 @@ workspace_storage_list.local_workspace_storage <- function(storage) {
   result[order(result$saved_at, decreasing = TRUE), , drop = FALSE]
 }
 
-workspace_storage_delete.local_workspace_storage <- function(storage, workspace_name) {
+workspace_storage_delete.local_workspace_storage <- function(
+    storage, workspace_name, context = NULL) {
+  normalize_workspace_access_context(context)
   workspace_dir <- local_workspace_directory(storage, workspace_name)
   if (!dir.exists(workspace_dir)) {
     stop(sprintf("Workspace '%s' was not found.", validate_workspace_name(workspace_name)), call. = FALSE)
