@@ -18,6 +18,32 @@ muffle_interrupted_workflow_promise <- function(expression) {
   )
 }
 
+testthat::test_that("RAW-23 workbook preview observer accepts missing and empty sheet input", {
+  shiny::testServer(workflow_dashboard_server, {
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(session$flushReact()),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = character(0))
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(session$flushReact()),
+      NA
+    )
+
+    artifact_statuses <- vapply(
+      workflow_artifacts(),
+      function(artifact) artifact$status,
+      character(1)
+    )
+    testthat::expect_false(any(artifact_statuses %in% c("running", "busy")))
+  })
+})
+
 testthat::test_that("Task selection and stage navigation use the shared workflow session", {
   shiny::testServer(workflow_dashboard_server, {
     testthat::expect_null(workflow_session$task_id)

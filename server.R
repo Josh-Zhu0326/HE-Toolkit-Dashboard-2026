@@ -753,11 +753,22 @@ function(input, output, session){
 
   observeEvent(dc11_workbook_upload(), {
     sheets <- names(dc11_workbook_upload()$sheets)
-    if (length(sheets) == 0) {
+    if (is.null(sheets) || length(sheets) == 0L) {
       sheets <- names(dc11_sheet_schemas())
     }
-    selected <- if (input$dc11_workbook_preview_sheet %in% sheets) {
-      input$dc11_workbook_preview_sheet
+    sheets <- sheets[!is.na(sheets) & nzchar(sheets)]
+    if (length(sheets) == 0L) {
+      return(invisible(NULL))
+    }
+
+    preview_sheet <- input$dc11_workbook_preview_sheet
+    has_valid_preview_sheet <- !is.null(preview_sheet) &&
+      length(preview_sheet) == 1L &&
+      !is.na(preview_sheet) &&
+      nzchar(preview_sheet) &&
+      preview_sheet %in% sheets
+    selected <- if (isTRUE(has_valid_preview_sheet)) {
+      preview_sheet
     } else {
       sheets[[1L]]
     }
