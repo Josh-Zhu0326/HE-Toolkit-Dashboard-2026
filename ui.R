@@ -229,6 +229,7 @@ page_navbar(
                   "Required mapping columns: biol_site_id, flow_site_id, wq_site_id, rhs_survey_id. Optional flow_input defaults to HDE. Use TBC for unconfirmed WQ/RHS mappings."
                 ),
                 uiOutput("site_metadata_upload_status"),
+                uiOutput("flow_source_default_status"),
                 div(class = "download-row",
                   downloadButton(
                     "download_demo_site_metadata",

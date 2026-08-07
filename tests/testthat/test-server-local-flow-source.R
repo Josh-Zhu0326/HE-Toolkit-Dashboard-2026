@@ -154,6 +154,16 @@ testthat::test_that("uploaded and pasted metadata preserve flow_input provenance
     testthat::expect_identical(site_metadata_upload_result()$status, "success")
     testthat::expect_identical(upload_provenance$flow_input_value, "HDE")
     testthat::expect_identical(upload_provenance$flow_input_source, "defaulted")
+    testthat::expect_match(
+      output$flow_source_default_status$html,
+      "HDE has been selected as the default source.",
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      output$flow_source_default_status$html,
+      "upload-status-info",
+      fixed = TRUE
+    )
 
     set_inputs_ignoring_interrupted_promises(session, meta_paste = normalised_text)
     session$flushReact()
@@ -176,6 +186,11 @@ testthat::test_that("uploaded and pasted metadata preserve flow_input provenance
     pasted <- metadata_flow_input_provenance()
     testthat::expect_identical(metadata()$flow_input, c("HDE", "HDE"))
     testthat::expect_identical(pasted$flow_input_source, c("explicit", "defaulted"))
+    testthat::expect_match(
+      output$flow_source_default_status$html,
+      "Flow source was not specified for 1 site.",
+      fixed = TRUE
+    )
   })
 })
 

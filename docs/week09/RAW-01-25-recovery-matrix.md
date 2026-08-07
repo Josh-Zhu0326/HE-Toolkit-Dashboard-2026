@@ -150,19 +150,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Flow processing / donor imputation. |
 | Blocking classification | Blocking for imputation; non-blocking for workflows that do not request imputation. |
 | Expected user-facing message | “Please enter donor-site information before importing donor flow data.” |
-| Implemented message | “If imputing flows please add donor mapping” and “If imputing flows please add additional donor sites as required”. |
+| Implemented message | “If imputing flows please add donor mapping.” and “If importing additional donor flows, please add the donor site list.” |
 | Recovery action | Paste the required donor information or leave the optional imputation path; retry from the same Stage. |
 | Expected retained state | Existing metadata/Flow and any unrelated completed artifacts remain; empty input is not treated as success. |
-| Implementation evidence | `validate(need())` at `server.R:1749-1751` and `server.R:1781-1783`. |
-| Automated test | None. |
+| Implementation evidence | Whitespace-aware `trimws()` guards run before either donor `fread()` call in `server.R`; validation does not change the Flow Statistics artifact. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-04 donor inputs reject all-whitespace text and allow in-session retry”: empty, spaces, tabs, newline, mixed whitespace, parser-not-called, retained Flow Statistics and valid retry. |
 | Manual test | Blank and whitespace-only mapping/list; verify blocker only when imputation is requested, message wording, no raw error, controls usable, and valid retry. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | No automated or current browser evidence; whitespace-only handling and retained state are unproved; wording differs from authority. |
+| Gap | Automated implementation gap closed; browser/Pilot evidence remains pending. |
 | Severity | Minor |
-| Recommended action | Add exact blank/whitespace tests and align the two messages and optional-path behaviour. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Run the Pilot Task 6 browser recovery check and capture the retained-state evidence. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-05
 
@@ -294,19 +294,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Stage 1 mapping; external Flow source selection. |
 | Blocking classification | Non-blocking under the later HDE-default contract. |
 | Expected user-facing message | RAW authority: “The metadata file is missing the required column flow_input.” Later guidance: “HDE was selected as the default Flow source.” |
-| Implemented message | No error; HDE is assigned with provenance. Upload success text does not explicitly announce every defaulted row. |
+| Implemented message | Informational, non-blocking UI notice: “Flow source was not specified for [n] site(s). HDE has been selected as the default source.” HDE provenance remains row-level and explicit. |
 | Recovery action | Review the provenance/default; change individual sites to NRFA if required, then re-import/recalculate Flow-derived outputs. |
 | Expected retained state | Mapping and unrelated artifacts remain; changing a source invalidates Flow-derived artifacts without session reset. |
-| Implementation evidence | `normalise_site_metadata_flow_input()` at `R/site_mapping_helpers.R:71-114`; use in `server.R:696-724,749-765`; Flow invalidation at `server.R:250-275`. |
-| Automated test | `tests/testthat/test-flow-metadata-defaults.R:17-78`; `tests/testthat/test-flow-mapping-contract.R:17-29`; provenance/server tests `tests/testthat/test-server-local-flow-source.R:93-160`. |
+| Implementation evidence | `normalise_site_metadata_flow_input()` in `R/site_mapping_helpers.R`; `flow_source_default_status` in `server.R`; mapping status placement in `ui.R`. |
+| Automated test | `tests/testthat/test-flow-metadata-defaults.R`; `tests/testthat/test-flow-mapping-contract.R`; `tests/testthat/test-server-local-flow-source.R`, including info styling/message for uploaded and pasted missing/blank values. |
 | Manual test | `TC-002`, `TC-015`; historical FT-01G/H were not run on the updated implementation. RC must confirm visible default/provenance and source-change recovery. |
 | Current execution result | Pass — default/provenance automation passed. |
-| Release evidence | Section 5 current test record; no current browser/RC evidence. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | Authority and later scope differ; UI acknowledgement and RC provenance evidence are missing. |
+| Gap | UI acknowledgement is implemented; final browser/RC provenance evidence remains pending. |
 | Severity | Minor |
-| Recommended action | Formally annotate RAW-10 as superseded by the HDE-default decision and add a browser assertion for visible provenance. |
-| Coverage states | Documented: Yes; Implemented: Yes (prevention/scope change); Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Confirm the informational notice and HDE provenance in the browser/Pilot run. |
+| Coverage states | Documented: Yes; Implemented: Yes (later HDE-default decision); Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-11
 
@@ -342,19 +342,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Biology processing / O:E; downstream join, HEV, model. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please import biology data before running this calculation.” |
-| Implemented message | “Please import biology data.” |
+| Implemented message | “Biology data are required before calculating O:E ratios. Import or restore Biology data, then calculate O:E ratios again.” |
 | Recovery action | Return to Data Input, import Biology, complete required processing, and retry. |
 | Expected retained state | Metadata, Environment, Flow and unrelated outputs remain; no stale O:E/join/HEV/model is current. |
-| Implementation evidence | Alert `server.R:1667-1684`; workflow artifacts `server.R:1652-1665`; dependency invalidation `R/workflow_state.R:179-204`. |
-| Automated test | No exact missing-Biology click/recovery assertion; workflow-state tests are indirect. |
+| Implementation evidence | The priority O:E action preflight in `server.R` checks the current Biology artifact before setting an accepted request or running state; the O:E calculation listens only to accepted requests. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing Biology, blocked/not-running state, retained Environment/Flow, import and successful retry. |
 | Manual test | RC: trigger without Biology, verify alert/UI/console/spinner, navigate back, import, retry, and check no unnecessary re-upload. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `TC-014`/`ST-04A` are happy paths, not current recovery. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | No exact test or current recovery evidence; old artifacts and loading behaviour unproved. |
+| Gap | Automated recovery/state gap closed; browser spinner and navigation evidence remains pending. |
 | Severity | Major |
-| Recommended action | Add direct prerequisite/server test and RC browser recovery capture. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Capture the browser retry, spinner termination and retained-state evidence in Pilot/RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-13
 
@@ -366,19 +366,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Biology processing / RICT; O:E and downstream analysis. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please import environmental data before running RICT predictions.” |
-| Implemented message | “Please import environmental base data.” |
+| Implemented message | “Current Environmental data are required before running RICT predictions. Import or regenerate Environmental data, then run RICT predictions again.” |
 | Recovery action | Import Environmental data, then rerun RICT. |
 | Expected retained state | Metadata, Biology, Flow and unrelated artifacts remain; no stale prediction/O:E is current. |
-| Implementation evidence | Alert `server.R:1567-1583`; unguarded import/calculation path `server.R:1375-1379,1544-1555`. |
-| Automated test | None for this trigger. |
+| Implementation evidence | The priority RICT action preflight in `server.R` validates the current Environmental artifact before accepting a request or entering running; prediction processing listens only to accepted requests. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing and stale Environmental states, retained Biology, re-import and successful retry. |
 | Manual test | RC: click RICT without Environment, verify blocking message and no console-only failure, import data, retry, inspect retained state. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-04A`/`FT-06A` are success paths only. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | No exact automation/recovery; Environment import has no uniform external-error wrapper. |
+| Gap | Prerequisite recovery is automated; external-service failure handling remains outside Phase 2A and browser evidence is pending. |
 | Severity | Major |
-| Recommended action | Test prerequisite and external-import failure separately; capture both recovery paths on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Capture the prerequisite retry in Pilot/RC; retain the separate external-import failure gap for later work. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-14
 
@@ -390,19 +390,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Biology processing / O:E. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please run RICT predictions before calculating O:E ratios.” |
-| Implemented message | “Please run RICT predictions.” |
+| Implemented message | “Current RICT predictions are required before calculating O:E ratios. Run RICT predictions before calculating O:E ratios.” |
 | Recovery action | Run RICT successfully, then retry O:E. |
 | Expected retained state | Biology/Environment/Flow inputs remain; failed O:E does not clear RICT prerequisites or mark downstream outputs current. |
-| Implementation evidence | Alert `server.R:1700-1717`; O:E reactive `server.R:1632-1650`. |
-| Automated test | None for this trigger/retry. |
+| Implementation evidence | The O:E action preflight in `server.R` validates the current RICT artifact before accepting the request; the O:E event reactive cannot access predictions for a blocked click. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing RICT predictions, retained Biology/Environment, RICT run and successful O:E retry. |
 | Manual test | RC: skip RICT, request O:E, verify alert/spinner/navigation, run RICT, retry O:E, verify prior inputs retained. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-04A` is a completed sequence, not missing-prerequisite recovery. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | No exact automation/browser evidence and no proof the reactive error is also represented in UI. |
+| Gap | Automated block/retry and controlled message are complete; browser evidence remains pending. |
 | Severity | Major |
-| Recommended action | Add prerequisite test and RC recovery screenshot/log with artifact-state assertions. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Capture the blocked notification, spinner termination and retry in Pilot/RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-15
 
@@ -414,19 +414,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Build Joined HE dataset”; Stage 3 Processing / join; downstream HEV/model/download. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please calculate flow statistics before joining biology and flow data.” |
-| Implemented message | “Flow statistics are missing.” |
+| Implemented message | “Flow Statistics are missing or out of date. Calculate or regenerate Flow Statistics, then build the Joined HE Dataset again.” |
 | Recovery action | Return to Flow processing, calculate statistics from the current source, return to join, and rerun. |
 | Expected retained state | Valid Biology/O:E and mapping remain; completed old join/HEV/model/download must be stale/blocked, not usable as success. |
-| Implementation evidence | Alert `server.R:2160-2177`; revision gates `server.R:1952-1967,2050-2079`; state invalidation `server.R:250-275`, `R/workflow_state.R:179-204`. |
-| Automated test | No exact missing-prerequisite UI test. Indirect stale tests: `tests/testthat/test-server-local-flow-source.R:213-260`, `tests/testthat/test-workflow-server.R:127-205`. |
+| Implementation evidence | The priority join preflight in `server.R` checks current Flow Statistics before creating `join_request` or entering running; join result reactives listen only to accepted requests. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale Flow Statistics, no join calls, retained O:E, regeneration and successful retry. |
 | Manual test | RC: attempt join before stats; then create stats and join; change Flow source and verify old join, HEV, model and every download cannot be used until regeneration. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-05A` failed for another backend error; it is not current RAW-15 evidence. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | Missing one-to-one test, current browser recovery, and download-currentness proof. |
+| Gap | Direct automation and stale-input non-consumption are complete; browser/download evidence remains pending. |
 | Severity | Major |
-| Recommended action | Add direct prerequisite and stale-download tests; execute full recovery chain on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No (indirect state tests only); Executed current main: No; Final RC evidence: No. |
+| Recommended action | Execute the browser recovery chain and confirm current-only downloads on Pilot/RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-16
 
@@ -438,19 +438,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Build Joined HE dataset”; Stage 3 join; downstream HEV/model/download. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please calculate O:E ratios before joining biology and flow data.” |
-| Implemented message | “Processed biology data are missing.” |
+| Implemented message | “Current O:E ratios are required before building the Joined HE Dataset. Calculate or regenerate O:E ratios, then build the Joined HE Dataset again.” |
 | Recovery action | Complete RICT and O:E, return to Analysis, and rerun join. |
 | Expected retained state | Mapping, Flow and Flow statistics remain; incomplete/stale joined/HEV/model/download artifacts remain blocked. |
-| Implementation evidence | Alert `server.R:2141-2158`; join uses `biol_all()` at `server.R:2050-2063`; stale dependencies at `R/workflow_state.R:5-25,179-204`. |
-| Automated test | No exact trigger/retry assertion; workflow state/config tests are indirect. |
+| Implementation evidence | The priority join preflight in `server.R` checks the current O:E artifact before creating `join_request`; the join result reactives reject missing/stale O:E. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale O:E, no join calls, retained Flow Statistics, O:E regeneration and successful retry. |
 | Manual test | RC: attempt join before O:E; complete O:E; retry; verify Flow stats retained and no stale output/download use. |
-| Current execution result | Not Executed |
-| Release evidence | None current; July join records are historical and encountered other failures. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | Runtime wording is less specific; no exact test or browser recovery/state evidence. |
+| Gap | Runtime wording and automated recovery are complete; browser recovery/state evidence remains pending. |
 | Severity | Major |
-| Recommended action | Align the prerequisite message, add a direct test, and capture RC retry plus stale gates. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Capture the missing/stale O:E browser retry and retained Flow state in Pilot/RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-17
 
@@ -462,19 +462,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Generate HEV plots”; Stage 4 HEV. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please join biology and flow data before creating an HEV plot.” |
-| Implemented message | “Paired biology-flow data are missing.” |
+| Implemented message | “The Joined HE Dataset is missing or out of date. Rebuild or regenerate the Joined HE Dataset, then create the HEV plot again.” |
 | Recovery action | Return to the earliest blocked Stage, regenerate join, return to HEV, and render again. |
 | Expected retained state | Inputs and current upstream artifacts remain; an old HEV plot/download cannot be used as current; no session reset or re-upload should be needed. |
-| Implementation evidence | Alert `server.R:2426-2443`; revision gate `server.R:2356-2397`; resume logic `R/workflow_state.R:234-287`. |
-| Automated test | No exact HEV click/recovery test. Cross-cutting resume/stale tests: `tests/testthat/test-workflow-state.R:116-145`, `tests/testthat/test-workflow-server.R:127-205`. |
+| Implementation evidence | The priority HEV action preflight in `server.R` checks the current Joined HE Dataset before accepting a plot request or entering running; HEV plot/download evaluation is gated by the accepted request and current join. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale join, blocked/not-running HEV, old plot unavailable, retained upstream, rebuild and successful retry/current result. |
 | Manual test | `TC-016` normal path; historical `ST-06` saw the message but was blocked. RC must test missing and stale joins, back navigation, regeneration, plot and download. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-06` at an older build only; no current/final RC recovery packet. |
+| Current execution result | Pass — targeted automation. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | No current browser or exact automation; HEV download does not itself assert artifact currentness. |
+| Gap | Exact automation and current-only HEV evaluation are complete; browser/download evidence remains pending. |
 | Severity | Major |
-| Recommended action | Add HEV prerequisite/stale download test and execute the whole retry chain on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Confirm the blocked plot/download, rebuild and retry path in Pilot/RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-18
 

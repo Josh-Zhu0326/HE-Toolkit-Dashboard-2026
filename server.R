@@ -209,6 +209,22 @@ function(input, output, session){
     artifact_is_current(workflow_artifacts()[[artifact_id]])
   }
 
+  workflow_block_artifact <- function(
+      artifact_id,
+      blocking_reason,
+      next_action,
+      notification = paste(blocking_reason, next_action)) {
+    workflow_set_artifact(
+      artifact_id,
+      "blocked",
+      blocking_reason = blocking_reason,
+      next_action = next_action,
+      invalidate_downstream = TRUE
+    )
+    showNotification(notification, type = "error", duration = 10)
+    invisible(FALSE)
+  }
+
   workflow_checkpoint_card <- function(artifact_id, complete_message, blocked_message) {
     artifact <- workflow_artifacts()[[artifact_id]]
     if (artifact_is_current(artifact)) {
@@ -226,6 +242,9 @@ function(input, output, session){
   flow_stats_revision <- reactiveVal(NULL)
   join_revision <- reactiveVal(NULL)
   hev_revision <- reactiveVal(NULL)
+  rict_request <- reactiveVal(NULL)
+  oe_request <- reactiveVal(NULL)
+  hev_request <- reactiveVal(NULL)
   join_request <- reactiveVal(NULL)
   join_settings_used <- reactiveVal(NULL)
 
@@ -245,6 +264,7 @@ function(input, output, session){
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
+    hev_request(NULL)
     join_request(NULL)
     join_settings_used(NULL)
     workflow_reset_artifact(
@@ -282,9 +302,37 @@ function(input, output, session){
     workflow_begin_artifact("environment_input", "Complete the environmental-data import.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$run_rict, {
+    rict_request(NULL)
+    if (!workflow_artifact_is_current("environment_input")) {
+      workflow_block_artifact(
+        "processed_environment",
+        "Current Environmental data are required before running RICT predictions.",
+        "Import or regenerate Environmental data, then run RICT predictions again."
+      )
+      return()
+    }
+    rict_request(input$run_rict)
     workflow_begin_artifact("processed_environment", "Complete RICT prediction processing.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$calc_OE, {
+    oe_request(NULL)
+    if (!workflow_artifact_is_current("biology_input")) {
+      workflow_block_artifact(
+        "oe_result",
+        "Biology data are required before calculating O:E ratios.",
+        "Import or restore Biology data, then calculate O:E ratios again."
+      )
+      return()
+    }
+    if (!workflow_artifact_is_current("processed_environment")) {
+      workflow_block_artifact(
+        "oe_result",
+        "Current RICT predictions are required before calculating O:E ratios.",
+        "Run RICT predictions before calculating O:E ratios."
+      )
+      return()
+    }
+    oe_request(input$calc_OE)
     workflow_begin_artifact("oe_result", "Complete the O:E calculation.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$calc_flow_stats, {
@@ -303,6 +351,26 @@ function(input, output, session){
   # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
     req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
+    join_request(NULL)
+    join_revision(NULL)
+    hev_revision(NULL)
+    hev_request(NULL)
+    if (!workflow_artifact_is_current("oe_result")) {
+      workflow_block_artifact(
+        "joined_core",
+        "Current O:E ratios are required before building the Joined HE Dataset.",
+        "Calculate or regenerate O:E ratios, then build the Joined HE Dataset again."
+      )
+      return()
+    }
+    if (!workflow_artifact_is_current("flow_statistics")) {
+      workflow_block_artifact(
+        "joined_core",
+        "Flow Statistics are missing or out of date.",
+        "Calculate or regenerate Flow Statistics, then build the Joined HE Dataset again."
+      )
+      return()
+    }
     active_join_source("generated")
     join_request(list(
       flow_revision = isolate(flow_source_revision()),
@@ -312,12 +380,10 @@ function(input, output, session){
       ),
       request_id = input$join_he
     ))
-  }, ignoreInit = TRUE, priority = 110)
-  observeEvent(input$join_he, {
-    req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
-  }, ignoreInit = TRUE, priority = 100)
+  }, ignoreInit = TRUE, priority = 110)
   observeEvent(input$renderHEV, {
+    hev_request(NULL)
     dependency <- hev_dependency_check()
     hev_plot_dependency_status(dependency)
     if (identical(dependency$status, "error")) {
@@ -330,6 +396,15 @@ function(input, output, session){
       showNotification(dependency$message, type = "error", duration = 10)
       return()
     }
+    if (!workflow_artifact_is_current("joined_core")) {
+      workflow_block_artifact(
+        "hev_result",
+        "The Joined HE Dataset is missing or out of date.",
+        "Rebuild or regenerate the Joined HE Dataset, then create the HEV plot again."
+      )
+      return()
+    }
+    hev_request(input$renderHEV)
     workflow_begin_artifact("hev_result", "Complete HEV plot generation.")
   }, ignoreInit = TRUE, priority = 100)
 
@@ -357,6 +432,7 @@ function(input, output, session){
         # current until the user explicitly submits another Join request.
         join_revision(NULL)
         hev_revision(NULL)
+        hev_request(NULL)
         workflow_set_artifact(
           "joined_core",
           "stale",
@@ -880,6 +956,29 @@ function(input, output, session){
 
   output$site_metadata_upload_status <- renderUI({
     format_validation_message(site_metadata_upload_result())
+  })
+
+  output$flow_source_default_status <- renderUI({
+    provenance <- tryCatch(
+      metadata_flow_input_provenance(),
+      error = function(error) NULL,
+      shiny.silent.error = function(error) NULL
+    )
+    if (is.null(provenance)) {
+      provenance <- site_metadata_upload_flow_provenance()
+    }
+    req(!is.null(provenance))
+    default_count <- sum(provenance$flow_input_source == "defaulted")
+    req(default_count > 0L)
+    format_validation_message(list(
+      status = "info",
+      messages = paste(
+        "Flow source was not specified for",
+        default_count,
+        if (default_count == 1L) "site." else "sites.",
+        "HDE has been selected as the default source."
+      )
+    ))
   })
 
   output$download_demo_site_metadata <- downloadHandler(
@@ -1685,7 +1784,9 @@ function(input, output, session){
   
   ## RICT predictions ----
   ### calculating ----
-  predict_data <- eventReactive(input$run_rict, {
+  predict_data <- eventReactive(rict_request(), {
+    req(!is.null(rict_request()))
+    req(workflow_artifact_is_current("environment_input"))
     env_data <- env_data()
     
     keeps <- c("biol_site_id", "SEASON", "TL2_WHPT_ASPT_AbW_DistFam", "TL2_WHPT_NTAXA_AbW_DistFam",
@@ -1708,7 +1809,7 @@ function(input, output, session){
     )
   })
   
-  #### error message for absent env data ----
+  #### current Environmental prerequisite state ----
   env_data_exist <- reactiveVal(FALSE)
   
   observe({
@@ -1716,18 +1817,8 @@ function(input, output, session){
     env_data_exist(TRUE)
   })
   
-  observeEvent(input$run_rict, {
-    
-    if(!env_data_exist()) {
-      
-      shinyalert(title = "Please import environmental base data",
-                 type = "error")
-    } 
-    
-  })
-  
   #### warning message for incomplete env data ----
-  observeEvent(input$run_rict, {
+  observeEvent(predict_data(), {
     
     if(sum(is.na(env_data()$ALTITUDE),	
            is.na(env_data()$SLOPE),	
@@ -1773,8 +1864,10 @@ function(input, output, session){
   
   ## O:E ratios ----
   ### calculating ----
-  biol_all <- reactive({
-    req(input$calc_OE)
+  biol_all <- eventReactive(oe_request(), {
+    req(!is.null(oe_request()))
+    req(workflow_artifact_is_current("biology_input"))
+    req(workflow_artifact_is_current("processed_environment"))
     
     predict_data <- predict_data()
     env_data <- env_data()
@@ -1791,7 +1884,7 @@ function(input, output, session){
              WFD_WATERBODY_ID:CALCIUM, WHPT_ASPT_O:PSI_OE)
     
 
-  })
+  }, ignoreInit = TRUE)
 
   observeEvent(biol_all(), {
     result <- biol_all()
@@ -1808,7 +1901,7 @@ function(input, output, session){
     )
   })
   
-  #### error message for absent biol data ----
+  #### current Biology prerequisite state ----
   
   biol_data_exist <- reactiveVal(FALSE)
   
@@ -1817,18 +1910,8 @@ function(input, output, session){
     biol_data_exist(TRUE)
   })
   
-  observeEvent(input$calc_OE, {
-    
-    if(!biol_data_exist()) {
-      
-      shinyalert(title = "Please import biology data",
-                 type = "error")
-    } 
-    
-  })
-  
   #### warning message for incomplete biol data ----
-  observeEvent(input$calc_OE, {
+  observeEvent(biol_all(), {
     
     if(sum(is.na(biol_all()$WHPT_ASPT_O),	
            is.na(biol_all()$LIFE_F_O),	
@@ -1841,23 +1924,13 @@ function(input, output, session){
     
   })
   
-  #### error message for absent predict data ----
+  #### current RICT prerequisite state ----
   
   predict_data_exist <- reactiveVal(FALSE)
   
   observe({
     req(predict_data())
     predict_data_exist(TRUE)
-  })
-  
-  observeEvent(input$calc_OE, {
-    
-    if(!predict_data_exist()) {
-      
-      shinyalert(title = "Please run RICT predictions",
-                 type = "error")
-    } 
-    
   })
   
   ### displaying ----
@@ -1888,16 +1961,15 @@ function(input, output, session){
   ### donor mapping ----
   #### upload ----
   donor_mapping <- reactive({ 
+    donor_text <- paste(input$donor_mapping_paste, collapse = "\n")
     
   ##### error message for absent donor mapping ----
     validate(
-      need(input$donor_mapping_paste != "", "If imputing flows please add donor mapping")
+      need(nzchar(trimws(donor_text)), "If imputing flows please add donor mapping.")
     )
     
-    if (input$donor_mapping_paste != '') {
-      donor_mapping <- fread(paste(input$donor_mapping_paste, collapse = "\n"), colClasses = "character")
-      donor_mapping <-as.data.frame(donor_mapping)
-    }
+    donor_mapping <- fread(donor_text, colClasses = "character")
+    as.data.frame(donor_mapping)
   })
   
   #### display ----
@@ -1920,22 +1992,24 @@ function(input, output, session){
   ### donor site list ----
   #### upload ----
   donor_list <- reactive({ 
+    donor_text <- paste(input$donor_list_paste, collapse = "\n")
     
   ##### error message for absent extra flow site list ----
     validate(
-      need(input$donor_list_paste != "", "If imputing flows please add additional donor sites as required")
+      need(
+        nzchar(trimws(donor_text)),
+        "If importing additional donor flows, please add the donor site list."
+      )
     )
     
-    if (input$donor_list_paste != '') {
-      donor_list <- fread(paste(input$donor_list_paste, collapse = "\n"), colClasses = "character")
-      donor_list <-as.data.frame(donor_list)
-      donor_list <- tryCatch(
-        normalise_site_metadata_flow_input(donor_list),
-        error = function(e) e
-      )
-      validate(need(!inherits(donor_list, "error"), if (inherits(donor_list, "error")) conditionMessage(donor_list) else ""))
-      donor_list
-    }
+    donor_list <- fread(donor_text, colClasses = "character")
+    donor_list <- as.data.frame(donor_list)
+    donor_list <- tryCatch(
+      normalise_site_metadata_flow_input(donor_list),
+      error = function(e) e
+    )
+    validate(need(!inherits(donor_list, "error"), if (inherits(donor_list, "error")) conditionMessage(donor_list) else ""))
+    donor_list
   })
   
   #### display ----
@@ -2230,9 +2304,12 @@ function(input, output, session){
   ## Run join calculations ----
   ### default join type for modelling ----
   
-  join_data_result <- eventReactive(input$join_he, {
-    request <- isolate(join_request())
+  join_data_result <- eventReactive(join_request(), {
+    request <- join_request()
     req(request)
+    req(identical(request$request_id, input$join_he))
+    req(workflow_artifact_is_current("oe_result"))
+    req(workflow_artifact_is_current("flow_statistics"))
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
     mapping$biol_site_id <- as.character(mapping$biol_site_id)
     mapping$flow_site_id <- as.character(mapping$flow_site_id)
@@ -2667,9 +2744,12 @@ function(input, output, session){
   
   ### join type for plotting ----
   
-  join_data_addbiol_result <- eventReactive(input$join_he, {
-    request <- isolate(join_request())
+  join_data_addbiol_result <- eventReactive(join_request(), {
+    request <- join_request()
     req(request)
+    req(identical(request$request_id, input$join_he))
+    req(workflow_artifact_is_current("oe_result"))
+    req(workflow_artifact_is_current("flow_statistics"))
     all.combinations <- expand.grid(biol_site_id = unique(biol_data()$biol_site_id), 
                                     Year = min(biol_data()$Year):max(biol_data()$Year), 
                                     Season = c("Spring", "Autumn"), stringsAsFactors = FALSE)
@@ -2699,7 +2779,7 @@ function(input, output, session){
     result
   })
   
-  ### error message for absent biology data ----
+  ### current join prerequisite states ----
   
   biol_all_data_exist <- reactiveVal(FALSE)
   
@@ -2708,33 +2788,11 @@ function(input, output, session){
     biol_all_data_exist(TRUE)
   })
   
-  observeEvent(input$join_he, {
-    
-    if(!biol_all_data_exist()) {
-      
-      shinyalert(title = "Processed biology data are missing",
-                 type = "error")
-    } 
-    
-  })
-  
-  ### error message for absent flow stats ----
-  
   flow_stats_exist <- reactiveVal(FALSE)
   
   observe({
     req(flow_stats())
     flow_stats_exist(TRUE)
-  })
-  
-  observeEvent(input$join_he, {
-    
-    if(!flow_stats_exist()) {
-      
-      shinyalert(title = "Flow statistics are missing",
-                 type = "error")
-    } 
-    
   })
   
   ### error message for unselected lag(s) ----
@@ -2752,6 +2810,8 @@ function(input, output, session){
   ### warning message for biol data predating flow records ----
   
   observeEvent(input$join_he, {
+    req(!is.null(isolate(join_request())))
+    req(identical(isolate(join_request())$request_id, input$join_he))
     
     biol_starts <- biol_data() %>% group_by(biol_site_id) %>% summarise(biol_start = min(SAMPLE_DATE))
     flow_starts <- flow_stats() %>% pluck(1) %>% group_by(flow_site_id) %>% summarise(flow_start = min(start_date))
@@ -2927,8 +2987,8 @@ function(input, output, session){
   # HEV ----
   ## Create HEV dataset ----
   
-  HEV_data_result <- eventReactive(input$join_he, {
-    request <- isolate(join_request())
+  HEV_data_result <- eventReactive(join_request(), {
+    request <- join_request()
     req(request)
     flowstats_1 <- flow_stats() %>% pluck(1)
     
@@ -3006,27 +3066,19 @@ function(input, output, session){
   })
   
   ### activate initial plot upon site selection
-  HEV_go <- eventReactive(input$renderHEV, {
+  HEV_go <- eventReactive(hev_request(), {
+    req(!is.null(hev_request()))
+    req(workflow_artifact_is_current("joined_core"))
     HEV_plot_data()
-  }, ignoreInit = TRUE)
+  })
   
-  ### error message for absent joined data ----
+  ### current Joined HE Dataset prerequisite state ----
   
   HEV_data_exist <- reactiveVal(FALSE)
   
   observe({
     req(HEV_data())
     HEV_data_exist(TRUE)
-  })
-  
-  observeEvent(input$renderHEV, {
-    
-    if(!HEV_data_exist()) {
-      
-      shinyalert(title = "Paired biology-flow data are missing",
-                 type = "error")
-    } 
-    
   })
   
   ### render HEV plot with download option ----
@@ -3048,6 +3100,8 @@ function(input, output, session){
   })
 
   HEV_plot <- reactive({
+    req(identical(hev_request(), input$renderHEV))
+    req(isolate(workflow_artifact_is_current("joined_core")))
     req(!identical(hev_plot_dependency_status()$status, "error"))
     hev_data <- HEV_go() %>% filter(Year >= input$HEV_date_range[1] & Year <= input$HEV_date_range[2])
     biol_metrics <- if (isTRUE(input$HEV_show_all_metrics)) {

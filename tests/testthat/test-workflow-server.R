@@ -181,6 +181,86 @@ testthat::test_that("Flow-statistics attempt without Flow input becomes recovera
   })
 })
 
+testthat::test_that("RAW-04 donor inputs reject all-whitespace text and allow in-session retry", {
+  fread_calls <- 0L
+  rlang::local_bindings(
+    fread = function(input, ...) {
+      fread_calls <<- fread_calls + 1L
+      data.table::fread(text = input, ..., data.table = FALSE)
+    },
+    .env = environment(workflow_dashboard_server)
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "flow_statistics",
+      "complete",
+      data_source = "retained test Flow Statistics",
+      history_summary = "Generated before donor validation."
+    )
+    workflow_artifacts(registry)
+
+    whitespace_inputs <- c("", "   ", "\t", "\n", " \t\n ")
+    for (value in whitespace_inputs) {
+      muffle_interrupted_workflow_promise(session$setInputs(
+        donor_mapping_paste = value,
+        donor_list_paste = value
+      ))
+      muffle_interrupted_workflow_promise(session$flushReact())
+
+      mapping_message <- tryCatch(
+        {
+          donor_mapping()
+          NULL
+        },
+        error = conditionMessage
+      )
+      list_message <- tryCatch(
+        {
+          donor_list()
+          NULL
+        },
+        error = conditionMessage
+      )
+      testthat::expect_match(
+        mapping_message,
+        "If imputing flows please add donor mapping.",
+        fixed = TRUE
+      )
+      testthat::expect_match(
+        list_message,
+        "please add the donor site list",
+        fixed = TRUE
+      )
+      testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+      testthat::expect_false(identical(workflow_artifacts()$flow_statistics$status, "running"))
+    }
+    testthat::expect_identical(fread_calls, 0L)
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      donor_mapping_paste = paste(
+        "donee_flow_site_id,donor_flow_site_id",
+        "F1,F2",
+        sep = "\n"
+      ),
+      donor_list_paste = paste(
+        "flow_site_id,flow_input",
+        "F2,HDE",
+        sep = "\n"
+      )
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(donor_mapping()$donor_flow_site_id, "F2")
+    testthat::expect_identical(donor_list()$flow_site_id, "F2")
+    testthat::expect_identical(donor_list()$flow_input, "HDE")
+    testthat::expect_identical(fread_calls, 2L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+  })
+})
+
 testthat::test_that("Join-setting changes stale current outputs without rerunning them", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -286,7 +366,7 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
   })
 })
 
-testthat::test_that("real business outputs advance the shared artifact registry", {
+testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover in session", {
   biology_fixture <- data.frame(
     biol_site_id = "B1",
     SAMPLE_ID = paste0("S", 1:3),
@@ -319,6 +399,7 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     CALCIUM = 30
   )
 
+  join_calls <- 0L
   rlang::local_bindings(
     import_inv = function(...) biology_fixture,
     import_env = function(...) environment_fixture,
@@ -343,6 +424,7 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       )
     },
     join_he = function(..., join_type) {
+      join_calls <<- join_calls + 1L
       if (identical(join_type, "add_flows")) {
         return(data.frame(
           biol_site_id = "B1",
@@ -388,26 +470,197 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       local_flow_csv = local_flow_input,
       date_range_biol = as.Date(c("2020-01-01", "2022-12-31")),
       date_range_flow = as.Date(c("2020-01-01", "2022-12-31")),
-      import_inv = 1,
       import_env = 1
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
 
-    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 1))
-    muffle_interrupted_workflow_promise(session$flushReact())
+    # RAW-12: missing Biology blocks O:E before running and retains other inputs.
     muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 1))
     muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$oe_result$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$oe_result$blocking_reason,
+      "Biology data are required",
+      fixed = TRUE
+    )
+    testthat::expect_null(oe_request())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+
+    muffle_interrupted_workflow_promise(session$setInputs(import_inv = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_identical(workflow_artifacts()$oe_result$status, "blocked")
+
+    # RAW-13: missing and stale Environmental states block RICT and retain Biology.
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "environment_input",
+      "not_started",
+      next_action = "Import Environmental data."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$processed_environment$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$processed_environment$blocking_reason,
+      "Environmental data are required",
+      fixed = TRUE
+    )
+    testthat::expect_null(rict_request())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "environment_input",
+      "stale",
+      blocking_reason = "Synthetic stale Environmental state.",
+      next_action = "Regenerate Environmental data."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$processed_environment$status, "blocked")
+    testthat::expect_null(rict_request())
+
+    muffle_interrupted_workflow_promise(session$setInputs(import_env = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+
+    # RAW-14: current Biology/Environment do not substitute for RICT predictions.
+    muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$oe_result$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$oe_result$next_action,
+      "Run RICT predictions before calculating O:E ratios.",
+      fixed = TRUE
+    )
+    testthat::expect_null(oe_request())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+
+    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$processed_environment))
+    muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+
+    # RAW-15: missing and stale Flow Statistics block join without consuming them.
+    muffle_interrupted_workflow_promise(session$setInputs(
+      choose_lags = 0,
+      choose_join_method = "A",
+      join_he = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$joined_core$blocking_reason,
+      "Flow Statistics are missing or out of date.",
+      fixed = TRUE
+    )
+    testthat::expect_null(join_request())
+    testthat::expect_identical(join_calls, 0L)
+
     muffle_interrupted_workflow_promise(session$setInputs(
       win_width_selector = 6,
       win_step_selector = 6,
       calc_flow_stats = 1
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "flow_statistics",
+      "stale",
+      data_source = "retained stale Flow Statistics",
+      history_summary = "Must not be consumed by join.",
+      blocking_reason = "Synthetic stale Flow Statistics.",
+      next_action = "Regenerate Flow Statistics."
+    )
+    workflow_artifacts(registry)
     muffle_interrupted_workflow_promise(session$setInputs(
-      choose_lags = 0,
-      choose_join_method = "A",
-      join_he = 1
+      join_he = 2
     ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(join_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+
+    muffle_interrupted_workflow_promise(session$setInputs(calc_flow_stats = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    # RAW-16: missing and stale O:E block join while Flow Statistics are retained.
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "oe_result",
+      "not_started",
+      next_action = "Calculate O:E ratios."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$joined_core$blocking_reason,
+      "O:E ratios are required before building the Joined HE Dataset.",
+      fixed = TRUE
+    )
+    testthat::expect_null(join_request())
+    testthat::expect_identical(join_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "oe_result",
+      "stale",
+      data_source = "retained stale O:E",
+      history_summary = "Must not be consumed by join.",
+      blocking_reason = "Synthetic stale O:E state.",
+      next_action = "Regenerate O:E ratios."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 4))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$joined_core$blocking_reason,
+      "O:E ratios are required before building the Joined HE Dataset.",
+      fixed = TRUE
+    )
+    testthat::expect_null(join_request())
+    testthat::expect_identical(join_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 4))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+
+    # RAW-17: HEV blocks until a current Joined HE Dataset exists.
+    muffle_interrupted_workflow_promise(session$setInputs(
+      site_selector = "B1",
+      biol_metric_selector = "LIFE_F_OE",
+      flow_metric_selector = "Q95z",
+      HEV_date_range = c(2020, 2022),
+      HEV_show_all_metrics = FALSE,
+      HEV_show_high_low = FALSE,
+      renderHEV = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$hev_result$blocking_reason,
+      "Joined HE Dataset is missing or out of date",
+      fixed = TRUE
+    )
+    testthat::expect_null(hev_request())
+
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 5))
     muffle_interrupted_workflow_promise(session$flushReact())
 
     expected_current <- c(
@@ -444,14 +697,41 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
 
     muffle_interrupted_workflow_promise(session$setInputs(
-      site_selector = "B1",
-      biol_metric_selector = "LIFE_F_OE",
-      flow_metric_selector = "Q95z",
-      HEV_date_range = c(2020, 2022),
-      HEV_show_all_metrics = FALSE,
-      HEV_show_high_low = FALSE,
-      renderHEV = 1
+      renderHEV = 2
     ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(hev_request(), 2)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(hev_plot_dependency_status()$status, "success")
+    testthat::expect_silent(HEV_data())
+    testthat::expect_silent(HEV_plot_data())
+    testthat::expect_silent(HEV_go())
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+
+    muffle_interrupted_workflow_promise(session$setInputs(choose_join_method = "B"))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
+
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_null(hev_request())
+    testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 6))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 4))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
 
