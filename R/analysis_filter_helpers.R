@@ -12,7 +12,7 @@
 # - Each record is found by one stable id column. The DC-11 upload contract uses
 #   record_id or sample_id.
 # - Duplicate detection is handled outside this filtering helper. WK8-16 covers
-#   same-site, same-day biology duplicates only.
+#   same-site same-day and same-month biology duplicate decisions.
 
 # the columns the exclusion log should have
 ANALYSIS_EXCLUSION_LOG_COLUMNS <- c(

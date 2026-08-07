@@ -521,6 +521,63 @@ testthat::test_that("an unavailable browser backend rejects forged save events",
   })
 })
 
+testthat::test_that("biology duplicate choices are applied through the analysis selection", {
+  shiny::testServer(workflow_dashboard_server, {
+    duplicate_fixture <- data.frame(
+      biol_site_id = c("B1", "B1", "B1", "B2"),
+      sample_id = c("S1", "S2", "S3", "S4"),
+      date = as.Date(c("2024-05-01", "2024-05-01", "2024-05-15", "2024-06-01")),
+      sampling_year = c(2024, 2024, 2024, 2024),
+      Year = c(2024, 2024, 2024, 2024),
+      LIFE_F_OE = c(0.91, 0.93, 0.95, 1.01),
+      Q95z_lag0 = c(-0.5, -0.4, -0.3, 0.1),
+      stringsAsFactors = FALSE
+    )
+    processed_checkpoint_data(duplicate_fixture)
+    active_join_source("checkpoint")
+    analysis_filter_selection(new_filter_selection())
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    detected <- biology_duplicate_result()
+    testthat::expect_identical(detected$status, "blocked")
+    testthat::expect_true(any(detected$groups$duplicate_period == "same_day"))
+    testthat::expect_true(any(detected$groups$duplicate_period == "same_month_year"))
+
+    muffle_interrupted_workflow_promise(session$setInputs(keep_all_biology_duplicates = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(biology_duplicate_choice_result()$status, "success")
+    testthat::expect_equal(nrow(current_analysis_data()), nrow(duplicate_fixture))
+    testthat::expect_true(all(biology_duplicate_choice_result()$log$action == "kept"))
+
+    groups <- biology_duplicate_result()$groups
+    first_day_group <- groups$duplicate_group_id[groups$duplicate_period == "same_day"][[1L]]
+    choices <- data.frame(
+      duplicate_group_id = groups$duplicate_group_id,
+      choice = ifelse(groups$duplicate_group_id == first_day_group, "keep_record", "keep_all"),
+      selected_record_id = ifelse(groups$duplicate_group_id == first_day_group, "S1", ""),
+      user_comment = "server test duplicate decision",
+      stringsAsFactors = FALSE
+    )
+    choices_csv <- paste(
+      paste(names(choices), collapse = ","),
+      paste(apply(choices, 1, paste, collapse = ","), collapse = "\n"),
+      sep = "\n"
+    )
+    muffle_interrupted_workflow_promise(session$setInputs(
+      biology_duplicate_choices_csv = choices_csv,
+      apply_biology_duplicate_choices = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(biology_duplicate_choice_result()$status, "success")
+    testthat::expect_false("S2" %in% as.character(current_analysis_data()$sample_id))
+    testthat::expect_true("S1" %in% as.character(current_analysis_data()$sample_id))
+    testthat::expect_equal(nrow(analysis_exclusion_log()), 1L)
+    testthat::expect_identical(analysis_exclusion_log()$trigger, "duplicate_choice")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
+  })
+})
+
 testthat::test_that("the default local backend writes a named, restorable workspace", {
   workspace_root <- tempfile("server-workspace-storage-")
   on.exit(unlink(workspace_root, recursive = TRUE, force = TRUE), add = TRUE)

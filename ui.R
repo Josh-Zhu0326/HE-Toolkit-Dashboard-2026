@@ -609,6 +609,33 @@ page_navbar(
             class = "dashboard-card",
             card_header("Exclusion and restore log"),
             DT::dataTableOutput("analysis_exclusion_log_table")
+          ),
+          card(
+            class = "dashboard-card",
+            card_header("Biology duplicate review"),
+            uiOutput("biology_duplicate_status"),
+            DT::dataTableOutput("biology_duplicate_groups_table"),
+            DT::dataTableOutput("biology_duplicate_records_table"),
+            textAreaInput(
+              "biology_duplicate_choices_csv",
+              "Duplicate choices CSV",
+              placeholder = "duplicate_group_id,choice,selected_record_id,user_comment\nDUPD001,keep_all,,both samples valid\nDUPM002,keep_record,S001,selected representative sample",
+              rows = 4
+            ),
+            div(
+              class = "action-stack",
+              actionButton(
+                "keep_all_biology_duplicates",
+                "Keep all duplicate groups",
+                class = "client-action-button"
+              ),
+              actionButton(
+                "apply_biology_duplicate_choices",
+                "Apply duplicate choices",
+                class = "client-action-button"
+              )
+            ),
+            DT::dataTableOutput("biology_duplicate_choice_log_table")
           )
         )
       ),

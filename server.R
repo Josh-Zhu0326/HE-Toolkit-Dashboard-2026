@@ -48,6 +48,9 @@ function(input, output, session){
   hev_download_history <- reactiveVal(empty_hev_download_history())
   active_join_source <- reactiveVal("generated")
   analysis_filter_selection <- reactiveVal(new_filter_selection())
+  biology_duplicate_choice_result <- reactiveVal(new_duplicate_choice_result(
+    "Build a Joined HE dataset before reviewing biology duplicates."
+  ))
   joined_enriched_result <- reactiveVal(list(
     status = "not_ready",
     joined_enriched = NULL,
@@ -2544,6 +2547,11 @@ function(input, output, session){
     filtered
   })
 
+  biology_duplicate_result <- reactive({
+    source <- current_joined_source()
+    detect_biology_duplicates(source$analysis_dataset)
+  })
+
   current_analysis_context <- reactive({
     filtered <- analysis_filter_result()
     list(
@@ -2567,6 +2575,107 @@ function(input, output, session){
   output$analysis_exclusion_log_table <- DT::renderDataTable({
     analysis_exclusion_log()
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  output$biology_duplicate_status <- renderUI({
+    result <- biology_duplicate_result()
+    display_status <- if (identical(result$status, "blocked")) "warning" else result$status
+    messages <- c(
+      result$messages,
+      biology_duplicate_choice_result()$messages
+    )
+    format_validation_message(list(status = display_status, messages = messages))
+  })
+
+  output$biology_duplicate_groups_table <- DT::renderDataTable({
+    groups <- biology_duplicate_result()$groups
+    if (is.null(groups) || nrow(groups) == 0L) {
+      return(empty_duplicate_groups_table())
+    }
+    groups
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 5))
+
+  output$biology_duplicate_records_table <- DT::renderDataTable({
+    records <- biology_duplicate_result()$records
+    if (is.null(records) || nrow(records) == 0L) {
+      return(empty_duplicate_records_table())
+    }
+    records
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 8))
+
+  output$biology_duplicate_choice_log_table <- DT::renderDataTable({
+    log <- biology_duplicate_choice_result()$log
+    if (is.null(log) || nrow(log) == 0L) {
+      return(empty_duplicate_choice_log())
+    }
+    log
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 8))
+
+  apply_biology_duplicate_choices <- function(choices) {
+    joined <- isolate(current_joined_source()$analysis_dataset)
+    duplicate_result <- isolate(biology_duplicate_result())
+    result <- tryCatch(
+      apply_duplicate_choices(joined, choices, duplicate_result),
+      error = function(error) {
+        blocked <- new_duplicate_choice_result(conditionMessage(error))
+        blocked$status <- "blocked"
+        blocked
+      }
+    )
+    biology_duplicate_choice_result(result)
+
+    if (!identical(result$status, "success")) {
+      showNotification(result$messages, type = "warning", duration = 8)
+      return(invisible(result))
+    }
+
+    next_selection <- isolate(analysis_filter_selection())
+    next_selection <- apply_duplicate_exclusions_to_selection(next_selection, result)
+    analysis_filter_selection(next_selection)
+
+    filtered <- apply_filter_selection(joined, next_selection)
+    workflow_complete_artifact(
+      "filter_selection",
+      "Biology duplicate choices",
+      sprintf(
+        "Recorded duplicate choices for %d group(s); current selection excludes %d of %d records.",
+        length(unique(result$log$duplicate_group_id)),
+        filtered$n_excluded,
+        filtered$n_source
+      )
+    )
+    workflow_complete_artifact(
+      "exclusion_log",
+      "Exclusion and restore log",
+      sprintf("Recorded %d analysis-selection action(s).", filtered$filter_version)
+    )
+    workflow_complete_artifact(
+      "analysis_dataset",
+      "Current analysis selection",
+      sprintf("Current analysis dataset contains %d of %d records.", filtered$n_kept, filtered$n_source)
+    )
+    mark_hev_result_stale("Biology duplicate choices changed the analysis selection.")
+    showNotification(result$messages, type = "message", duration = 6)
+    invisible(result)
+  }
+
+  observeEvent(input$keep_all_biology_duplicates, {
+    duplicate_result <- biology_duplicate_result()
+    req(isTRUE(duplicate_result$needs_choice))
+    choices <- build_keep_all_duplicate_choices(duplicate_result)
+    apply_biology_duplicate_choices(choices)
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$apply_biology_duplicate_choices, {
+    choices <- tryCatch(
+      parse_duplicate_choice_csv_text(input$biology_duplicate_choices_csv),
+      error = function(error) {
+        showNotification(conditionMessage(error), type = "error", duration = 8)
+        NULL
+      }
+    )
+    req(!is.null(choices))
+    apply_biology_duplicate_choices(choices)
+  }, ignoreInit = TRUE)
 
   commit_analysis_selection <- function(next_selection, action_label) {
     joined <- isolate(current_joined_source()$analysis_dataset)
@@ -2661,6 +2770,9 @@ function(input, output, session){
 
   observeEvent(join_data(), {
     analysis_filter_selection(new_filter_selection())
+    biology_duplicate_choice_result(new_duplicate_choice_result(
+      "No biology duplicate choices have been applied for the current Joined HE dataset."
+    ))
     joined_enriched_result(list(
       status = "not_ready",
       joined_enriched = NULL,
@@ -3310,6 +3422,7 @@ function(input, output, session){
       joined_enriched = function() joined_enriched_result()$joined_enriched,
       analysis_dataset = function() current_analysis_data(),
       analysis_exclusion_log = function() analysis_exclusion_log(),
+      biology_duplicate_choice_log = function() biology_duplicate_choice_result()$log,
       joined_analysis = function() join_data_addbiol(),
       model_result = function() basic_model_result(),
       hev_data = function() HEV_data(),
