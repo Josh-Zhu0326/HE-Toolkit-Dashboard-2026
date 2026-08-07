@@ -312,3 +312,18 @@ Expected result:
 - Failed optional enrichment is recorded as a warning and does not invalidate `joined_core`.
 - The analysis dataset records whether it was derived from `joined_core` or `joined_enriched`.
 - Filtering changes only the analysis dataset and does not write back to either joined dataset.
+
+## TC-042 HEV Current Output and Download History
+
+Steps:
+1. Build or load a current analysis dataset.
+2. Generate an HEV plot for one site, date range, biology metric, and flow metric.
+3. Confirm the source/provenance summary is shown.
+4. Change one HEV setting without regenerating.
+5. Regenerate the HEV plot and download it.
+
+Expected result:
+- The HEV result records the source dataset, source fingerprint, filter version, selected site, metrics, and date range.
+- Changing HEV settings marks the previous result stale and prevents it being downloaded as the current result.
+- Regenerating creates a current HEV result again.
+- Download history records the download format and the provenance of the downloaded HEV result.

@@ -428,6 +428,19 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$status, "success")
+    testthat::expect_identical(hev_current_result()$provenance$source_dataset, "joined_core")
+    testthat::expect_identical(hev_current_result()$provenance$filter_version, 0L)
+
+    muffle_interrupted_workflow_promise(session$setInputs(HEV_show_high_low = TRUE))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_identical(hev_current_result()$status, "stale")
+
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$status, "success")
 
     joined_before_filter <- join_data()
     record_ids <- as.character(joined_before_filter$sample_id)
