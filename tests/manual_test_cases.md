@@ -327,3 +327,19 @@ Expected result:
 - Changing HEV settings marks the previous result stale and prevents it being downloaded as the current result.
 - Regenerating creates a current HEV result again.
 - Download history records the download format and the provenance of the downloaded HEV result.
+
+## TC-043 Biology Duplicate Choice Contract
+
+Steps:
+1. Build or load an analysis dataset containing same-site same-day and same-site same-month Biology duplicate records.
+2. Open Explore Relationships > Analysis Selection.
+3. Review the Biology duplicate groups and records.
+4. Choose Keep all duplicate groups.
+5. Re-apply choices using a CSV where one duplicate group uses `keep_record`.
+
+Expected result:
+- Same-day and same-month duplicate groups are listed with their source records.
+- Keep all retains every source row and records a duplicate choice log.
+- Keep record excludes only the non-selected records from the current analysis dataset.
+- `joined_core` and `joined_enriched` remain unchanged.
+- The exclusion log records duplicate-choice exclusions with trigger `duplicate_choice`.
