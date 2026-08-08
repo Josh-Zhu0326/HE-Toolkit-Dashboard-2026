@@ -62,6 +62,7 @@ source(file.path("R", "analysis_filter_helpers.R"))
 source(file.path("R", "joined_dataset_boundary_helpers.R"))
 source(file.path("R", "analysis_model_helpers.R"))
 source(file.path("R", "mixed_model_helpers.R"))
+source(file.path("R", "hev_output_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
@@ -976,7 +977,9 @@ downloadButtonUI <- function(id) {
 downloadSelectUI <- function(id) {
   selectInput(NS(id, "format"), label = "", choices = c("PDF", "JPEG", "PNG"), width = "125px")
 }
-downloadServer <- function(id, plot) {
+downloadServer <- function(id, plot,
+                           can_download = function() TRUE,
+                           on_download = function(format, file) NULL) {
   moduleServer(id, function(input, output, session) {
     output$dl_plot <- downloadHandler(
       filename = function() {
@@ -984,7 +987,9 @@ downloadServer <- function(id, plot) {
         paste0(id, ".", file_format)
       },
       content = function(file) {
+        validate(need(isTRUE(can_download()), "Regenerate the current plot before downloading."))
         ggsave(file, plot = plot(), width = 10, height = 5)
+        on_download(input$format, file)
       }
     )
   })

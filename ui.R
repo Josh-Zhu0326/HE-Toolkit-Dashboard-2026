@@ -706,15 +706,17 @@ page_navbar(
           ),
           div(class = "dashboard-page",
             h3(class = "section-title", "Hydro-ecological variation plot"),
-            p(class = "page-lead", "Review HEV plots for selected biological and flow metrics. Existing HEV download behaviour is preserved."),
+            p(class = "page-lead", "Review HEV plots for selected biological and flow metrics from the current analysis dataset."),
             card(class = "dashboard-card",
               card_header("HEV output"),
               uiOutput("hev_status_message"),
+              uiOutput("hev_provenance_summary"),
               plotOutput("HEV_plot"),
               div(class = "download-row",
                 downloadSelectUI("HEVPlot"),
                 downloadButtonUI("HEVPlot")
-              )
+              ),
+              DT::dataTableOutput("hev_download_history_table")
             )
           )
 )

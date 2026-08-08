@@ -34,6 +34,28 @@ testthat::test_that("RAW-23 workbook preview observer accepts missing and empty 
       muffle_interrupted_workflow_promise(session$flushReact()),
       NA
     )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = NA_character_)
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = "")
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = "not_a_workbook_sheet")
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(session$flushReact()),
+      NA
+    )
 
     artifact_statuses <- vapply(
       workflow_artifacts(),
@@ -706,20 +728,44 @@ testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover
     testthat::expect_silent(HEV_data())
     testthat::expect_silent(HEV_plot_data())
     testthat::expect_silent(HEV_go())
+    testthat::expect_named(
+      HEV_go(),
+      c(
+        "data", "analysis_context", "site_id", "date_range",
+        "biol_metric_selector", "flow_metric_selector", "show_all_metrics",
+        "show_high_low", "show_status"
+      )
+    )
     testthat::expect_s3_class(HEV_plot(), "ggplot")
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    previous_provenance <- hev_current_result()$provenance
+    hev_download_history(append_hev_download_history(
+      hev_download_history(),
+      previous_provenance,
+      "PNG",
+      downloaded_at = as.POSIXct("2026-08-07 12:00:00", tz = "UTC")
+    ))
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
 
     muffle_interrupted_workflow_promise(session$setInputs(choose_join_method = "B"))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_identical(hev_current_result()$status, "stale")
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
+    testthat::expect_identical(
+      hev_download_history()$source_fingerprint,
+      previous_provenance$source_fingerprint
+    )
     testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
 
     muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 3))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
     testthat::expect_null(hev_request())
+    testthat::expect_false(identical(hev_current_result()$status, "success"))
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
     testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
     testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
@@ -728,12 +774,28 @@ testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_identical(hev_current_result()$status, "not_ready")
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
 
     muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 4))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_s3_class(HEV_plot(), "ggplot")
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$status, "success")
+    testthat::expect_identical(hev_current_result()$provenance$source_dataset, "joined_core")
+    testthat::expect_identical(hev_current_result()$provenance$filter_version, 0L)
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
+
+    muffle_interrupted_workflow_promise(session$setInputs(HEV_show_high_low = TRUE))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_identical(hev_current_result()$status, "stale")
+
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$status, "success")
 
     joined_before_filter <- join_data()
     record_ids <- as.character(joined_before_filter$sample_id)

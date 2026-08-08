@@ -40,3 +40,4 @@ TC-038,Model interface too few rows,Medium,joined data with fewer than 3 complet
 TC-039,Model interface invalid variable,Medium,joined data with a non-existent variable name,Selecting an invalid variable shows a friendly reselect message not a crash
 TC-040,DC-11 workbook checkpoint,High,standard DC-11 multi-sheet XLSX template,Workbook upload validates all recognised sheets reports sheet-level issues and previews the selected sheet without triggering import join modelling or HEV
 TC-041,Joined dataset boundary,High,joined_core with optional WQ/RHS summaries,joined_core remains unchanged optional failures do not invalidate core and analysis_dataset records whether it derives from core or enriched data
+TC-042,HEV current output and download history,High,current analysis_dataset and valid HEV selections,HEV provenance is shown settings changes make previous result stale and download history records current exports

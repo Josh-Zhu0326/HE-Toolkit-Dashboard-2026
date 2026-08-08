@@ -38,6 +38,14 @@ function(input, output, session){
     status = "info",
     message = "HEV plotting dependencies have not been checked in this session."
   ))
+  hev_current_result <- reactiveVal(list(
+    status = "not_ready",
+    plot = NULL,
+    data = NULL,
+    provenance = NULL,
+    messages = "Generate an HEV plot from the current analysis dataset."
+  ))
+  hev_download_history <- reactiveVal(empty_hev_download_history())
   active_join_source <- reactiveVal("generated")
   analysis_filter_selection <- reactiveVal(new_filter_selection())
   joined_enriched_result <- reactiveVal(list(
@@ -49,6 +57,28 @@ function(input, output, session){
   selected_enrichments <- reactive({
     normalise_enrichment_selection(input$selected_enrichments)
   })
+
+  mark_hev_result_stale <- function(reason) {
+    current <- isolate(hev_current_result())
+    if (!identical(current$status, "success")) {
+      return(invisible(NULL))
+    }
+    hev_current_result(modifyList(current, list(
+      status = "stale",
+      messages = paste("The previous HEV plot is stale.", reason)
+    )))
+    if (workflow_artifact_is_current("hev_result")) {
+      workflow_set_artifact(
+        "hev_result",
+        "stale",
+        data_source = "HEV plot generation",
+        history_summary = summarise_hev_provenance(current$provenance),
+        blocking_reason = reason,
+        next_action = "Regenerate the HEV plot before downloading it as the current result."
+      )
+    }
+    invisible(NULL)
+  }
 
   output$workflow_header <- renderUI({
     workflow_header_ui(
@@ -78,33 +108,39 @@ function(input, output, session){
 
   # Always derive Resume from artifact state; do not hard-code a starting Stage.
   lapply(he_workflow_task_ids(), function(task_id) {
-    observeEvent(input[[paste0("select_task__", task_id)]], {
-      task <- get_he_workflow_task(task_id)
-      resume_stage <- workflow_resume_stage(task, workflow_artifacts())
-      workflow_session$task_id <- task_id
-      workflow_session$stage_index <- resume_stage
-      updateNavbarPage(
-        session,
-        "main_nav",
-        selected = workflow_nav_target(task_id, resume_stage)
-      )
-    }, ignoreInit = TRUE)
+    local({
+      current_task_id <- task_id
+      observeEvent(input[[paste0("select_task__", current_task_id)]], {
+        task <- get_he_workflow_task(current_task_id)
+        resume_stage <- workflow_resume_stage(task, workflow_artifacts())
+        workflow_session$task_id <- current_task_id
+        workflow_session$stage_index <- resume_stage
+        updateNavbarPage(
+          session,
+          "main_nav",
+          selected = workflow_nav_target(current_task_id, resume_stage)
+        )
+      }, ignoreInit = TRUE)
+    })
   })
 
   # Keep unused "-" Stages inaccessible in both the UI and server.
   lapply(seq_along(he_workflow_stages), function(stage_index) {
-    observeEvent(input[[paste0("workflow_stage_", stage_index)]], {
-      req(workflow_session$task_id)
-      task <- get_he_workflow_task(workflow_session$task_id)
-      if (!identical(task$stage_path[[stage_index]], "-")) {
-        workflow_session$stage_index <- stage_index
-        updateNavbarPage(
-          session,
-          "main_nav",
-          selected = workflow_nav_target(workflow_session$task_id, stage_index)
-        )
-      }
-    }, ignoreInit = TRUE)
+    local({
+      current_stage_index <- stage_index
+      observeEvent(input[[paste0("workflow_stage_", current_stage_index)]], {
+        req(workflow_session$task_id)
+        task <- get_he_workflow_task(workflow_session$task_id)
+        if (!identical(task$stage_path[[current_stage_index]], "-")) {
+          workflow_session$stage_index <- current_stage_index
+          updateNavbarPage(
+            session,
+            "main_nav",
+            selected = workflow_nav_target(workflow_session$task_id, current_stage_index)
+          )
+        }
+      }, ignoreInit = TRUE)
+    })
   })
 
   observeEvent(input$change_task, {
@@ -260,6 +296,7 @@ function(input, output, session){
   }
 
   invalidate_flow_derived_state <- function(reset_external = FALSE) {
+    mark_hev_result_stale("The Flow source changed after the current HEV plot was generated.")
     flow_source_revision(isolate(flow_source_revision()) + 1L)
     flow_stats_revision(NULL)
     join_revision(NULL)
@@ -351,6 +388,7 @@ function(input, output, session){
   # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
     req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
+    mark_hev_result_stale("The Joined HE Dataset is being rebuilt.")
     join_request(NULL)
     join_revision(NULL)
     hev_revision(NULL)
@@ -430,6 +468,7 @@ function(input, output, session){
       if (artifact_is_current(joined_core)) {
         # Retain the cached output and its metadata, but stop treating it as
         # current until the user explicitly submits another Join request.
+        mark_hev_result_stale("Join settings changed after the current HEV plot was generated.")
         join_revision(NULL)
         hev_revision(NULL)
         hev_request(NULL)
@@ -499,9 +538,15 @@ function(input, output, session){
         "Biology and Flow paired",
         "[Blocked] Data not yet joined (Analysis page)"
       ),
+      workflow_checkpoint_card(
+        "analysis_dataset",
+        "Current analysis dataset ready",
+        "[Blocked] Current analysis dataset not yet available"
+      ),
       if (workflow_artifact_is_current("oe_result") &&
           workflow_artifact_is_current("flow_statistics") &&
-          workflow_artifact_is_current("joined_core")) {
+          workflow_artifact_is_current("joined_core") &&
+          workflow_artifact_is_current("analysis_dataset")) {
         cp_card("pass", "All prerequisites met — ready to generate HEV plot")
       }
     )
@@ -2506,6 +2551,7 @@ function(input, output, session){
         source$source_rows
       )
     )
+    mark_hev_result_stale("The analysis dataset source changed.")
   }, ignoreInit = TRUE)
 
   output$download_processed_dataset_checkpoint <- downloadHandler(
@@ -2588,6 +2634,16 @@ function(input, output, session){
     filtered
   })
 
+  current_analysis_context <- reactive({
+    filtered <- analysis_filter_result()
+    list(
+      source_dataset = filtered$source_dataset,
+      source_fingerprint = filtered$source_fingerprint,
+      filter_version = filtered$filter_version,
+      analysis_rows = if (is.null(filtered$analysis_dataset)) 0L else nrow(filtered$analysis_dataset)
+    )
+  })
+
   # Single source of truth for every downstream analysis consumer. Filtering
   # derives this dataset without mutating the Joined HE dataset.
   current_analysis_data <- reactive({
@@ -2662,6 +2718,7 @@ function(input, output, session){
       plot = NULL,
       summary = NULL
     ))
+    mark_hev_result_stale("The analysis selection changed.")
 
     invisible(filtered)
   }
@@ -2740,6 +2797,13 @@ function(input, output, session){
       "Core Joined HE dataset",
       sprintf("Created analysis selection version 0 from joined_core with %d row(s).", nrow(result))
     )
+    hev_current_result(list(
+      status = "not_ready",
+      plot = NULL,
+      data = NULL,
+      provenance = NULL,
+      messages = "Generate an HEV plot from the current analysis dataset."
+    ))
   })
   
   ### join type for plotting ----
@@ -3057,20 +3121,29 @@ function(input, output, session){
   })
   
   HEV_plot_data <- reactive({
-    
-    HEV_plot_data <- HEV_data() %>% 
+    req(input$site_selector)
+    HEV_data() %>%
       filter(biol_site_id == input$site_selector)
-    
-    return(HEV_plot_data)
-    
   })
   
   ### activate initial plot upon site selection
   HEV_go <- eventReactive(hev_request(), {
-    req(!is.null(hev_request()))
+    request_id <- hev_request()
+    req(!is.null(request_id))
     req(workflow_artifact_is_current("joined_core"))
-    HEV_plot_data()
-  })
+    plot_data <- HEV_plot_data()
+    list(
+      data = plot_data,
+      analysis_context = isolate(current_analysis_context()),
+      site_id = isolate(input$site_selector),
+      date_range = isolate(input$HEV_date_range),
+      biol_metric_selector = isolate(input$biol_metric_selector),
+      flow_metric_selector = isolate(input$flow_metric_selector),
+      show_all_metrics = isTRUE(isolate(input$HEV_show_all_metrics)),
+      show_high_low = isTRUE(isolate(input$HEV_show_high_low)),
+      show_status = isTRUE(isolate(input$HEV_show_status))
+    )
+  }, ignoreInit = TRUE)
   
   ### current Joined HE Dataset prerequisite state ----
   
@@ -3091,47 +3164,97 @@ function(input, output, session){
         messages = dependency$message
       )))
     }
+    result <- hev_current_result()
+    messages <- result$messages
     if (isTRUE(input$HEV_show_status)) {
-      format_validation_message(list(
-        status = "warning",
-        messages = "Status class boundaries require confirmed boundary/class data. None are currently available in the dashboard data, so no boundary lines are drawn."
-      ))
+      messages <- c(
+        messages,
+        "Status class boundaries require confirmed boundary/class data. None are currently available in the dashboard data, so no boundary lines are drawn."
+      )
     }
+    display_status <- if (identical(result$status, "stale")) {
+      "warning"
+    } else if (identical(result$status, "not_ready")) {
+      "info"
+    } else {
+      result$status
+    }
+    format_validation_message(list(status = display_status, messages = messages))
+  })
+
+  output$hev_provenance_summary <- renderUI({
+    result <- hev_current_result()
+    if (is.null(result$provenance)) {
+      return(NULL)
+    }
+    format_validation_message(list(
+      status = if (identical(result$status, "stale")) "warning" else "info",
+      messages = summarise_hev_provenance(result$provenance)
+    ))
+  })
+
+  HEV_result <- reactive({
+    req(!identical(hev_plot_dependency_status()$status, "error"))
+    request <- HEV_go()
+    hev_data <- request$data %>%
+      filter(Year >= request$date_range[1] & Year <= request$date_range[2])
+    biol_metrics <- resolve_hev_biology_metrics(
+      hev_data,
+      request$biol_metric_selector,
+      request$show_all_metrics
+    )
+    flow_metrics <- resolve_hev_flow_metrics(
+      hev_data,
+      request$flow_metric_selector,
+      request$show_high_low
+    )
+    validate(
+      need(nrow(hev_data) > 0, "No HEV records are available for the selected site and date range."),
+      need(length(biol_metrics) > 0, "No selected biology metric is available in the current HEV data."),
+      need(length(flow_metrics) > 0, "No selected flow metric is available in the current HEV data.")
+    )
+
+    plot <- plot_hev_dash(data = hev_data,
+                          date_col = "date",
+                          flow_stat = flow_metrics,
+                          biol_metric = biol_metrics,
+                          multiplot = request$show_all_metrics,
+                          clr_by = "Season")
+    provenance <- build_hev_output_provenance(
+      analysis_context = request$analysis_context,
+      plot_data = hev_data,
+      site_id = request$site_id,
+      date_range = request$date_range,
+      biology_metrics = biol_metrics,
+      flow_metrics = flow_metrics,
+      show_all_metrics = request$show_all_metrics,
+      show_high_low = request$show_high_low,
+      show_status = request$show_status
+    )
+    list(plot = plot, data = hev_data, provenance = provenance)
   })
 
   HEV_plot <- reactive({
     req(identical(hev_request(), input$renderHEV))
     req(isolate(workflow_artifact_is_current("joined_core")))
     req(!identical(hev_plot_dependency_status()$status, "error"))
-    hev_data <- HEV_go() %>% filter(Year >= input$HEV_date_range[1] & Year <= input$HEV_date_range[2])
-    biol_metrics <- if (isTRUE(input$HEV_show_all_metrics)) {
-      c("WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE")
-    } else {
-      input$biol_metric_selector
-    }
-    flow_metrics <- if (isTRUE(input$HEV_show_high_low)) {
-      selected <- input$flow_metric_selector
-      high_low <- if (stringr::str_detect(selected, "z$")) c("Q95z", "Q10z") else c("Q95", "Q10")
-      if (all(high_low %in% names(hev_data))) high_low else selected
-    } else {
-      input$flow_metric_selector
-    }
-
-    plot_hev_dash(data = hev_data,
-                  date_col = "date",
-                  flow_stat = flow_metrics,
-                  biol_metric = biol_metrics,
-                  multiplot = isTRUE(input$HEV_show_all_metrics),
-                  clr_by = "Season")
+    HEV_result()$plot
   })
 
-  observeEvent(HEV_plot(), {
-    plot_result <- HEV_plot()
-    req(!is.null(plot_result))
+  observeEvent(HEV_result(), {
+    result <- HEV_result()
+    req(!is.null(result$plot))
+    hev_current_result(list(
+      status = "success",
+      plot = result$plot,
+      data = result$data,
+      provenance = result$provenance,
+      messages = "Generated the current HEV plot from the current analysis dataset."
+    ))
     workflow_complete_artifact(
       "hev_result",
       "HEV plot generation",
-      "Generated the current HEV plot from the current analysis selection."
+      summarise_hev_provenance(result$provenance)
     )
   })
 
@@ -3139,7 +3262,41 @@ function(input, output, session){
     HEV_plot()
   }) 
   
-  downloadServer("HEVPlot", HEV_plot)
+  output$hev_download_history_table <- DT::renderDataTable({
+    hev_download_history()
+  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 5))
+
+  observeEvent(
+    list(
+      input$site_selector,
+      input$biol_metric_selector,
+      input$flow_metric_selector,
+      input$HEV_date_range,
+      input$HEV_show_all_metrics,
+      input$HEV_show_high_low,
+      input$HEV_show_status
+    ),
+    {
+      mark_hev_result_stale("HEV settings changed after the current plot was generated.")
+    },
+    ignoreInit = TRUE
+  )
+
+  downloadServer(
+    "HEVPlot",
+    HEV_plot,
+    can_download = function() {
+      identical(hev_current_result()$status, "success") &&
+        workflow_artifact_is_current("hev_result")
+    },
+    on_download = function(format, file) {
+      hev_download_history(append_hev_download_history(
+        hev_download_history(),
+        hev_current_result()$provenance,
+        format
+      ))
+    }
+  )
 
   # LOCAL WORKSPACE SAVE ----
 
@@ -3182,6 +3339,9 @@ function(input, output, session){
       wq_contract_summary_status = function() wq_contract_summary_result()$status,
       joined_enriched_status = function() joined_enriched_result()$status,
       analysis_source_dataset = function() current_joined_source()$source_dataset,
+      hev_result_status = function() hev_current_result()$status,
+      hev_result_provenance = function() hev_current_result()$provenance,
+      hev_download_history_rows = function() nrow(hev_download_history()),
       show_environment_plot = function() showEnvplot(),
       show_flow_heatmap = function() showHeatmap(),
       show_imputed_flow_heatmap = function() showHeatmapimp(),
@@ -3222,7 +3382,9 @@ function(input, output, session){
       analysis_exclusion_log = function() analysis_exclusion_log(),
       joined_analysis = function() join_data_addbiol(),
       model_result = function() basic_model_result(),
-      hev_data = function() HEV_data()
+      hev_data = function() HEV_data(),
+      hev_plot_data = function() hev_current_result()$data,
+      hev_download_history = function() hev_download_history()
     ))
   }
 
