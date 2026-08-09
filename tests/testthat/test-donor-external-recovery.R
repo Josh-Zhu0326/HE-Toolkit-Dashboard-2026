@@ -152,7 +152,6 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     testthat::expect_identical(flow_imputation_result()$status, "error")
     testthat::expect_match(mapping_message, "donor mapping could not be read or validated", fixed = TRUE)
     testthat::expect_false(grepl("fread|C:/private|conditionMessage", mapping_message, ignore.case = TRUE))
-    testthat::expect_false(flow_imputation_running())
     testthat::expect_identical(imputation_calls, 0L)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
 
@@ -164,13 +163,11 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     session$flushReact()
     testthat::expect_identical(flow_imputation_result()$status, "success")
     testthat::expect_identical(imputation_calls, 1L)
-    testthat::expect_false(flow_imputation_running())
 
     raw_recovery_set_inputs(session, donor_list_paste = "flow_input\nHDE", import_donor_flow = 1)
     session$flushReact()
     testthat::expect_identical(donor_flow_import_result()$status, "error")
     testthat::expect_identical(donor_import_calls, 0L)
-    testthat::expect_false(donor_flow_import_running())
 
     raw_recovery_set_inputs(
       session,
@@ -182,7 +179,6 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     testthat::expect_identical(donor_flow_import_result()$status, "error")
     testthat::expect_false(grepl("libcurl|C:/private|conditionMessage", donor_error, ignore.case = TRUE))
     testthat::expect_match(tail(external_import_diagnostics()$detail, 1L), "libcurl donor failure", fixed = TRUE)
-    testthat::expect_false(donor_flow_import_running())
     testthat::expect_false(import_donor_flow_success())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
 
@@ -190,7 +186,6 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     session$flushReact()
     testthat::expect_identical(donor_flow_import_result()$status, "success")
     testthat::expect_true(import_donor_flow_success())
-    testthat::expect_false(donor_flow_import_running())
     testthat::expect_true("27091" %in% flow_data_extra()$flow_site_id)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
   })

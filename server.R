@@ -1160,6 +1160,20 @@ function(input, output, session){
     invisible(TRUE)
   }
 
+  begin_site_metadata_replacement <- function(validation_message, blocking_reason, next_action) {
+    current_site_metadata(NULL)
+    metadata_result(list(
+      data = NULL,
+      flow_input_provenance = NULL,
+      validation = list(
+        status = "error",
+        messages = validation_message
+      )
+    ))
+    workflow_reset_artifact("site_mapping", blocking_reason, next_action)
+    invalidate_flow_derived_state(reset_external = TRUE)
+  }
+
   observeEvent(input$site_metadata_csv, {
     site_metadata_upload_text(NULL)
     site_metadata_upload_flow_provenance(NULL)
@@ -1846,39 +1860,19 @@ function(input, output, session){
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$site_metadata_csv, {
-    current_site_metadata(NULL)
-    metadata_result(list(
-      data = NULL,
-      flow_input_provenance = NULL,
-      validation = list(
-        status = "error",
-        messages = "The site metadata replacement is being validated."
-      )
-    ))
-    workflow_reset_artifact(
-      "site_mapping",
+    begin_site_metadata_replacement(
+      "The site metadata replacement is being validated.",
       "The site metadata CSV changed.",
       "Complete validation of the replacement site metadata CSV."
     )
-    invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$meta_paste, {
-    current_site_metadata(NULL)
-    metadata_result(list(
-      data = NULL,
-      flow_input_provenance = NULL,
-      validation = list(
-        status = "error",
-        messages = "The pasted site metadata replacement is being validated."
-      )
-    ))
-    workflow_reset_artifact(
-      "site_mapping",
+    begin_site_metadata_replacement(
+      "The pasted site metadata replacement is being validated.",
       "The pasted site metadata changed.",
       "Complete validation of the pasted site metadata."
     )
-    invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = TRUE, priority = 200)
 
   observeEvent(input$date_range_flow, {
@@ -2486,7 +2480,6 @@ function(input, output, session){
   ### impute flow data ----
   #### get extra flow data if needed ----
   donor_flow_import_data <- reactiveVal(NULL)
-  donor_flow_import_running <- reactiveVal(FALSE)
   donor_flow_import_result <- reactiveVal(list(
     status = "info",
     messages = "Add donor sites, then import the additional Flow data if required."
@@ -2517,8 +2510,6 @@ function(input, output, session){
       return()
     }
 
-    donor_flow_import_running(TRUE)
-    on.exit(donor_flow_import_running(FALSE), add = TRUE)
     donor_sites <- as.character(parsed$data$flow_site_id)
     donor_inputs <- as.character(parsed$data$flow_input)
     import_result <- safe_external_import(
@@ -2576,7 +2567,6 @@ function(input, output, session){
     }
   })
 
-  flow_imputation_running <- reactiveVal(FALSE)
   flow_imputation_result <- reactiveVal(list(
     status = "info",
     messages = "Add a donor mapping, then run Flow imputation.",
@@ -2609,8 +2599,6 @@ function(input, output, session){
       return()
     }
 
-    flow_imputation_running(TRUE)
-    on.exit(flow_imputation_running(FALSE), add = TRUE)
     imputation <- safe_external_import(
       function() {
         impute_flow(
