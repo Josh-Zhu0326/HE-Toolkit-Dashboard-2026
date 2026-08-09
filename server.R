@@ -306,6 +306,45 @@ function(input, output, session){
     invisible(NULL)
   }
 
+  raw24_contains_internal_detail <- function(message) {
+    if (!is.character(message) || length(message) != 1L || is.na(message)) {
+      return(TRUE)
+    }
+    grepl(
+      paste(
+        "[\\r\\n]",
+        "[A-Za-z]:[/\\\\]",
+        "(^|[[:space:]('\\\"])/(Users|home|tmp|private|var|etc|usr|opt)/",
+        "\\\\\\\\[^\\\\]+\\\\",
+        paste(
+          "conditionMessage|traceback|call stack|fread|read[.]csv|readRDS",
+          "ggplot|ggsave|file[.]copy|write_csv|curl|libcurl|reactive|shiny[.]",
+          sep = "|"
+        ),
+        sep = "|"
+      ),
+      message,
+      ignore.case = TRUE,
+      perl = TRUE
+    )
+  }
+
+  raw24_safe_condition_message <- function(error, safe_prefixes, fallback) {
+    diagnostic <- conditionMessage(error)
+    trusted_message <- any(startsWith(diagnostic, safe_prefixes)) &&
+      !raw24_contains_internal_detail(diagnostic)
+    if (isTRUE(trusted_message)) diagnostic else fallback
+  }
+
+  record_raw24_condition_diagnostic <- function(context, error) {
+    message(sprintf(
+      "RAW-24 user-facing error diagnostic [%s]: %s",
+      context,
+      conditionMessage(error)
+    ))
+    invisible(NULL)
+  }
+
   safe_server_file_operation <- function(context, operation) {
     result <- safe_file_operation(operation)
     if (!identical(result$status, "success")) {
@@ -3033,11 +3072,14 @@ function(input, output, session){
   )
 
   processed_checkpoint_user_error_message <- function(error) {
-    message <- conditionMessage(error)
-    if (startsWith(message, "Processed dataset checkpoint")) {
-      return(message)
-    }
-    "Processed dataset checkpoint could not be loaded. Use a checkpoint downloaded from this dashboard."
+    raw24_safe_condition_message(
+      error,
+      safe_prefixes = "Processed dataset checkpoint",
+      fallback = paste(
+        "Processed dataset checkpoint could not be loaded.",
+        "Use a checkpoint downloaded from this dashboard."
+      )
+    )
   }
 
   observeEvent(input$load_processed_dataset_checkpoint, {
@@ -3067,6 +3109,7 @@ function(input, output, session){
       processed_checkpoint_load_status(list(status = "success", message = message))
       showNotification(message, type = "message", duration = 6)
     }, error = function(error) {
+      record_raw24_condition_diagnostic("processed dataset checkpoint load", error)
       message <- processed_checkpoint_user_error_message(error)
       processed_checkpoint_load_status(list(status = "error", message = message))
       showNotification(message, type = "error", duration = 8)
@@ -3438,6 +3481,12 @@ function(input, output, session){
         model_type  = "linear"
       )
     )
+    if (is.character(result$diagnostic) &&
+        length(result$diagnostic) == 1L &&
+        !is.na(result$diagnostic) &&
+        nzchar(result$diagnostic)) {
+      message(sprintf("RAW-24 model diagnostic: %s", result$diagnostic))
+    }
     basic_model_result(result)
     if (identical(result$status, "success")) {
       workflow_complete_artifact(
@@ -3871,15 +3920,15 @@ function(input, output, session){
   }
 
   workspace_user_error_message <- function(error) {
-    message <- conditionMessage(error)
     safe_prefixes <- c(
       "Workspace", "workspace", "A workspace", "Enter a workspace",
       "Dataset", "Saved dataset", "Local workspace"
     )
-    if (any(startsWith(message, safe_prefixes))) {
-      return(message)
-    }
-    "Workspace could not be saved. Check the name and local storage configuration."
+    raw24_safe_condition_message(
+      error,
+      safe_prefixes = safe_prefixes,
+      fallback = "Workspace could not be saved. Check the name and local storage configuration."
+    )
   }
 
   observeEvent(input$save_workspace, {
@@ -3935,6 +3984,7 @@ function(input, output, session){
       workspace_save_status(list(status = "success", message = message, result = result))
       showNotification(message, type = "message", duration = 6)
     }, error = function(error) {
+      record_raw24_condition_diagnostic("workspace save", error)
       message <- workspace_user_error_message(error)
       workspace_save_status(list(status = "error", message = message, result = NULL))
       showNotification(message, type = "error", duration = 8)

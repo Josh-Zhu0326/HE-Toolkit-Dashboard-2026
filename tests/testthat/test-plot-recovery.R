@@ -11,7 +11,10 @@ testthat::test_that("RAW-18 plot boundary sanitises errors and rejects unusable 
   testthat::expect_identical(thrown$failure, "plot_error")
   testthat::expect_match(thrown$diagnostic, raw_detail, fixed = TRUE)
   testthat::expect_match(thrown$message, "The plot could not be created", fixed = TRUE)
-  testthat::expect_false(grepl("ggplot_build|C:/private", thrown$message))
+  testthat::expect_false(grepl(
+    "conditionMessage|ggplot|ggplot_build|C:/private",
+    thrown$message
+  ))
   testthat::expect_identical(null_result$failure, "unusable_result")
   testthat::expect_identical(unsupported$failure, "unusable_result")
   testthat::expect_null(null_result$value)

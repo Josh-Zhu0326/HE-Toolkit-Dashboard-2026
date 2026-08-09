@@ -14,7 +14,10 @@ testthat::test_that("RAW-19 file boundary returns success and sanitises writer f
   testthat::expect_match(failure$diagnostic, raw_detail, fixed = TRUE)
   testthat::expect_match(failure$message, "The file could not be created or saved", fixed = TRUE)
   testthat::expect_match(failure$message, "destination is available and writable", fixed = TRUE)
-  testthat::expect_false(grepl("Permission denied|C:/Users|output.csv", failure$message, fixed = FALSE))
+  testthat::expect_false(grepl(
+    "conditionMessage|file.copy|write_csv|ggsave|Permission denied|C:/Users|output.csv",
+    failure$message
+  ))
 })
 
 testthat::test_that("RAW-19 failed derivative operation retains source state and retries", {

@@ -1046,6 +1046,139 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
   })
 })
 
+testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state and retries", {
+  model_mode <- new.env(parent = emptyenv())
+  model_mode$value <- "error"
+  original_model_runner <- get(
+    "build_basic_flow_ecology_model",
+    envir = environment(workflow_dashboard_server)
+  )
+  rlang::local_bindings(
+    build_basic_flow_ecology_model = function(data, flow_var, ecology_var) {
+      if (identical(model_mode$value, "error")) {
+        stop(
+          paste(
+            "lm.fit stats package failure at",
+            "C:/Users/developer/AppData/Local/Temp/model-input.csv"
+          ),
+          call. = FALSE
+        )
+      }
+      original_model_runner(data, flow_var, ecology_var)
+    },
+    .env = environment(workflow_dashboard_server)
+  )
+
+  checkpoint_path <- tempfile("raw24-model-checkpoint-", fileext = ".rds")
+  on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
+  checkpoint_data <- data.frame(
+    biol_site_id = "B1",
+    sample_id = paste0("S", 1:4),
+    date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01", "2023-05-01")),
+    Year = 2020:2023,
+    Q95z_lag0 = c(-1.5, -0.5, 0.5, 1.5),
+    LIFE_F_OE = c(0.7, 0.92, 1.05, 1.31),
+    stringsAsFactors = FALSE
+  )
+  write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
+  upload <- list(
+    name = basename(checkpoint_path),
+    size = file.info(checkpoint_path)$size,
+    type = "application/octet-stream",
+    datapath = normalizePath(checkpoint_path, winslash = "/", mustWork = TRUE)
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    checkpoint_fallback <- paste(
+      "Processed dataset checkpoint could not be loaded.",
+      "Use a checkpoint downloaded from this dashboard."
+    )
+    checkpoint_path_error <- simpleError(paste(
+      "Processed dataset checkpoint readRDS failed at",
+      "C:/Users/developer/AppData/Local/Temp/checkpoint.rds"
+    ))
+    workspace_path_error <- simpleError(
+      "Workspace save failed in reactive storage at /tmp/private/workspace.rds"
+    )
+    testthat::expect_identical(
+      processed_checkpoint_user_error_message(checkpoint_path_error),
+      checkpoint_fallback
+    )
+    testthat::expect_identical(
+      processed_checkpoint_user_error_message(simpleError(
+        "Processed dataset checkpoint is missing required column 'Year'."
+      )),
+      "Processed dataset checkpoint is missing required column 'Year'."
+    )
+    testthat::expect_identical(
+      workspace_user_error_message(workspace_path_error),
+      "Workspace could not be saved. Check the name and local storage configuration."
+    )
+    testthat::expect_false(grepl(
+      "readRDS|reactive|C:/Users|AppData|/tmp/private",
+      paste(
+        processed_checkpoint_user_error_message(checkpoint_path_error),
+        workspace_user_error_message(workspace_path_error)
+      )
+    ))
+    testthat::expect_message(
+      record_raw24_condition_diagnostic("checkpoint test", checkpoint_path_error),
+      "C:/Users/developer/AppData/Local/Temp/checkpoint.rds",
+      fixed = TRUE
+    )
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      processed_dataset_checkpoint_file = upload,
+      load_processed_dataset_checkpoint = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    retained_upstream <- workflow_artifacts()[c("joined_core", "analysis_dataset")]
+
+    testthat::expect_message(
+      muffle_interrupted_workflow_promise(session$setInputs(
+        basic_model_flow_var = "Q95z_lag0",
+        basic_model_ecology_var = "LIFE_F_OE",
+        run_basic_model = 1
+      )),
+      "RAW-24 model diagnostic: lm.fit stats package failure",
+      fixed = TRUE
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    safe_message <- model_fit_failure_message()
+    testthat::expect_identical(basic_model_result()$status, "error")
+    testthat::expect_identical(basic_model_result()$messages, safe_message)
+    testthat::expect_match(basic_model_result()$diagnostic, "C:/Users/developer", fixed = TRUE)
+    testthat::expect_match(output$basic_model_status$html, safe_message, fixed = TRUE)
+    testthat::expect_false(grepl(
+      "conditionMessage|lm.fit|stats package|C:/Users|AppData|model-input",
+      output$basic_model_status$html
+    ))
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "failed")
+    testthat::expect_identical(
+      workflow_artifacts()$model_result$blocking_reason,
+      safe_message
+    )
+    testthat::expect_identical(
+      workflow_artifacts()[c("joined_core", "analysis_dataset")],
+      retained_upstream
+    )
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
+
+    model_mode$value <- "success"
+    muffle_interrupted_workflow_promise(session$setInputs(run_basic_model = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(basic_model_result()$status, "success")
+    testthat::expect_null(basic_model_result()$diagnostic)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
+    testthat::expect_identical(current_analysis_data(), checkpoint_data)
+  })
+})
+
 testthat::test_that("a failed checkpoint upload does not replace current data", {
   valid_path <- tempfile("joined-he-checkpoint-", fileext = ".rds")
   invalid_path <- tempfile("joined-he-checkpoint-invalid-", fileext = ".rds")

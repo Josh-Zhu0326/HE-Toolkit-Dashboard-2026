@@ -635,19 +635,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Upload, donor input, model, download/temp and any fallback exception path. |
 | Blocking classification | Blocking for the failed operation; information-disclosure risk application-wide. |
 | Expected user-facing message | “An internal file-reading error occurred. Please check your input and try again.” |
-| Implemented message | Upload wrappers sanitise selected read failures; metadata normalisation and donor/model paths can display `conditionMessage(e)`. |
+| Implemented message | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Upload, donor, external-import, plot and file-operation boundaries use stable messages; model fitting, processed-checkpoint loading and workspace-save fallback presentation now keep raw diagnostics internal and expose only controlled actionable wording. |
 | Recovery action | Correct/retry input without seeing internal details; preserve valid state; support logs may retain details only in an authorised location. |
 | Expected retained state | Existing valid artifacts and inputs remain, failed target is not successful, and no local path appears in UI/download filename. |
-| Implementation evidence | Partial safe upload messages `R/dashboard_backlog_helpers.R:1-19`, `server.R:448-478`; leaks possible at `server.R:696-704,752-756,1788-1792` and `R/model_interface_helpers.R:70-74`. |
-| Automated test | None explicitly injects a path-bearing condition and asserts it is absent from rendered UI. |
+| Implementation evidence | `R/model_interface_helpers.R` separates `messages` from `diagnostic`; `server.R` records model/checkpoint/workspace diagnostics internally and sanitises the affected UI fallback messages. Existing `safe_external_import()`, `safe_plot_result()` and `safe_file_operation()` contracts remain separate and unchanged. |
+| Automated test | `tests/testthat/test-user-facing-error-safety.R` and `tests/testthat/test-workflow-server.R` inject Windows/Unix path-bearing model/checkpoint/workspace errors, assert exact safe UI messages and retained internal diagnostics, verify upstream currentness, and prove retry. Existing donor/external, plot and file recovery tests retain targeted negative-disclosure assertions. |
 | Manual test | Inject a synthetic error containing a fake path in every exception boundary; assert UI/DOM/screenshot lacks path/stack trace while authorised console log can be correlated. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
+| Current execution result | Pass — targeted automated RAW-24 coverage executed; browser/manual verification pending. |
+| Release evidence | Implementation complete; browser/manual verification pending. |
 | RC re-test required | Yes |
-| Gap | No systematic sanitisation, negative disclosure test, or browser/RC evidence. |
+| Gap | Previously identified implementation and negative-disclosure automation gap resolved on `qa/raw-user-facing-recovery`; browser/manual verification remains pending. |
 | Severity | Major |
-| Recommended action | Separate user-safe errors from internal diagnostics and add path/stack-trace redaction tests. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Complete the planned final browser/manual verification after the remaining RAW implementation and regression sequence. |
+| Coverage states | Documented: Yes; Implemented: Direct; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-25
 
