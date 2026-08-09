@@ -62,6 +62,40 @@ testthat::test_that("RAW-24 condition messages allow domain text and reject inte
   }
 })
 
+testthat::test_that("RAW-24 rejects file URIs without rejecting HTTP URLs", {
+  fallback <- "Workspace could not be saved. Check the name and local storage configuration."
+  safe_prefixes <- c("Workspace", "Dataset")
+  filesystem_uri_messages <- c(
+    "Workspace failed at file:///Library/secret.rds",
+    "Workspace failed at file:///tmp/private/state.rds",
+    "Workspace failed at file:///Users/developer/state.rds",
+    "Workspace failed at file:////server/share/secret.rds"
+  )
+  web_url_messages <- c(
+    "Workspace recovery guidance: https://example.org/help",
+    "Workspace recovery guidance: https://example.org/#/help/recovery",
+    "Workspace recovery guidance: http://localhost:8080/#/workflow/stage"
+  )
+
+  for (unsafe_message in filesystem_uri_messages) {
+    testthat::expect_true(raw24_contains_internal_detail(unsafe_message))
+    sanitised <- raw24_safe_condition_message(
+      simpleError(unsafe_message),
+      safe_prefixes,
+      fallback
+    )
+    testthat::expect_identical(sanitised, fallback)
+    testthat::expect_false(grepl("file:|secret|private", sanitised, ignore.case = TRUE))
+  }
+  for (safe_message in web_url_messages) {
+    testthat::expect_false(raw24_contains_internal_detail(safe_message))
+    testthat::expect_identical(
+      raw24_safe_condition_message(simpleError(safe_message), safe_prefixes, fallback),
+      safe_message
+    )
+  }
+})
+
 testthat::test_that("the interrupted-promise muffler preserves unrelated warnings", {
   testthat::expect_warning(
     muffle_interrupted_workflow_promise(warning("new warning category")),

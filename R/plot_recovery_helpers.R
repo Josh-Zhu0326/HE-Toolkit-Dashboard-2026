@@ -90,6 +90,27 @@ safe_final_plot_render <- function(plot,
   )
 }
 
+safe_server_plot_result <- function(operation,
+                                    user_message = plot_recovery_user_message()) {
+  result <- safe_plot_result(
+    operation,
+    user_message = user_message
+  )
+  result$phase <- "validation"
+  result
+}
+
+safe_server_plot_render_result <- function(plot,
+                                           user_message = plot_recovery_user_message()) {
+  result <- safe_final_plot_render(
+    plot,
+    user_message = user_message
+  )
+  result$value <- NULL
+  result$phase <- "final_render"
+  result
+}
+
 force_plot_result <- function(plot) {
   # Force the complete draw stage without creating an image file or changing
   # the caller's active graphics device after validation completes.

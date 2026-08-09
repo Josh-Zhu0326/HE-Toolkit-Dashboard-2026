@@ -3,14 +3,15 @@ raw24_contains_internal_detail <- function(message) {
     return(TRUE)
   }
 
-  url_token <- "\\bhttps?://[^[:space:]'\\\"<>|]+"
+  web_url_token <- "\\bhttps?://[^[:space:]'\\\"<>|]+"
   path_scan_message <- gsub(
-    url_token,
+    web_url_token,
     "",
     message,
     ignore.case = TRUE,
     perl = TRUE
   )
+  filesystem_uri <- "\\bfile:/+"
   absolute_posix_path <- paste0(
     "(^|[^[:alnum:]_./-])",
     "/(?!/)[^[:space:]'\\\"<>|]*"
@@ -21,6 +22,11 @@ raw24_contains_internal_detail <- function(message) {
   )
 
   contains_absolute_path <- grepl(
+    filesystem_uri,
+    path_scan_message,
+    ignore.case = TRUE,
+    perl = TRUE
+  ) || grepl(
     paste(absolute_windows_path, absolute_posix_path, sep = "|"),
     path_scan_message,
     ignore.case = TRUE,

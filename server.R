@@ -325,18 +325,36 @@ function(input, output, session){
     result$value
   }
 
-  safe_server_plot <- function(context, operation) {
-    result <- safe_plot_result(operation)
-    if (!identical(result$status, "success")) {
-      message(sprintf(
-        "RAW-18 plot diagnostic [%s/%s]: %s",
-        context,
-        result$failure,
-        result$diagnostic
-      ))
-      validate(need(FALSE, result$message))
+  stop_for_plot_failure <- function(context, result) {
+    if (identical(result$status, "success")) {
+      return(invisible(FALSE))
     }
+
+    message(sprintf(
+      "RAW-18 %s diagnostic [%s/%s]: %s",
+      if (identical(result$phase, "final_render")) "final-render" else "plot",
+      context,
+      result$failure,
+      result$diagnostic
+    ))
+    validate(need(FALSE, result$message))
+  }
+
+  safe_server_plot_value <- function(context, operation) {
+    result <- safe_server_plot_result(operation)
+    stop_for_plot_failure(context, result)
     result$value
+  }
+
+  safe_server_plot_render <- function(context, plot) {
+    result <- safe_server_plot_render_result(plot)
+    stop_for_plot_failure(context, result)
+    invisible(NULL)
+  }
+
+  safe_server_plot <- function(context, operation) {
+    plot <- safe_server_plot_value(context, operation)
+    safe_server_plot_render(context, plot)
   }
 
   workflow_checkpoint_card <- function(artifact_id, complete_message, blocked_message) {
@@ -1715,7 +1733,7 @@ function(input, output, session){
       group_col = input$wq_group_col
     )
     validate(need(!is.null(result$plot), result$message))
-    safe_server_plot("WQ", function() result$plot)
+    safe_server_plot_value("WQ", function() result$plot)
   })
 
   current_rhs_plot <- reactive({
@@ -1726,15 +1744,15 @@ function(input, output, session){
       group_col = input$rhs_group_col
     )
     validate(need(!is.null(result$plot), result$message))
-    safe_server_plot("RHS", function() result$plot)
+    safe_server_plot_value("RHS", function() result$plot)
   })
 
   output$wq_mapped_plot <- renderPlot({
-    current_wq_plot()
+    safe_server_plot_render("WQ", current_wq_plot())
   })
 
   output$rhs_mapped_plot <- renderPlot({
-    current_rhs_plot()
+    safe_server_plot_render("RHS", current_rhs_plot())
   })
 
   output$download_wq_plot <- downloadHandler(
