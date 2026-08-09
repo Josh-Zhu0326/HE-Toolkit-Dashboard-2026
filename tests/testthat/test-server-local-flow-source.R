@@ -1,31 +1,5 @@
-project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
-dashboard_server <- local({
-  previous_dir <- getwd()
-  setwd(project_root)
-  on.exit(setwd(previous_dir), add = TRUE)
-  source("global.R")
-  source("server.R")$value
-})
-
-flow_upload_input <- function(path) {
-  list(
-    name = basename(path),
-    size = file.info(path)$size,
-    type = "text/csv",
-    datapath = normalizePath(path, winslash = "/", mustWork = TRUE)
-  )
-}
-
-set_inputs_ignoring_interrupted_promises <- function(session, ...) {
-  withCallingHandlers(
-    session$setInputs(...),
-    warning = function(warning) {
-      if (grepl("restarting interrupted promise evaluation", conditionMessage(warning), fixed = TRUE)) {
-        invokeRestart("muffleWarning")
-      }
-    }
-  )
-}
+dashboard_server <- workflow_dashboard_server
+flow_upload_input <- shiny_upload_input
 
 testthat::test_that("valid Local Flow is operational and bypasses the external importer", {
   importer_calls <- 0L
@@ -581,14 +555,7 @@ testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but su
   writeLines(c("habitat_score,channel_type", "55,natural"), invalid_rhs, useBytes = TRUE)
 
   shiny::testServer(dashboard_server, {
-    withCallingHandlers(
-      session$flushReact(),
-      warning = function(warning) {
-        if (grepl("restarting interrupted promise evaluation", conditionMessage(warning), fixed = TRUE)) {
-          invokeRestart("muffleWarning")
-        }
-      }
-    )
+    muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(wq_upload()$validation$status, "info")
     testthat::expect_identical(rhs_upload()$validation$status, "info")
     workflow_complete_artifact("joined_core", "test", "Unrelated core join fixture.")

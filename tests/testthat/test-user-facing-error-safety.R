@@ -1,6 +1,41 @@
 source(testthat::test_path("..", "..", "R", "csv_input_helpers.R"))
 source(testthat::test_path("..", "..", "R", "dashboard_backlog_helpers.R"))
 source(testthat::test_path("..", "..", "R", "model_interface_helpers.R"))
+source(testthat::test_path("..", "..", "R", "user_message_safety_helpers.R"))
+
+testthat::test_that("RAW-24 condition messages allow domain text and reject internal detail", {
+  fallback <- "Workspace could not be saved. Check the name and local storage configuration."
+  safe_prefixes <- c("Workspace", "Dataset")
+  safe_message <- "Workspace name must not be empty."
+  unsafe_messages <- c(
+    "Workspace failed at C:/Users/developer/AppData/Local/Temp/state.rds",
+    "Workspace failed at /tmp/private/state.rds",
+    "Workspace failed at \\\\server\\share\\state.rds",
+    "Workspace conditionMessage internal function failure",
+    "Workspace parser traceback in shiny.internal",
+    "Workspace ggplot ggsave file.copy curl failure"
+  )
+
+  testthat::expect_identical(
+    raw24_safe_condition_message(simpleError(safe_message), safe_prefixes, fallback),
+    safe_message
+  )
+  for (unsafe_message in unsafe_messages) {
+    testthat::expect_true(raw24_contains_internal_detail(unsafe_message))
+    testthat::expect_identical(
+      raw24_safe_condition_message(simpleError(unsafe_message), safe_prefixes, fallback),
+      fallback
+    )
+  }
+})
+
+testthat::test_that("the interrupted-promise muffler preserves unrelated warnings", {
+  testthat::expect_warning(
+    muffle_interrupted_workflow_promise(warning("new warning category")),
+    "new warning category",
+    fixed = TRUE
+  )
+})
 
 testthat::test_that("RAW-24 model failures separate the safe message from diagnostics and retry", {
   joined <- data.frame(

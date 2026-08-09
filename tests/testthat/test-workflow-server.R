@@ -1,23 +1,3 @@
-project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
-workflow_dashboard_server <- local({
-  previous_dir <- getwd()
-  setwd(project_root)
-  on.exit(setwd(previous_dir), add = TRUE)
-  source("global.R")
-  source("server.R")$value
-})
-
-muffle_interrupted_workflow_promise <- function(expression) {
-  withCallingHandlers(
-    expression,
-    warning = function(warning) {
-      if (grepl("restarting interrupted promise evaluation", conditionMessage(warning), fixed = TRUE)) {
-        invokeRestart("muffleWarning")
-      }
-    }
-  )
-}
-
 testthat::test_that("RAW-23 workbook preview observer accepts missing and empty sheet input", {
   shiny::testServer(workflow_dashboard_server, {
     testthat::expect_warning(
@@ -490,12 +470,7 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
 
   shiny::testServer(workflow_dashboard_server, {
     local_flow_path <- testthat::test_path("..", "fixtures", "local_flow.csv")
-    local_flow_input <- list(
-      name = basename(local_flow_path),
-      size = file.info(local_flow_path)$size,
-      type = "text/csv",
-      datapath = normalizePath(local_flow_path, winslash = "/", mustWork = TRUE)
-    )
+    local_flow_input <- shiny_upload_input(local_flow_path)
 
     muffle_interrupted_workflow_promise(session$setInputs(
       meta_paste = "biol_site_id,flow_site_id,flow_input\nB1,F1,HDE",
@@ -997,12 +972,7 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
     provenance = list(source = "first test session"),
     app_version = "test-commit"
   )
-  upload <- list(
-    name = basename(checkpoint_path),
-    size = file.info(checkpoint_path)$size,
-    type = "application/octet-stream",
-    datapath = normalizePath(checkpoint_path, winslash = "/", mustWork = TRUE)
-  )
+  upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")
 
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -1081,12 +1051,7 @@ testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state a
     stringsAsFactors = FALSE
   )
   write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
-  upload <- list(
-    name = basename(checkpoint_path),
-    size = file.info(checkpoint_path)$size,
-    type = "application/octet-stream",
-    datapath = normalizePath(checkpoint_path, winslash = "/", mustWork = TRUE)
-  )
+  upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")
 
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -1193,12 +1158,7 @@ testthat::test_that("a failed checkpoint upload does not replace current data", 
   )
   write_processed_dataset_checkpoint(checkpoint_data, valid_path)
   writeLines("not an R checkpoint", invalid_path, useBytes = TRUE)
-  upload <- function(path) list(
-    name = basename(path),
-    size = file.info(path)$size,
-    type = "application/octet-stream",
-    datapath = normalizePath(path, winslash = "/", mustWork = TRUE)
-  )
+  upload <- function(path) shiny_upload_input(path, "application/octet-stream")
 
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())

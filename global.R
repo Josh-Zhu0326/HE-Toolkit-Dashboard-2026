@@ -39,6 +39,7 @@ library(performance)
 options(sass.cache = FALSE)
 
 addResourcePath("prefix", "www")
+source(file.path("R", "user_message_safety_helpers.R"))
 source(file.path("R", "file_operation_helpers.R"))
 source(file.path("R", "csv_input_helpers.R"))
 source(file.path("R", "external_import_recovery_helpers.R"))

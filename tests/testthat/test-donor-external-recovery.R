@@ -1,31 +1,6 @@
-project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
-raw_recovery_server <- local({
-  previous_dir <- getwd()
-  setwd(project_root)
-  on.exit(setwd(previous_dir), add = TRUE)
-  source("global.R")
-  source("server.R")$value
-})
-
-raw_recovery_upload_input <- function(path) {
-  list(
-    name = basename(path),
-    size = file.info(path)$size,
-    type = "text/csv",
-    datapath = normalizePath(path, winslash = "/", mustWork = TRUE)
-  )
-}
-
-raw_recovery_set_inputs <- function(session, ...) {
-  withCallingHandlers(
-    session$setInputs(...),
-    warning = function(warning) {
-      if (grepl("restarting interrupted promise evaluation", conditionMessage(warning), fixed = TRUE)) {
-        invokeRestart("muffleWarning")
-      }
-    }
-  )
-}
+raw_recovery_server <- workflow_dashboard_server
+raw_recovery_upload_input <- shiny_upload_input
+raw_recovery_set_inputs <- set_inputs_ignoring_interrupted_promises
 
 testthat::test_that("RAW-02 and RAW-03 donor parsers reject unsafe input before downstream use", {
   reader_calls <- 0L
