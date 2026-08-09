@@ -23,22 +23,95 @@ plot_result_is_usable <- function(plot) {
     all(vapply(plot, plot_result_is_usable, logical(1)))
 }
 
-force_plot_result <- function(plot) {
+draw_plot_result <- function(plot) {
   if (inherits(plot, "ggmatrix")) {
-    GGally::ggmatrix_gtable(plot)
+    grid::grid.draw(GGally::ggmatrix_gtable(plot))
     return(invisible(TRUE))
   }
 
   if (inherits(plot, "ggplot")) {
-    ggplot2::ggplot_build(plot)
+    print(plot)
     return(invisible(TRUE))
   }
 
-  if (is.list(plot) && !inherits(plot, c("grob", "gtable"))) {
-    lapply(plot, force_plot_result)
+  if (inherits(plot, c("grob", "gtable"))) {
+    grid::grid.draw(plot)
+    return(invisible(TRUE))
+  }
+
+  if (inherits(plot, "recordedplot")) {
+    grDevices::replayPlot(plot)
+    return(invisible(TRUE))
+  }
+
+  if (inherits(plot, "trellis")) {
+    print(plot, newpage = TRUE)
+    return(invisible(TRUE))
+  }
+
+  if (is.list(plot)) {
+    lapply(plot, draw_plot_result)
   }
 
   invisible(TRUE)
+}
+
+safe_final_plot_render <- function(plot,
+                                   user_message = plot_recovery_user_message()) {
+  if (!plot_result_is_usable(plot)) {
+    return(list(
+      status = "failed",
+      failure = "unusable_result",
+      message = user_message,
+      diagnostic = "The final plot render received a NULL or unsupported result."
+    ))
+  }
+
+  tryCatch(
+    {
+      # This draw occurs on the graphics device already opened by renderPlot().
+      # Returning invisibly prevents Shiny from drawing the object a second time.
+      draw_plot_result(plot)
+      list(
+        status = "success",
+        failure = NULL,
+        message = NULL,
+        diagnostic = NULL
+      )
+    },
+    error = function(error) {
+      list(
+        status = "failed",
+        failure = "plot_error",
+        message = user_message,
+        diagnostic = conditionMessage(error)
+      )
+    }
+  )
+}
+
+force_plot_result <- function(plot) {
+  # Force the complete draw stage without creating an image file or changing
+  # the caller's active graphics device after validation completes.
+  grDevices::pdf(file = NULL)
+  validation_device <- grDevices::dev.cur()
+  on.exit({
+    open_devices <- grDevices::dev.list()
+    if (!is.null(open_devices) && validation_device %in% open_devices) {
+      withCallingHandlers(
+        grDevices::dev.off(which = validation_device),
+        warning = function(warning) {
+          # Preserve the draw error; grid emits this warning only while
+          # releasing a device that the failed draw left locked.
+          if (identical(conditionMessage(warning), "Killing locked device")) {
+            invokeRestart("muffleWarning")
+          }
+        }
+      )
+    }
+  }, add = TRUE)
+
+  draw_plot_result(plot)
 }
 
 safe_plot_result <- function(operation,

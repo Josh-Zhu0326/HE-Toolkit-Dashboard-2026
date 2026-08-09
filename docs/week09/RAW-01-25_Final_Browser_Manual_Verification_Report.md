@@ -6,6 +6,7 @@
 **Browser/manual baseline:** `b0f1bd5` (`docs: align RAW matrix with final recovery status`)
 **Automated verification baseline:** `19daf7a` (`refactor: consolidate RAW message and test helpers`)
 **Relationship between baselines:** `b0f1bd5` is a documentation-only descendant of `19daf7a`; no production or test behaviour changed between the automated gate and the browser/manual smoke session.
+**Corrective review verification:** 2026-08-09 at `516efdd` plus the local unstaged patch; implementation and automated results below include the PR #89 review corrections. The full browser suite was not repeated, but the production-rendering change received the focused RAW-18 smoke recorded below.
 **Prepared by:** Benyu Zhu
 **Scope:** RAW-01–RAW-25 recovery verification only. DATA-01 and DATA-02 are tracked separately and are not resolved by this report.
 
@@ -61,13 +62,13 @@ biol_site_id,flow_site_id,flow_input,wq_site_id,rhs_survey_id
 
 ## 3. Automated Regression Gate
 
-The final automated gate was executed before browser/manual smoke verification.
+The original final automated gate was executed before browser/manual smoke verification. The corrective automated gate below was executed after the review fixes; only the required focused RAW-18 browser smoke was rerun.
 
 ### 3.1 testthat
 
-- Cases: **154**
-- Expectations: **1,056**
-- Passed: **1,056**
+- Cases: **161**
+- Expectations: **1,131**
+- Passed: **1,131**
 - Failures: **0**
 - Errors: **0**
 - Warnings: **0**
@@ -109,7 +110,7 @@ Existing warning-only scripts:
 
 | RAW | Final Status | Browser / Manual Result | Evidence |
 |---|---|---|---|
-| RAW-01 | **Not Executed / Outstanding** | The authoritative missing-`ggnewscale` dependency failure was not injected during this browser session. | No browser screenshot required; scenario remains outstanding. |
+| RAW-01 | **Pass (Implementation + Automated)** | Dependency preflight and server blocking/recovery are implemented and automated tests pass. Missing-`ggnewscale` dependency injection was Not Executed during this browser session. | Automated evidence only for the failure path; no browser dependency-failure screenshot is claimed. |
 | RAW-02 | Pass | Path-like / malformed donor mapping input was converted to safe validation rather than raw file/path errors. | `RAW02_01_path_like_donor_mapping_safe_failure.png`, `RAW02_02_invalid_donor_mapping_schema_blocked.png` |
 | RAW-03 | Pass | Invalid Flow-source / mapping values were blocked safely before processing. | `RAW03_01_invalid_flow_input_blocked.png`, `RAW03_02_blank_flow_site_id_blocked.png` |
 | RAW-04 | Pass | Empty and whitespace-only donor mapping were blocked with the intended donor-mapping guidance; existing Flow Statistics were retained. | `RAW04_01_blank_donor_mapping_blocked.png`, `RAW04_02_whitespace_donor_mapping_blocked.png` |
@@ -126,13 +127,13 @@ Existing warning-only scripts:
 | RAW-15 | **Pass with Warning** | Join was blocked without current Flow Statistics; after calculating Flow Statistics, same-session retry generated Joined HE successfully. | `RAW15_01_join_blocked_without_flow_statistics.png`, `RAW15_02_join_retry_after_flow_statistics.png` |
 | RAW-16 | **Pass with Warning** | Join was blocked without current O:E; after calculating O:E, same-session retry generated Joined HE successfully. | `RAW16_01_join_blocked_without_oe.png`, `RAW16_02_join_retry_after_oe.png` |
 | RAW-17 | Pass | HEV generation was blocked without current Joined HE; after rebuilding the join, explicit same-session retry generated a current HEV plot. | `RAW17_01_hev_blocked_without_joined_he.png`, `RAW17_02_hev_retry_after_joined_he.png` |
-| RAW-18 | Pass | Invalid/unusable plot range produced a controlled failed plot request; upstream state remained current and retry after correcting the range succeeded. | `RAW18_01_hev_plot_failure_controlled.png`, `RAW18_02_hev_plot_retry_success.png` |
+| RAW-18 | Pass | Focused corrective Chrome smoke passed normal HEV rendering, controlled `2026–2026` failure and corrected `1990–2025` retry. Automation additionally proves the real final-render boundary catches second-draw and nested failures. | Existing screenshots `RAW18_01_hev_plot_failure_controlled.png`, `RAW18_02_hev_plot_retry_success.png`; focused corrective browser observation; targeted automation |
 | RAW-19 | Pass (Automated + Browser Normal Path) | Browser download path verified for PDF/JPEG/PNG; PDF opened successfully. Writer-failure recovery remains covered by automated tests. | `RAW19_01_hev_pdf_download_and_open.png`, `RAW19_02_hev_all_formats_downloaded.png` |
 | RAW-20 | **Superseded / N/A** | Historical runtime-generated Flow CSV reopen mechanism is not used by the current architecture. | No browser screenshot required. |
 | RAW-21 | Pass (Automated) | Filesystem/permission-style recovery covered by deterministic automation. Destructive Windows permission fault injection was intentionally not performed. | Automated evidence only. |
 | RAW-22 | Pass | Valid HDE donor request failed externally with safe UI messaging while existing Flow Statistics were retained; correcting source to NRFA succeeded in the same session. | `RAW22_01_additional_donor_external_failure_safe.png`, `RAW22_02_additional_donor_retry_success.png` |
 | RAW-23 | Pass | Workbook checkpoint basic browser smoke remained stable before upload and after a valid workbook. NULL/empty/NA/blank/invalid sheet inputs are covered by automation. | Browser smoke completed; screenshot not retained. |
-| RAW-24 | Pass | Multiple browser failures displayed safe user-facing messages without exposing paths, `fread`, `conditionMessage`, `ggplot`, traceback, or other internal implementation details. | Reuses RAW-02, RAW-06, RAW-18 and RAW-22 evidence. |
+| RAW-24 | Pass | Browser failures displayed safe messages; corrective automation covers colon-adjacent POSIX paths plus general POSIX, Windows drive and UNC forms while preserving complete HTTP/HTTPS URLs, hash routes and benign prose. | Reuses RAW-02, RAW-06, RAW-18 and RAW-22 evidence; targeted automation. |
 | RAW-25 | **Deferred / Known Limitation** | Global timeout/cancellation/busy-state lifecycle framework was intentionally not implemented in this recovery patch. | No browser test required for closure. |
 
 ---
@@ -159,11 +160,11 @@ This general navigation smoke is not evidence for RAW-01.
 
 ### RAW-01 — Missing `ggnewscale` Dependency / Recovery
 
-**Status:** Not Executed / Outstanding
+**Status:** Pass (Implementation + Automated); browser dependency-failure injection Not Executed
 
-The authoritative RAW-01 scenario requires verification of recovery when the `ggnewscale` dependency is unavailable. Missing-`ggnewscale` dependency injection was not performed during this final browser session. RAW-01 is therefore neither claimed fixed nor browser-verified and remains an outstanding browser scenario consistent with the recovery matrix.
+`hev_dependency_check()` performs the `ggnewscale` preflight, and the server blocks the HEV request with the agreed safe message while ending the request cleanly. Dedicated helper and workflow-server RAW-01 tests pass. Missing-`ggnewscale` dependency injection was not performed during this final browser session, so no browser dependency-failure verification is claimed.
 
-**Evidence:** No dedicated screenshot required; the scenario was not executed.
+**Evidence:** Passing `tests/testthat/test-hev-dependency-boundary.R` and the RAW-01 workflow-server case. No dedicated browser screenshot is claimed. `SMOKE_01_task_and_stage_navigation.png` remains general navigation smoke and is not RAW-01 evidence.
 
 ### RAW-02 — Safe Donor Mapping / Path-Like Input Handling
 
@@ -484,6 +485,10 @@ Recovery:
 - Stage 4 returned to `Complete`;
 - current HEV output and download became available again.
 
+Corrective automated coverage now exercises `safe_final_plot_render()` itself on the active output device. It proves valid `ggplot`, `ggmatrix`, `grob`, `gtable`, `recordedplot`, `trellis` and nested/list values render; a stateful object can pass its first validation draw but fail its second/final draw without escaping; nested draw failures are controlled; diagnostics retain technical detail while user text remains generic; and device state is unchanged after success/failure.
+
+After that production rendering change, a focused Chrome smoke reused the pilot mapping. A normal `1990–2025` HEV request produced a 1174×400 PNG. The unusable `2026–2026` range produced no image and displayed the generic plot recovery message while retaining the previous plot only as history. Restoring `1990–2025` and retrying in the same session produced the PNG again and returned the task to complete. No artificial browser draw-time object injection is claimed.
+
 **Evidence**
 
 - `RAW18_01_hev_plot_failure_controlled.png`
@@ -631,6 +636,8 @@ Across these cases, the UI used controlled messages and did not visibly expose:
 
 This browser evidence complements the dedicated RAW-24 automated safety tests.
 
+Corrective automation covers absolute POSIX paths (including colon-adjacent labels, `/Library`, `/Applications`, `/Volumes`, `/srv`, `/var`, `/Users`, `/home`, `/tmp` and root `/`), Windows drive paths using either separator, and UNC shares. Complete HTTP/HTTPS URL tokens are protected before filesystem-path detection, preserving multi-component URL paths and hash routes as well as ordinary `input/output`, `numerator/denominator` and `yes/no` prose. This did not involve an additional browser injection.
+
 **Evidence reused from:** RAW-02, RAW-06, RAW-18 and RAW-22.
 
 No additional screenshot was required.
@@ -729,7 +736,7 @@ RAW-01, RAW-20, RAW-21, RAW-23, RAW-24 and RAW-25 do not require dedicated scree
 
 Browser/manual recovery smoke completed with the following explicit outstanding scenarios and limitations:
 
-1. **RAW-01 missing-`ggnewscale` dependency injection** — not executed; the authoritative dependency-failure recovery scenario remains outstanding, with no implementation or automated coverage claimed.
+1. **RAW-01 missing-`ggnewscale` dependency injection** — not executed in the browser; implementation and automated verification pass, and no browser dependency-failure claim is made.
 2. **RAW-19 browser writer-failure injection** — not executed; failure recovery is covered by automated tests; normal browser PDF/JPEG/PNG download path passed.
 3. **RAW-21 destructive permission injection** — not executed; filesystem/permission recovery is covered by automation.
 4. **RAW-23 invalid-sheet browser injection** — not executed because the production UI does not expose a normal path to select a non-existent sheet; automated coverage exercises NULL/empty/NA/blank/invalid sheet states.
@@ -744,7 +751,7 @@ Browser/manual recovery smoke completed with the following explicit outstanding 
 
 **PASS**
 
-- 1,056 / 1,056 testthat expectations passed.
+- 1,131 / 1,131 testthat expectations passed.
 - 18 / 18 standalone scripts exited successfully.
 - No new automated warnings were introduced.
 
@@ -754,7 +761,7 @@ Browser/manual recovery smoke completed with the following explicit outstanding 
 
 The implemented RAW recovery scope was broadly verified across metadata replacement, malformed CSV handling, required/optional mapping validation, Flow-source defaulting, donor/imputation validation, Biology / Environmental / RICT / O:E / Flow Statistics prerequisite gates, Joined HE currentness, HEV currentness, controlled plot failure and same-session retry, external donor Flow failure and same-session recovery, HEV PDF/JPEG/PNG normal download path, workbook checkpoint stability, and user-facing error sanitisation.
 
-RAW-01 remains **Not Executed / Outstanding** because the authoritative missing-`ggnewscale` dependency-failure scenario was not injected during this session. The separate task/stage navigation check passed only as general browser smoke.
+RAW-01 is **Pass (Implementation + Automated)**. The authoritative missing-`ggnewscale` dependency-failure scenario was not injected during the browser session and remains explicitly Not Executed at that layer. The separate task/stage navigation check passed only as general browser smoke and is not RAW-01 evidence.
 
 RAW-15 and RAW-16 are **Pass with Warning** because Joined HE was generated successfully while a non-blocking Biology/Flow temporal coverage warning was displayed.
 

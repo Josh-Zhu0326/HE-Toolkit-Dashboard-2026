@@ -3748,7 +3748,16 @@ function(input, output, session){
   }, priority = -100)
 
   output$HEV_plot <- renderPlot({
-    HEV_plot()
+    final_render <- safe_final_plot_render(HEV_plot())
+    if (!identical(final_render$status, "success")) {
+      message(sprintf(
+        "RAW-18 final-render diagnostic [HEV/%s]: %s",
+        final_render$failure,
+        final_render$diagnostic
+      ))
+      validate(need(FALSE, final_render$message))
+    }
+    invisible(NULL)
   }) 
   
   output$hev_download_history_table <- DT::renderDataTable({

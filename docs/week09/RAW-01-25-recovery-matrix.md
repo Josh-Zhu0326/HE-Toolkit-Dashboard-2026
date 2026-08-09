@@ -1,7 +1,7 @@
 # RAW-01–25 Recovery Coverage Audit
 
 Historical audit date: 2026-07-30
-Final documentation cleanup baseline: 2026-08-09 on `qa/raw-user-facing-recovery` at `19daf7a`.
+Final corrective-review verification: 2026-08-09 on `qa/raw-user-facing-recovery` at `516efdd`, with the reviewed patch kept local and unstaged.
 
 ## 1. Audit Baseline
 
@@ -10,9 +10,9 @@ Final documentation cleanup baseline: 2026-08-09 on `qa/raw-user-facing-recovery
 | Item | Value |
 |---|---|
 | Branch | `qa/raw-user-facing-recovery` |
-| HEAD | `19daf7a01e695a4e8999feac6a168f68c32871ef` |
-| Worktree before this documentation cleanup | Clean |
-| Full testthat | 154 cases; 1056 expectations; 1056 passed; 0 failures; 0 errors; 0 warnings; 0 skips; exit code 0 |
+| HEAD | `516efdd657a9724955398b58f9b49ea7e0ae1eff` |
+| Corrective patch state | Local and unstaged; not committed, pushed or merged |
+| Full testthat | 161 cases; 1131 expectations; 1131 passed; 0 failures; 0 errors; 0 warnings; 0 skips; exit code 0 |
 | Standalone scripts | 18 total; 16 Pass; 2 Pass with Warning; 0 Fail |
 | Historical Pass with Warning | `tests/test_mixed_model_helpers.R`; `tests/test_server_site_import.R` |
 | Browser/manual verification | Final browser/manual smoke session completed separately; see row-level results and the final report |
@@ -52,13 +52,13 @@ Conclusion: a complete RAW-01–25 definition set does exist.
 | RAW-11 | RAW-11 | Implemented with direct passing workflow-server automation and passing final browser prerequisite verification. |
 | Superseded / N/A | RAW-20 | No additional production implementation or dedicated browser screenshot required. |
 | Deferred / Known limitation | RAW-25 | Not implemented in the current scope; future dedicated lifecycle/refactoring work recommended. |
-| Not Executed / Outstanding | RAW-01 | Missing-`ggnewscale` dependency injection was not performed; no implementation, automated test or browser verification is claimed. |
+| Pass (implementation + automated verification) | RAW-01 | Dependency preflight and server recovery are implemented and automated tests pass. Missing-`ggnewscale` browser dependency injection was Not Executed and is not claimed. |
 
-All 25 RAW identifiers remain documented. RAW-labelled deterministic tests exist for multiple recovery paths alongside cross-cutting workflow tests. Automated coverage and browser/manual verification are reported separately, with RAW-01 outstanding, RAW-20 Superseded / N/A and RAW-25 Deferred / Known Limitation.
+All 25 RAW identifiers remain documented. RAW-labelled deterministic tests exist for multiple recovery paths alongside cross-cutting workflow tests. Automated coverage and browser/manual verification are reported separately, with RAW-01 passing on implementation plus automation while its browser dependency-failure injection remains Not Executed, RAW-20 Superseded / N/A and RAW-25 Deferred / Known Limitation.
 
 ### Command-level result
 
-The final testthat gate passed 154 cases and 1056 expectations with no failures, errors, warnings or skips. The standalone gate ran 18 scripts: 16 Pass, 2 historical Pass with Warning, and 0 Fail. The two Pass with Warning scripts are `tests/test_mixed_model_helpers.R` and `tests/test_server_site_import.R`. Browser/manual results come from the separate completed final smoke session, not from this automated gate.
+The corrective testthat gate passed 161 cases and 1131 expectations with no failures, errors, warnings or skips. The standalone gate ran 18 scripts: 16 Pass, 2 historical Pass with Warning, and 0 Fail. The two Pass with Warning scripts are `tests/test_mixed_model_helpers.R` and `tests/test_server_site_import.R`. Browser/manual results come from the completed final session plus the focused RAW-18 corrective smoke, not from this automated gate.
 
 ## 4. RAW-01–25 Matrix
 
@@ -72,19 +72,19 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Affected workflow/task | Task “Generate HEV plots”; Stage 4 Analysis / HEV feature. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “The required package ggnewscale is missing. Please install project dependencies before using the HEV plot feature.” |
-| Implemented message | None. Namespace calls are made directly. |
+| Implemented message | “The required package ggnewscale is missing. Please install project dependencies before using the HEV plot feature.” |
 | Recovery action | Stop the operation; keep the session usable; an administrator restores the approved project dependencies, then the user retries the HEV plot. Do not ask a study participant to change packages mid-session. |
 | Expected retained state | Site mapping, imported data, processed Biology/Flow, join, selections, and any prior valid plot remain intact and clearly marked current/stale as appropriate. |
-| Implementation evidence | Not implemented. Direct calls at `global.R:485,524,565,605,637,675,715,755`; no `requireNamespace()`/friendly dependency guard was found. |
-| Automated test | None. |
+| Implementation evidence | `R/hev_dependency_helpers.R` implements `hev_dependency_check()` with a `requireNamespace("ggnewscale", quietly = TRUE)` preflight. The `renderHEV` observer in `server.R` runs that preflight before HEV prerequisites or plotting, clears the request, marks HEV blocked, shows the safe message and returns when the dependency is unavailable. |
+| Automated test | `tests/testthat/test-hev-dependency-boundary.R` covers missing and available dependency results and exact safe wording. `tests/testthat/test-workflow-server.R`, “RAW-01 missing HEV dependency blocks safely and ends the request”, injects the missing-dependency result and asserts blocked HEV state plus safe UI output. Both pass in the corrective gate. |
 | Manual test | Browser/manual fault-injection step: in an isolated environment only, make `ggnewscale` unavailable, render each HEV variant, verify friendly message, spinner termination, navigation, retained join, and recovery after restoring the approved environment. |
-| Current execution result | Not Executed / Outstanding. The missing-`ggnewscale` dependency failure was not injected during the final browser/manual session. |
-| Release evidence | No current implementation, automated test or browser evidence is claimed. The general task/stage navigation smoke is not RAW-01 evidence. |
-| Browser/manual verification required | Yes |
-| Gap | No dependency guard, no test, no retained-state/browser evidence. Raw R error and permanent loading remain possible. |
+| Current execution result | Pass based on complete implementation and passing automated verification. Missing-`ggnewscale` dependency injection was Not Executed during the final browser/manual session. |
+| Release evidence | Implementation and automated evidence above. No browser dependency-failure screenshot or manual injection is claimed. `SMOKE_01_task_and_stage_navigation.png` remains general navigation smoke and is not relabelled as RAW-01. |
+| Browser/manual verification required | Missing-dependency browser injection remains Not Executed and should stay explicitly separate from the passing implementation/automated assessment. |
+| Gap | Browser dependency-failure injection and recovery after restoring the approved environment were not executed; implementation and automated coverage are complete. |
 | Severity | Major |
-| Recommended action | Add an environment preflight and feature-level safe message in a future code change; add an isolated missing-package recovery test and browser/manual screenshot/log. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current branch: No; Browser/manual verification: Not Executed / Outstanding. |
+| Recommended action | Retain the passing implementation/automated evidence and, if later required, execute isolated browser dependency injection without treating the navigation smoke as RAW-01 evidence. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Automated assessment: Pass; Browser missing-dependency injection: Not Executed. |
 
 ### RAW-02
 
@@ -488,13 +488,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implemented message | WQ/RHS helpers retain their specific friendly validation; the shared plot-specific boundary and HEV status now use “The plot could not be created because the required data is missing or invalid. Check the plot inputs and current results, then try again.” |
 | Recovery action | Keep valid data and selections, choose valid variables/date range or regenerate prerequisites, then retry the plot. |
 | Expected retained state | Upstream data/results and prior valid artifacts remain; failed new plot is not marked complete; other pages stay usable. |
-| Implementation evidence | Historical partial evidence retained: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; formerly unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. Completion evidence: `R/plot_recovery_helpers.R` provides the plot-only result boundary; `server.R` applies it to WQ/RHS summary/mapped plots, PCA, both Flow heatmaps, analysis correlation/coverage, basic-model rendering and HEV. HEV failure finalises `hev_result` as failed while retaining previous plot/data/provenance and download history. |
-| Automated test | Historical helper evidence retained: `tests/test_wq_rhs_plots.R:36-91` and `tests/test_model_interface_helpers.R`. `tests/testthat/test-plot-recovery.R` covers thrown, NULL, unsupported and delayed-render failures plus a corrected retry; `tests/testthat/test-workflow-server.R` covers HEV exception/unusable result, safe UI text, failed-not-running/current state, retained upstream/HEV history and same-session retry success. |
+| Implementation evidence | Historical partial evidence retained: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; formerly unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. Completion evidence: `R/plot_recovery_helpers.R` retains no-file-device preflight and adds `safe_final_plot_render()`, which draws accepted `ggplot`, `ggmatrix`, `grob`, `gtable`, `recordedplot`, `trellis` and nested/list results on the graphics device already opened by Shiny. `output$HEV_plot` calls that helper inside `renderPlot()` and returns invisibly, so the real output draw is controlled and is not repeated outside the boundary. HEV generation failure still finalises `hev_result` as failed while retaining previous plot/data/provenance and download history. |
+| Automated test | Historical helper evidence retained: `tests/test_wq_rhs_plots.R:36-91` and `tests/test_model_interface_helpers.R`. `tests/testthat/test-plot-recovery.R` covers thrown, NULL, unsupported and delayed-render ggplot failures; all accepted plot classes; an object whose validation draw succeeds and final draw fails; nested/list final-draw failure; generic user text with retained diagnostics; and unchanged device state after validation/final-render success and failure. `tests/testthat/test-workflow-server.R` covers HEV exception/unusable result, safe UI text, failed-not-running/current state, retained upstream/HEV history and same-session retry success. |
 | Manual test | `TC-007`, `TC-009`, `TC-016–TC-021`; execute missing/invalid data and forced plotting error on every plot family. |
 | Current execution result | Pass — targeted deterministic plot-boundary/workflow-server automation and final browser controlled-failure/retry verification passed. |
 | Release evidence | Current browser evidence: `RAW18_01_hev_plot_failure_controlled.png` and `RAW18_02_hev_plot_retry_success.png`. Historical plot images remain output examples, not recovery evidence. |
 | Browser/manual verification required | Yes |
-| Gap | Automated implementation and exact HEV failure/finalisation/retention/retry coverage are complete, with current browser evidence retained. |
+| Gap | The actual HEV Shiny output draw is now inside the controlled boundary. A focused browser smoke rechecked normal render, unusable `2026–2026` failure and corrected `1990–2025` retry; no artificial browser draw-time object injection is claimed. |
 | Severity | Major |
 | Recommended action | Retain the current automated and browser evidence with the final QA packet. |
 | Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
@@ -625,15 +625,15 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 |---|---|
 | RAW ID | RAW-24 |
 | Error scenario | Local/developer filesystem path is exposed to the user. |
-| Trigger | A parser/model/file exception contains `C:/Users/...` or another internal path and historically reached UI. |
+| Trigger | A parser/model/file exception contains a POSIX, Windows drive or UNC absolute path and historically reached UI. |
 | Affected workflow/task | Upload, donor input, model, download/temp and any fallback exception path. |
 | Blocking classification | Blocking for the failed operation; information-disclosure risk application-wide. |
 | Expected user-facing message | “An internal file-reading error occurred. Please check your input and try again.” |
 | Implemented message | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Upload, donor, external-import, plot and file-operation boundaries use stable messages; model fitting, processed-checkpoint loading and workspace-save fallback presentation now keep raw diagnostics internal and expose only controlled actionable wording. |
 | Recovery action | Correct/retry input without seeing internal details; preserve valid state; support logs may retain details only in an authorised location. |
 | Expected retained state | Existing valid artifacts and inputs remain, failed target is not successful, and no local path appears in UI/download filename. |
-| Implementation evidence | `R/model_interface_helpers.R` separates `messages` from `diagnostic`; `server.R` records model/checkpoint/workspace diagnostics internally and sanitises the affected UI fallback messages. Existing `safe_external_import()`, `safe_plot_result()` and `safe_file_operation()` contracts remain separate and unchanged. |
-| Automated test | `tests/testthat/test-user-facing-error-safety.R` and `tests/testthat/test-workflow-server.R` inject Windows/Unix path-bearing model/checkpoint/workspace errors, assert exact safe UI messages and retained internal diagnostics, verify upstream currentness, and prove retry. Existing donor/external, plot and file recovery tests retain targeted negative-disclosure assertions. |
+| Implementation evidence | `R/model_interface_helpers.R` separates `messages` from `diagnostic`; `server.R` records model/checkpoint/workspace diagnostics internally and sanitises the affected UI fallback messages. `R/user_message_safety_helpers.R` protects complete HTTP/HTTPS URL tokens before boundary-aware detection for absolute POSIX paths, Windows drive paths with either separator and UNC share paths. POSIX paths remain unsafe after ordinary punctuation such as a label colon, while URL paths and hash routes are not reclassified as filesystem paths. POSIX root `/` is intentionally treated as an absolute path. Existing `safe_external_import()`, `safe_plot_result()` and `safe_file_operation()` contracts remain separate. |
+| Automated test | `tests/testthat/test-user-facing-error-safety.R` covers `/Library/Frameworks`, `/Applications`, `/Volumes`, `/srv`, `/var`, `/Users`, `/home`, `/tmp` and root `/`; colon-adjacent POSIX paths; Windows `C:/` and `D:\\` paths; UNC paths; HTTP/HTTPS URLs including multiple components and hash routes; exact fallback wording; and retained `input/output`, `numerator/denominator` and `yes/no` prose. `tests/testthat/test-workflow-server.R` retains path-bearing checkpoint/workspace UI boundary, state and retry coverage. Existing donor/external, plot and file recovery tests retain targeted negative-disclosure assertions. |
 | Manual test | Inject a synthetic error containing a fake path in every exception boundary; assert UI/DOM/screenshot lacks path/stack trace while authorised console log can be correlated. |
 | Current execution result | Pass — targeted automated RAW-24 coverage plus final browser evidence reused from RAW-02, RAW-06, RAW-18 and RAW-22. |
 | Release evidence | No dedicated RAW-24 screenshot required; current browser evidence is reused from RAW-02, RAW-06, RAW-18 and RAW-22. |
@@ -669,11 +669,11 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 
 ## 5. Current Executable Test Results
 
-Final automated gate on `qa/raw-user-facing-recovery` at `19daf7a01e695a4e8999feac6a168f68c32871ef`:
+Corrective automated gate on `qa/raw-user-facing-recovery` at `516efdd657a9724955398b58f9b49ea7e0ae1eff` plus the local unstaged review patch:
 
 | Suite | Total | Pass | Pass with Warning | Fail | Other results | Exit code |
 |---|---:|---:|---:|---:|---|---:|
-| Full testthat | 154 cases / 1056 expectations | 1056 expectations | 0 | 0 | 0 errors; 0 warnings; 0 skips | 0 |
+| Full testthat | 161 cases / 1131 expectations | 1131 expectations | 0 | 0 | 0 errors; 0 warnings; 0 skips | 0 |
 | Standalone scripts | 18 | 16 | 2 | 0 | — | 0 for every script |
 
 The two historical standalone Pass with Warning results are:
@@ -683,21 +683,21 @@ The two historical standalone Pass with Warning results are:
 
 The expanded automated inventory includes RAW-labelled deterministic recovery tests and cross-cutting workflow/currentness coverage, including direct passing RAW-11 workflow-server coverage. The final counts supersede the old eight-script and 12-testthat-file inventory.
 
-Browser/manual smoke cases were not rerun during this documentation-only cleanup. The row-level browser outcomes reconcile the already completed final smoke session and remain distinct from the automated gate.
+The full browser/manual suite was not rerun for this corrective patch. Because production HEV rendering changed, a focused RAW-18 Chrome smoke reused the pilot mapping and passed normal render, controlled unusable-range failure, and corrected same-session retry. Other row-level browser outcomes remain from the already completed final session and stay distinct from the corrective automated gate.
 
 ## 6. Missing Evidence
 
 ### Current implementation limitations
 
 - RAW-25 is explicitly **Deferred / Known limitation**. Application-wide timeout, lifecycle, repeated-click protection and button-state consistency are not guaranteed for every long-running or asynchronous action.
-- RAW-01 is **Not Executed / Outstanding**. Missing-`ggnewscale` dependency injection was not performed, and no implementation or automated coverage is claimed.
+- RAW-01 implementation and automated verification pass. Missing-`ggnewscale` browser dependency injection was not performed and remains explicitly **Not Executed**; no manual dependency-failure claim is made.
 - DATA-01 and DATA-02 remain unresolved scientific-risk decisions, as recorded in Section 7.
 
 The former gaps for RAW-02/03 donor parsing, RAW-18 plot recovery, RAW-19/21 file recovery, RAW-22 external imports, RAW-23 scoped safe boundaries and RAW-24 user-facing redaction are closed by the current implementation and automated evidence. RAW-20 is Superseded / N/A and requires no additional production implementation.
 
 ### Remaining QA evidence limitations
 
-- RAW-01 missing-`ggnewscale` dependency injection was not executed and remains outstanding.
+- RAW-01 missing-`ggnewscale` browser dependency injection was not executed; this is a browser-evidence limitation, not an implementation or automated-coverage gap.
 - RAW-19 manual writer-failure injection and RAW-21 destructive browser permission/filesystem fault injection were not executed; their failure-recovery results are automated. RAW-19 also has a passing browser normal download path.
 - RAW-23 basic browser smoke passed without a retained screenshot; automated edge-case coverage passed, but invalid-sheet browser injection was not executed.
 - Historical July screenshots and failure records remain historical evidence and are not promoted to current browser/manual results.
@@ -715,17 +715,17 @@ The former gaps for RAW-02/03 donor parsing, RAW-18 plot recovery, RAW-19/21 fil
 - **DATA-01:** `server.R:1637` silently keeps only the first Biology row per `biol_site_id`/Year/Season before O:E. No user message, provenance or direct regression test proves this deletion is scientifically intended.
 - **DATA-02:** `server.R:1378` silently converts Environmental `NA` values to zero before RICT. This can change scientific outputs without a visible warning or retained source-vs-normalised audit trail.
 - **RAW-25 — Deferred / Known limitation:** application-wide lifecycle consistency is not guaranteed for every long-running or asynchronous action. This is recommended for future dedicated lifecycle/refactoring work, not immediate implementation on this branch.
-- **Browser/manual QA evidence:** the final smoke session is complete with the explicit RAW-01, RAW-19, RAW-21 and RAW-23 limitations above.
-- **RAW-01:** missing dependency recovery remains unimplemented and unverified until addressed through a separate authorised implementation/evidence task.
+- **Browser/manual QA evidence:** the final smoke session is complete with the explicit RAW-01 browser-injection, RAW-19, RAW-21 and RAW-23 limitations above.
+- **RAW-01:** dependency recovery is implemented and automated verification passes; only missing-dependency browser injection remains Not Executed.
 
 WQ contract exclusions and below-detection transformations remain explicit and covered by standalone tests. They do not mitigate DATA-01 or DATA-02.
 
 ## 8. Final Browser/Manual Verification Outcome
 
-The final browser/manual recovery smoke session is complete with documented limitations. The implemented scope was broadly verified; RAW-01 remains Not Executed / Outstanding, RAW-20 is Superseded / N/A, and RAW-25 remains Deferred / Known Limitation. RAW-19/21 destructive browser fault injection and RAW-23 invalid-sheet browser injection were not executed.
+The final browser/manual recovery smoke session is complete with documented limitations. RAW-01 passes based on implementation plus automated verification, while missing-`ggnewscale` browser injection remains Not Executed. RAW-20 is Superseded / N/A, and RAW-25 remains Deferred / Known Limitation. RAW-19/21 destructive browser fault injection and RAW-23 invalid-sheet browser injection were not executed.
 
 ## 9. Recommended Next Actions
 
 1. Retain the final QA evidence/report with the automated baseline, qualified browser/manual results, RAW-20 Superseded / N/A disposition, RAW-25 Deferred limitation, and DATA-01/DATA-02 risks.
-2. Address RAW-01 only through a separately authorised implementation and isolated missing-dependency verification task.
+2. If browser evidence is later required for RAW-01, perform only the isolated missing-dependency injection and recovery verification; do not relabel general navigation smoke as RAW-01.
 3. Schedule RAW-25 only as future dedicated lifecycle/refactoring work.

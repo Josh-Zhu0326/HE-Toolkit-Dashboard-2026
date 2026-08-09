@@ -9,7 +9,20 @@ testthat::test_that("RAW-24 condition messages allow domain text and reject inte
   safe_message <- "Workspace name must not be empty."
   unsafe_messages <- c(
     "Workspace failed at C:/Users/developer/AppData/Local/Temp/state.rds",
+    "Workspace failed at D:\\restricted\\state.rds",
+    "Workspace failed at /Users/developer/private/state.rds",
+    "Workspace failed at /home/developer/private/state.rds",
     "Workspace failed at /tmp/private/state.rds",
+    "Workspace failed at path:/tmp/private/state.rds",
+    "Workspace failed at path:/Users/developer/state.rds",
+    "Workspace failed at location:/Library/Frameworks/foo",
+    "Workspace failed at file:/srv/private/file.rds",
+    "Workspace read failed at /Library/Frameworks/toolkit/state.rds",
+    "Workspace read failed at /Applications/HE Toolkit/state.rds",
+    "Workspace read failed at /Volumes/private/state.rds",
+    "Workspace read failed at /srv/dashboard/state.rds",
+    "Workspace read failed at /var/lib/dashboard/state.rds",
+    "Workspace failed at /",
     "Workspace failed at \\\\server\\share\\state.rds",
     "Workspace conditionMessage internal function failure",
     "Workspace parser traceback in shiny.internal",
@@ -25,6 +38,26 @@ testthat::test_that("RAW-24 condition messages allow domain text and reject inte
     testthat::expect_identical(
       raw24_safe_condition_message(simpleError(unsafe_message), safe_prefixes, fallback),
       fallback
+    )
+  }
+
+  benign_messages <- c(
+    safe_message,
+    "Workspace recovery guidance: https://example.org/help",
+    "Workspace recovery guidance: http://example.org/help",
+    "Workspace recovery guidance: https://docs.example.org/help/workspaces/recovery?mode=safe",
+    "Workspace help is available at https://example.org/docs/a/b/c",
+    "Workspace help is available at https://example.org/#/help/recovery",
+    "Workspace help is available at http://localhost:8080/#/workflow/stage",
+    "Workspace input/output label is required.",
+    "Dataset numerator/denominator values are valid.",
+    "Workspace selection must be yes/no before continuing."
+  )
+  for (benign_message in benign_messages) {
+    testthat::expect_false(raw24_contains_internal_detail(benign_message))
+    testthat::expect_identical(
+      raw24_safe_condition_message(simpleError(benign_message), safe_prefixes, fallback),
+      benign_message
     )
   }
 })
