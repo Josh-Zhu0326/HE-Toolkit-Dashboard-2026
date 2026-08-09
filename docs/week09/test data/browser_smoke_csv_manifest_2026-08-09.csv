@@ -1,0 +1,13 @@
+file,RAW,purpose,expected_browser_result,recommended_use
+pilot_site_metadata_2026-08-09.csv,baseline,Valid mapping/recovery baseline,Mapping passes; flow_input remains NRFA,Use before/after invalid replacement cases
+raw10_missing_flow_input_2026-08-09.csv,RAW-10,flow_input column absent,Defaults to HDE with non-blocking information; mapping remains valid,Browser smoke
+raw10_blank_flow_input_2026-08-09.csv,RAW-10,flow_input blank,Defaults to HDE with non-blocking information; mapping remains valid,Browser smoke
+raw05_header_only_metadata_2026-08-09.csv,RAW-05,Invalid replacement after valid metadata,Old mapping must not remain current; controlled validation; valid retry restores mapping,Browser smoke
+raw06_structurally_malformed_metadata_2026-08-09.csv,RAW-06,Structurally inconsistent CSV row,Controlled parse/validation failure; no raw parser/path detail; retry works,Browser smoke
+raw07_missing_biol_site_id_2026-08-09.csv,RAW-07,Required core mapping missing,Blocking validation for Biology core mapping,Browser smoke
+raw07_core_only_optional_absent_2026-08-09.csv,RAW-07,Optional WQ/RHS mappings omitted,Core mapping remains valid; optional sources are non-blocking,Browser smoke
+raw08_invalid_mapping_equivalence_2026-08-09.csv,RAW-08,Same invalid mapping for upload and paste comparison,Upload and pasted metadata should produce equivalent invalid result,"Upload file, then paste the same row manually"
+raw09_missing_flow_site_id_2026-08-09.csv,RAW-09,flow_site_id column missing,Core mapping blocked; Flow/downstream not current,Browser smoke
+raw09_blank_flow_site_id_2026-08-09.csv,RAW-09,flow_site_id blank,Core mapping blocked; Flow/downstream not current,Browser smoke
+raw05_header_only_local_flow_2026-08-09.csv,RAW-05,Invalid replacement of a valid Local Flow upload,Old Local Flow must not remain current; retry with valid file should recover,Use only if manually testing Local Flow replacement
+raw06_structurally_malformed_local_flow_2026-08-09.csv,RAW-06,Malformed/structurally inconsistent Local Flow upload,Controlled failure; no raw parser/path details,Use only if manually testing Local Flow parser boundary

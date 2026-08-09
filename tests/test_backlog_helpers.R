@@ -1,3 +1,4 @@
+source(file.path("R", "csv_input_helpers.R"))
 source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
@@ -15,7 +16,8 @@ missing_mapping <- data.frame(
   stringsAsFactors = FALSE
 )
 missing_validation <- validate_supporting_mapping(missing_mapping)
-stopifnot(identical(missing_validation$status, "error"))
+stopifnot(identical(missing_validation$status, "info"))
+stopifnot(any(grepl("Optional WQ mapping", missing_validation$messages, fixed = TRUE)))
 
 duplicated_mapping <- data.frame(
   biol_site_id = c("291", "291"),

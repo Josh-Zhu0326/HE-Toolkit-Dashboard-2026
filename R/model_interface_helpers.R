@@ -23,15 +23,37 @@
 SUPPORTED_MODEL_TYPES <- c("linear")
 
 # a standard error result, so the caller never has to deal with raw errors
-model_error <- function(msg) {
-  list(status = "error", messages = msg, plot = NULL, summary = NULL)
+model_error <- function(msg, diagnostic = NULL) {
+  list(
+    status = "error",
+    messages = msg,
+    plot = NULL,
+    summary = NULL,
+    diagnostic = diagnostic
+  )
 }
 
 model_not_ready <- function(msg) {
-  list(status = "not_ready", messages = msg, plot = NULL, summary = NULL)
+  list(
+    status = "not_ready",
+    messages = msg,
+    plot = NULL,
+    summary = NULL,
+    diagnostic = NULL
+  )
 }
 
-run_model <- function(data, params = list()) {
+model_fit_failure_message <- function() {
+  paste(
+    "The model could not be fitted with the selected variables.",
+    "Check the current analysis data or select different variables, then try again."
+  )
+}
+
+run_model <- function(
+    data,
+    params = list(),
+    model_runner = build_basic_flow_ecology_model) {
 
   # read the parameters, default the model type to linear
   flow_var    <- params$flow_var
@@ -104,21 +126,24 @@ run_model <- function(data, params = list()) {
   result <- tryCatch(
     switch(
       model_type,
-      linear = build_basic_flow_ecology_model(
+      linear = model_runner(
         data = model_data, flow_var = flow_var, ecology_var = ecology_var
       )
     ),
     error = function(e) {
-      model_error(paste0(
-        "The model could not be fitted with the selected variables. ",
-        "Please try different variables or check the data. (", conditionMessage(e), ")"
-      ))
+      model_error(
+        model_fit_failure_message(),
+        diagnostic = conditionMessage(e)
+      )
     }
   )
 
   # last safety check: make sure we got a proper result back
   if (is.null(result) || is.null(result$status)) {
     return(model_error("The model returned no result. Please try again."))
+  }
+  if (!"diagnostic" %in% names(result)) {
+    result["diagnostic"] <- list(NULL)
   }
   result
 }

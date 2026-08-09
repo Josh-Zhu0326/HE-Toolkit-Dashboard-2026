@@ -1,3 +1,5 @@
+source(file.path("R", "file_operation_helpers.R"))
+source(file.path("R", "csv_input_helpers.R"))
 source(file.path("R", "site_mapping_helpers.R"))
 
 metadata_text <- paste(

@@ -39,8 +39,13 @@ library(performance)
 options(sass.cache = FALSE)
 
 addResourcePath("prefix", "www")
+source(file.path("R", "user_message_safety_helpers.R"))
+source(file.path("R", "file_operation_helpers.R"))
+source(file.path("R", "csv_input_helpers.R"))
+source(file.path("R", "external_import_recovery_helpers.R"))
 source(file.path("R", "site_mapping_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
+source(file.path("R", "plot_recovery_helpers.R"))
 source(file.path("R", "wq_contract_helpers.R"))
 source(file.path("R", "hev_dependency_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
@@ -979,19 +984,38 @@ downloadSelectUI <- function(id) {
 }
 downloadServer <- function(id, plot,
                            can_download = function() TRUE,
-                           on_download = function(format, file) NULL) {
+                           on_download = function(format, file) NULL,
+                           write_plot = function(file, plot) {
+                             ggplot2::ggsave(file, plot = plot, width = 10, height = 5)
+                           }) {
   moduleServer(id, function(input, output, session) {
+    write_download <- function(file, format = input$format) {
+      validate(need(isTRUE(can_download()), "Regenerate the current plot before downloading."))
+      result <- safe_file_operation(function() write_plot(file, plot()))
+      if (!identical(result$status, "success")) {
+        message(sprintf(
+          "RAW-19/21 file-operation diagnostic [HEV plot/%s]: %s",
+          result$failure,
+          result$diagnostic
+        ))
+        showNotification(result$message, type = "error", duration = 10)
+        validate(need(FALSE, result$message))
+      }
+      on_download(format, file)
+      invisible(result$value)
+    }
+
     output$dl_plot <- downloadHandler(
       filename = function() {
         file_format <- tolower(input$format)
         paste0(id, ".", file_format)
       },
       content = function(file) {
-        validate(need(isTRUE(can_download()), "Regenerate the current plot before downloading."))
-        ggsave(file, plot = plot(), width = 10, height = 5)
-        on_download(input$format, file)
+        write_download(file)
       }
     )
+
+    list(write_download = write_download)
   })
 }
 

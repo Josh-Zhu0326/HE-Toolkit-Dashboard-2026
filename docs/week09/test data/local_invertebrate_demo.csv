@@ -1,0 +1,19 @@
+biol_site_id,date,taxon,abundance
+SITE_001,2025/1/15,Baetis rhodani,12
+SITE_001,2025/1/15,Gammarus pulex,8
+SITE_001,2025/1/15,Heptageniidae,4
+SITE_002,2025/1/15,Baetis rhodani,10
+SITE_002,2025/1/15,Gammarus pulex,6
+SITE_002,2025/1/15,Heptageniidae,3
+SITE_001,2025/2/15,Baetis rhodani,15
+SITE_001,2025/2/15,Gammarus pulex,9
+SITE_001,2025/2/15,Heptageniidae,5
+SITE_002,2025/2/15,Baetis rhodani,13
+SITE_002,2025/2/15,Gammarus pulex,7
+SITE_002,2025/2/15,Heptageniidae,4
+SITE_001,2025/3/15,Baetis rhodani,18
+SITE_001,2025/3/15,Gammarus pulex,11
+SITE_001,2025/3/15,Heptageniidae,6
+SITE_002,2025/3/15,Baetis rhodani,16
+SITE_002,2025/3/15,Gammarus pulex,9
+SITE_002,2025/3/15,Heptageniidae,5

@@ -1,34 +1,35 @@
 # RAW-01–25 Recovery Coverage Audit
 
-Audit date: 2026-07-30  
-Audit scope: current local `main` / current `HEAD`; this is not final RC sign-off.
+Historical audit date: 2026-07-30
+Final corrective-review verification: 2026-08-09 on `qa/raw-user-facing-recovery`.
+Final verified code baseline: `99b2a04` (committed local verification baseline).
 
 ## 1. Audit Baseline
 
+### Current final automated-gate baseline
+
 | Item | Value |
 |---|---|
-| Branch | `main` |
-| HEAD | `9d0c7e9336e30c4e16ee83579a0cbcf39af0a3ca` |
-| Locally cached `origin/main` | `9d0c7e9336e30c4e16ee83579a0cbcf39af0a3ca` |
-| Ahead / behind | `0 / 0` from `git rev-list --left-right --count origin/main...HEAD` |
-| Network freshness | Unclear. No fetch or external-service call was made, so `origin/main` means the locally cached ref. |
-| Start worktree | `?? docs/week09/`; this directory already contained the user-owned untracked `docs/week09/2026-07-30-benyu-return-audit.md`. The requested report target did not exist. |
-| OS | Windows 11 x64, build 26200 |
-| PowerShell | 5.1.26100.8737 |
-| Git | 2.52.0.windows.1 |
-| R | 4.6.1 (2026-06-24 ucrt), `x86_64-w64-mingw32/x64` |
-| R timezone / locale | `Europe/London`; Chinese (Simplified) China UTF-8 locale, `LC_NUMERIC=C` |
-| R invocation | `C:\Program Files\R\R-4.6.1\bin\Rscript.exe --vanilla`; `Rscript` was not on `PATH` |
-| Restrictions observed | No application/test-code edit, dependency change, external service, real customer data, commit, push, merge, reset, rebase, stash, or evidence overwrite. |
+| Branch | `qa/raw-user-facing-recovery` |
+| Final verified code baseline | `99b2a04` (committed local verification baseline) |
+| Verification worktree | Clean after the temporary testthat-generated `Rplots.pdf` artifact was removed |
+| Full testthat | 165 cases; 1176 expectations; 1176 passed; 0 failures; 0 errors; 0 warnings; 0 skips; exit code 0 |
+| Standalone scripts | 18/18 exited 0; 16 Pass; 2 Pass with Warning; 0 Fail |
+| Historical Pass with Warning | `tests/test_mixed_model_helpers.R`; `tests/test_server_site_import.R` |
+| Browser/manual verification | Final browser/manual smoke session completed separately; see row-level results and the final report |
+
+### Historical audit baseline
+
+The original 2026-07-30 audit ran on local `main` at `9d0c7e9336e30c4e16ee83579a0cbcf39af0a3ca`, with the locally cached `origin/main` at the same commit and a pre-existing untracked `docs/week09/` directory. That historical dirty-worktree observation and the original OS/R/tooling details remain provenance for the initial audit; they are not the current branch or worktree state.
 
 Interpretation used in this audit:
 
 - **Documented** means the RAW definition exists in the authority below.
-- **Implemented** means a runtime path prevents or handles the scenario. `Partial` is not counted as full alignment, but is included in the “any implementation” total.
+- **Implemented** means the scoped runtime recovery path prevents or handles the scenario.
 - **Automated test exists** means a test asserts this scenario or a close, explicitly identified slice. Merely loading the file does not count.
-- **Executed current main** means that linked automation was actually run at the baseline commit in this audit.
-- **Final RC evidence available** is `No` for every row. Current-main console results and old July records are not final RC evidence.
-- A row-level `Pass` means only the linked automated slice passed; it does not close unexecuted browser, recovery, retained-state, or RC checks.
+- **Executed current branch** means that linked automation was run at the final automated-gate commit.
+- **Browser/manual verification** is separate from automated coverage and is recorded from the completed final smoke session at row level.
+- A row-level automated `Pass` does not imply destructive browser fault injection; any unexecuted browser injection is stated explicitly.
 
 ## 2. Source of RAW-01–25
 
@@ -38,33 +39,27 @@ The authoritative source is `docs/week05/5.3_Error_List.md`.
 - The identifiers are continuous, unique, and complete: 25 definitions, no missing ID and no duplicate ID.
 - Lines 33–39 add common acceptance criteria: friendly UI message; no raw R error, stack trace, or local path; loading state must end; other pages/controls remain usable; repeated clicks must be prevented while processing.
 - `docs/week08/WK8-09_Complete_Error_List.md` is useful later guidance, especially `OUTPUT-08` to `OUTPUT-12`, but uses a different identifier scheme and does not replace the RAW authority.
-- Historical July test records and `docs/week09/2026-07-30-benyu-return-audit.md` are supporting evidence only, not definitions and not current/final RC execution.
+- Historical July test records and `docs/week09/2026-07-30-benyu-return-audit.md` are supporting evidence only, not definitions or current browser/manual execution.
 
 Conclusion: a complete RAW-01–25 definition set does exist.
 
 ## 3. Coverage Summary
 
-### Five-state coverage
+### Current disposition coverage
 
-| State | Count | Basis |
-|---|---:|---|
-| Documented | 25 | All IDs exist in the authoritative source. |
-| Implemented — direct | 14 | RAW-04–17 have a direct guard, prevention rule, or prerequisite message, though wording/state evidence is sometimes incomplete. |
-| Implemented — partial | 4 | RAW-18, RAW-22, RAW-23, RAW-24 are covered only on selected paths. |
-| Implemented — any direct or partial | 18 | Direct plus partial; this is the “implemented quantity” used in the hand-off summary. |
-| Not implemented | 7 | RAW-01, RAW-02, RAW-03, RAW-19, RAW-20, RAW-21, RAW-25. |
-| Automated test exists — scenario/near-scenario | 8 | RAW-05, RAW-06, RAW-07, RAW-08, RAW-09, RAW-10, RAW-18, RAW-23. No test is labelled with a RAW ID. |
-| Test executed on current main — RAW rows | 8 | The same eight rows had linked automation run. |
-| Current RAW-row result: Pass | 8 | Linked automated slices passed. |
-| Current RAW-row result: Pass with Warning | 0 | No scenario-level RAW assertion emitted a warning. |
-| Current RAW-row result: Fail | 0 | No executed scenario-level RAW assertion failed. |
-| Current RAW-row result: Not Executed | 17 | No safe existing scenario-level automation; browser/external/fault-injection/RC work was not run. |
-| Final RC evidence available | 0 | Current-main output and historical evidence are not final RC evidence. |
-| Final RC re-test required | 25 | Every RAW item must be re-run on the selected frozen RC. |
+| Disposition | RAW IDs | Current evidence state |
+|---|---|---|
+| Implemented / scoped recovery complete | RAW-02–RAW-10, RAW-12–RAW-19, RAW-21–RAW-24 | Implementation complete; final browser/manual outcomes are recorded per row, including qualified automated-only fault-recovery evidence where applicable. |
+| RAW-11 | RAW-11 | Implemented with direct passing workflow-server automation and passing final browser prerequisite verification. |
+| Superseded / N/A | RAW-20 | No additional production implementation or dedicated browser screenshot required. |
+| Deferred / Known limitation | RAW-25 | Not implemented in the current scope; future dedicated lifecycle/refactoring work recommended. |
+| Pass (implementation + automated verification) | RAW-01 | Dependency preflight and server recovery are implemented and automated tests pass. Missing-`ggnewscale` browser dependency injection was Not Executed and is not claimed. |
+
+All 25 RAW identifiers remain documented. RAW-labelled deterministic tests exist for multiple recovery paths alongside cross-cutting workflow tests. Automated coverage and browser/manual verification are reported separately, with RAW-01 passing on implementation plus automation while its browser dependency-failure injection remains Not Executed, RAW-20 Superseded / N/A and RAW-25 Deferred / Known Limitation.
 
 ### Command-level result
 
-The testthat runner passed. All eight standalone scripts exited 0. The standalone batch, and a confirming rerun of `tests/test_server_site_import.R`, emitted two non-blocking Leaflet `derivePoints()` warnings, so that command scope is recorded as **Pass with Warning**. This command-level warning does not convert untested RAW-22 failure recovery into an executed RAW scenario.
+The final automated regression suite was executed against committed baseline `99b2a04`. The testthat gate passed 165 cases and 1176 expectations (1176 passed) with 0 failures, 0 errors, 0 warnings and 0 skips. The standalone gate had 18/18 established scripts exit 0: 16 Pass, 2 historical Pass with Warning, and 0 Fail. The two Pass with Warning scripts are `tests/test_mixed_model_helpers.R` and `tests/test_server_site_import.R`; no new warning category was introduced. Browser/manual results come from the completed final session plus the focused RAW-18 corrective smoke, not from this automated gate.
 
 ## 4. RAW-01–25 Matrix
 
@@ -78,19 +73,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Generate HEV plots”; Stage 4 Analysis / HEV feature. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “The required package ggnewscale is missing. Please install project dependencies before using the HEV plot feature.” |
-| Implemented message | None. Namespace calls are made directly. |
-| Recovery action | Stop the operation; keep the session usable; an administrator restores the frozen RC dependencies, then the user retries the HEV plot. Do not ask a study participant to change packages mid-session. |
+| Implemented message | “The required package ggnewscale is missing. Please install project dependencies before using the HEV plot feature.” |
+| Recovery action | Stop the operation; keep the session usable; an administrator restores the approved project dependencies, then the user retries the HEV plot. Do not ask a study participant to change packages mid-session. |
 | Expected retained state | Site mapping, imported data, processed Biology/Flow, join, selections, and any prior valid plot remain intact and clearly marked current/stale as appropriate. |
-| Implementation evidence | Not implemented. Direct calls at `global.R:485,524,565,605,637,675,715,755`; no `requireNamespace()`/friendly dependency guard was found. |
-| Automated test | None. |
-| Manual test | RC fault-injection step: in an isolated RC environment only, make `ggnewscale` unavailable, render each HEV variant, verify friendly message, spinner termination, navigation, retained join, and recovery after restoring the approved environment. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
-| RC re-test required | Yes |
-| Gap | No dependency guard, no test, no retained-state/browser evidence. Raw R error and permanent loading remain possible. |
+| Implementation evidence | `R/hev_dependency_helpers.R` implements `hev_dependency_check()` with a `requireNamespace("ggnewscale", quietly = TRUE)` preflight. The `renderHEV` observer in `server.R` runs that preflight before HEV prerequisites or plotting, clears the request, marks HEV blocked, shows the safe message and returns when the dependency is unavailable. |
+| Automated test | `tests/testthat/test-hev-dependency-boundary.R` covers missing and available dependency results and exact safe wording. `tests/testthat/test-workflow-server.R`, “RAW-01 missing HEV dependency blocks safely and ends the request”, injects the missing-dependency result and asserts blocked HEV state plus safe UI output. Both pass in the corrective gate. |
+| Manual test | Browser/manual fault-injection step: in an isolated environment only, make `ggnewscale` unavailable, render each HEV variant, verify friendly message, spinner termination, navigation, retained join, and recovery after restoring the approved environment. |
+| Current execution result | Pass based on complete implementation and passing automated verification. Missing-`ggnewscale` dependency injection was Not Executed during the final browser/manual session. |
+| Release evidence | Implementation and automated evidence above. No browser dependency-failure screenshot or manual injection is claimed. `SMOKE_01_task_and_stage_navigation.png` remains general navigation smoke and is not relabelled as RAW-01. |
+| Browser/manual verification required | Missing-dependency browser injection remains Not Executed and should stay explicitly separate from the passing implementation/automated assessment. |
+| Gap | Browser dependency-failure injection and recovery after restoring the approved environment were not executed; implementation and automated coverage are complete. |
 | Severity | Major |
-| Recommended action | Add an environment preflight and feature-level safe message in a future code change; add an isolated missing-package recovery test and RC screenshot/log. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the passing implementation/automated evidence and, if later required, execute isolated browser dependency injection without treating the navigation smoke as RAW-01 evidence. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Automated assessment: Pass; Browser missing-dependency injection: Not Executed. |
 
 ### RAW-02
 
@@ -102,19 +97,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Flow processing / donor mapping and imputation. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “The donor-site input could not be read. Please check the required format and try again.” |
-| Implemented message | None for parse failure; only later validation messages such as “Donee flow sites not detected in original metadata”. |
+| Implemented message | “The donor mapping could not be read or validated. Please correct the two-column donor-site mapping and try again.” Blank/whitespace input retains “If imputing flows please add donor mapping.” |
 | Recovery action | Correct the donor mapping text and resubmit; the UI must remain responsive and must not require re-import of already valid metadata/Flow. |
 | Expected retained state | Donor text, metadata, imported Flow, chosen dates/settings, and prior valid artifacts remain; failed imputation/join outputs are not marked successful. |
-| Implementation evidence | `server.R:1746-1756`, especially unguarded `fread()` at 1754. |
-| Automated test | None. |
+| Implementation evidence | Previously unguarded parser resolved on `qa/raw-user-facing-recovery`: `parse_donor_mapping()` in `R/site_mapping_helpers.R` forces text parsing, rejects parser warnings/errors and invalid two-column structures, and `server.R` routes failed attempts to a controlled result without replacing Flow Statistics. |
+| Automated test | `tests/testthat/test-donor-external-recovery.R` covers blank-before-parser, malformed/path-like input, schema failure, redaction, retained Flow Statistics, running reset and same-session retry; `tests/testthat/test-workflow-server.R` retains RAW-04 regression coverage. |
 | Manual test | Paste malformed/path-like donor mapping; submit; assert no raw console-only failure, friendly UI feedback, loading ends, controls/navigation work, correct-and-retry succeeds without re-upload. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-04B` covers a valid donor path/warnings, not this parse failure or recovery. |
-| RC re-test required | Yes |
-| Gap | Unguarded parser; no automation; no current browser recovery/retention evidence. |
+| Current execution result | Pass — automated coverage and final browser/manual recovery verification passed. |
+| Release evidence | Current browser evidence: `RAW02_01_path_like_donor_mapping_safe_failure.png` and `RAW02_02_invalid_donor_mapping_schema_blocked.png`. Historical `ST-04B` remains supporting context only. |
+| Browser/manual verification required | Yes |
+| Gap | Previously identified implementation and browser recovery/retention evidence gaps are resolved. |
 | Severity | Major |
-| Recommended action | Wrap donor parsing, validate schema before use, preserve text, and add malformed-to-valid recovery automation. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-03
 
@@ -126,19 +121,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Flow processing / donor mapping, donor list, imputation. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “The input format is invalid. Please check the donor-site format before importing.” |
-| Implemented message | Donor mapping has none; donor list normalisation catches only the later normalisation error and can display raw `conditionMessage(e)`. |
+| Implemented message | Donor mapping and donor-list parser failures now use stable messages. Donor list failures state that the list is invalid or unreadable, identify `flow_site_id` and accepted `flow_input` values, and instruct the user to retry. |
 | Recovery action | Keep pasted text available, show the expected format, allow correction and retry without session reset. |
 | Expected retained state | Metadata, imported Flow, prior completed artifacts, date range and donor inputs remain; no stale imputation/statistic/join may be treated as current. |
-| Implementation evidence | Unguarded mapping/list reads at `server.R:1754` and `server.R:1786`; raw `conditionMessage()` at `server.R:1788-1792`. |
-| Automated test | None. |
+| Implementation evidence | Previously unguarded reads resolved on `qa/raw-user-facing-recovery`: `parse_donor_site_list()` in `R/site_mapping_helpers.R` sanitises parser/normalisation failures and validates the existing `flow_site_id` plus NRFA/HDE contract; `server.R` prevents malformed input reaching the donor importer and finalises donor import state on every return path. |
+| Automated test | `tests/testthat/test-donor-external-recovery.R` covers blank, malformed and invalid donor-list structures, importer non-invocation, controlled external failure, state retention, finalisation and same-session retry. |
 | Manual test | Exercise malformed mapping and malformed donor-list variants separately; verify safe UI message, no path/stack trace, spinner exit, retained inputs, back navigation, and successful retry. |
-| Current execution result | Not Executed |
-| Release evidence | None; historical `ST-04B` is a successful/expected-warning path only. |
-| RC re-test required | Yes |
-| Gap | Parser errors are not consistently caught or sanitised. |
+| Current execution result | Pass — automated coverage and final browser/manual verification passed. |
+| Release evidence | Current browser evidence: `RAW03_01_invalid_flow_input_blocked.png` and `RAW03_02_blank_flow_site_id_blocked.png`. Historical `ST-04B` remains supporting context only. |
+| Browser/manual verification required | Yes |
+| Gap | Previously identified implementation and browser recovery/retention evidence gaps are resolved. |
 | Severity | Major |
-| Recommended action | Introduce one safe donor parser with schema validation and tests for mapping/list invalid-to-valid recovery. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-04
 
@@ -150,19 +145,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Flow processing / donor imputation. |
 | Blocking classification | Blocking for imputation; non-blocking for workflows that do not request imputation. |
 | Expected user-facing message | “Please enter donor-site information before importing donor flow data.” |
-| Implemented message | “If imputing flows please add donor mapping” and “If imputing flows please add additional donor sites as required”. |
+| Implemented message | “If imputing flows please add donor mapping.” and “If importing additional donor flows, please add the donor site list.” |
 | Recovery action | Paste the required donor information or leave the optional imputation path; retry from the same Stage. |
 | Expected retained state | Existing metadata/Flow and any unrelated completed artifacts remain; empty input is not treated as success. |
-| Implementation evidence | `validate(need())` at `server.R:1749-1751` and `server.R:1781-1783`. |
-| Automated test | None. |
+| Implementation evidence | Whitespace-aware `trimws()` guards run before either donor `fread()` call in `server.R`; validation does not change the Flow Statistics artifact. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-04 donor inputs reject all-whitespace text and allow in-session retry”: empty, spaces, tabs, newline, mixed whitespace, parser-not-called, retained Flow Statistics and valid retry. |
 | Manual test | Blank and whitespace-only mapping/list; verify blocker only when imputation is requested, message wording, no raw error, controls usable, and valid retry. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
-| RC re-test required | Yes |
-| Gap | No automated or current browser evidence; whitespace-only handling and retained state are unproved; wording differs from authority. |
+| Current execution result | Pass — targeted automation and final browser/manual verification passed. |
+| Release evidence | Current browser evidence: `RAW04_01_blank_donor_mapping_blocked.png` and `RAW04_02_whitespace_donor_mapping_blocked.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Automated implementation and browser/manual evidence gaps are closed. |
 | Severity | Minor |
-| Recommended action | Add exact blank/whitespace tests and align the two messages and optional-path behaviour. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-05
 
@@ -177,16 +172,17 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Implemented message | Examples: “Local flow CSV appears to be empty”; “Your WQ file appears to be empty. Please upload a CSV file with at least one data row.” |
 | Recovery action | Select a non-empty valid CSV and retry; optional-source failure must not block the Biology+Flow core path. |
 | Expected retained state | Unrelated valid artifacts and mapping remain. An invalid replacement must not leave the old local source silently operational; browser file input may require re-selection, but no unrelated re-upload. |
-| Implementation evidence | `R/dashboard_backlog_helpers.R:1-19`; `server.R:448-478,481-490,526-535,1198-1227`; replacement invalidation at `server.R:1254-1256`. |
+| Implementation evidence | `read_dashboard_csv()` and the metadata reader reject empty content with controlled messages. Replacement observers reset the affected Biology, Flow, WQ, RHS, or site-mapping artifact before validation; only a valid retry completes it again. |
 | Automated test | Near-scenario: `tests/testthat/test-site-metadata-helpers.R:31`, “header-only site metadata CSV is reported as empty”; replacement-state test `tests/testthat/test-server-local-flow-source.R:162`, “replacing valid Local Flow with an invalid file removes the previous local source”. |
-| Manual test | `TC-029`; historical `ST-07E`/`ST-07F`. RC must repeat zero-byte and header-only for every upload type, then valid replacement without restart. |
-| Current execution result | Pass — linked automated slices passed; multi-source browser recovery was not executed. |
-| Release evidence | Current command record in Section 5; old `ST-07E`/`ST-07F` text is historical and not RC evidence. |
-| RC re-test required | Yes |
-| Gap | No complete per-source recovery matrix, screenshots, file-input retention evidence, or final RC run. |
+| Manual test | `TC-029`; historical `ST-07E`/`ST-07F`. Browser/manual verification must repeat zero-byte and header-only for every upload type, then valid replacement without restart. |
+| Phase 2B automated test | `tests/testthat/test-site-metadata-helpers.R` covers header-only metadata. `tests/testthat/test-server-local-flow-source.R` covers valid-to-invalid-to-valid replacement recovery for metadata, Local Flow, Local Biology, WQ, and RHS while checking retained unrelated state. |
+| Current execution result | Pass — linked automated slices and final browser invalid-to-valid replacement verification passed. |
+| Release evidence | Current browser evidence: `RAW05_01_invalid_replacement_not_current.png` and `RAW05_02_valid_retry_restores_mapping.png`. Historical `ST-07E`/`ST-07F` remains supporting evidence only. |
+| Browser/manual verification required | Yes |
+| Gap | The previous stale-current replacement gap is closed by automated and current browser evidence; exhaustive per-control screenshots were not required for this smoke session. |
 | Severity | Major |
-| Recommended action | Parameterise empty-file automation for all upload controls and execute invalid-to-valid browser recovery on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (near-scenario); Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-06
 
@@ -201,16 +197,17 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Implemented message | “... CSV could not be read. Please upload a valid CSV file.” / “Your WQ/RHS file could not be read as CSV. Please check that it is a valid comma-separated file.” |
 | Recovery action | Correct/re-export the CSV and replace it; remain in the current session. |
 | Expected retained state | Unrelated artifacts remain; failed replacement is not operational; no stale old source is used downstream. |
-| Implementation evidence | Safe reads at `R/dashboard_backlog_helpers.R:1-19`, `R/site_mapping_helpers.R:54-69`, `server.R:448-478`; upload rendering at `server.R:586-605,686-719,1198-1227`. |
+| Implementation evidence | `read_character_csv()` converts parser errors and structural parser warnings into a controlled invalid result. Both metadata routes and all local upload readers use this boundary; parser text, paths, and implementation details do not enter UI messages. |
 | Automated test | `tests/testthat/test-site-metadata-helpers.R:48`, “existing non-CSV input is reported as unreadable”; replacement test at `tests/testthat/test-server-local-flow-source.R:162`. |
-| Manual test | Historical `ST-07E` and recovery `ST-07F`; RC: malformed delimiter/quotes/inconsistent rows for each upload, followed by valid replacement. |
-| Current execution result | Pass — linked parser/replacement slices passed; full browser matrix was not executed. |
-| Release evidence | Section 5 current command record; July `ST-07E/F` is historical only. |
-| RC re-test required | Yes |
-| Gap | No exact all-control automation; no retained-state, loading, or final RC screenshots. |
+| Manual test | Historical `ST-07E` and recovery `ST-07F`; Browser/manual: malformed delimiter/quotes/inconsistent rows for each upload, followed by valid replacement. |
+| Phase 2B automated test | `tests/testthat/test-site-metadata-helpers.R` compares malformed uploaded and pasted metadata. `tests/testthat/test-server-local-flow-source.R` covers malformed Local Flow and WQ replacement, old-current invalidation, controlled text, and same-session retry. |
+| Current execution result | Pass — linked parser/replacement automation and final browser malformed-to-valid recovery verification passed. |
+| Release evidence | Current browser evidence: `RAW06_01_malformed_csv_controlled_failure.png` and `RAW06_02_valid_retry_after_malformed_csv.png`. July `ST-07E/F` remains historical only. |
+| Browser/manual verification required | Yes |
+| Gap | The previous raw-parser/stale-current gap is closed for the Phase 2B upload paths, with current browser evidence retained. |
 | Severity | Major |
-| Recommended action | Add shared upload-contract tests and RC browser recovery evidence for every file control. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-07
 
@@ -220,21 +217,22 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Error scenario | Required columns are missing after upload. |
 | Trigger | Upload a readable CSV that omits columns required by that source contract. |
 | Affected workflow/task | Stage 1 validation for mapping, Local Biology/Flow, WQ/RHS. |
-| Blocking classification | Blocking for required-source schema errors; WQ/RHS warning/error classification is path-specific and partly unclear. |
+| Blocking classification | Missing/invalid core `biol_site_id` or `flow_site_id` blocks site mapping. Missing WQ/RHS input is informational and non-blocking. A supplied WQ/RHS file without its usable identifier is invalid only for that optional feature. |
 | Expected user-facing message | “The uploaded file is missing required columns. Please check the file format and upload again.” |
 | Implemented message | Source-specific lists, e.g. “Local flow CSV is missing required column(s): ...”; WQ missing site ID is a warning, while RHS missing `rhs_survey_id` is also currently a warning. |
 | Recovery action | Add/rename required columns and re-upload; optional-source warning must not block core work. |
 | Expected retained state | Existing unrelated artifacts remain; invalid required source is blocked; old/stale source cannot continue into Flow stats/join/model/download. |
-| Implementation evidence | `R/dashboard_backlog_helpers.R:22-100,102-158`; WQ/RHS validators `server.R:481-570`; flow invalidation `server.R:1254-1280`. |
+| Implementation evidence | `validate_supporting_mapping()` freezes core required versus optional mapping severity. Local Biology/Flow validators remain blocking when their supplied file is invalid. WQ/RHS observers reset only their optional artifacts; their absence remains informational. |
 | Automated test | `tests/testthat/test-local-flow-contract.R:38`, “missing required Local Flow columns are rejected”; `tests/testthat/test-dashboard-backlog-helpers.R:4`; standalone `tests/test_backlog_helpers.R:11-18`; WQ contract missing-column checks in `tests/test_wq_contract_helpers.R:94-97`. |
-| Manual test | `TC-003`, `TC-013`; historical `ST-07C`; repeat every upload contract on RC. |
-| Current execution result | Pass — linked schema tests passed. |
-| Release evidence | Section 5 current command record; historical `ST-07C` is not current/RC. |
-| RC re-test required | Yes |
-| Gap | No single classification contract across sources; RHS required-column warning may incorrectly allow progress; browser recovery and stale-output blocking unproved. |
+| Manual test | `TC-003`, `TC-013`; historical `ST-07C`; repeat every upload contract during final browser/manual verification. |
+| Phase 2B automated test | `tests/testthat/test-dashboard-backlog-helpers.R` covers required core and optional-absence severity. `tests/testthat/test-server-local-flow-source.R` covers optional missing, valid, supplied-invalid, retained core join, and valid retry. |
+| Current execution result | Pass — linked schema tests and final browser required/optional mapping verification passed. |
+| Release evidence | Current browser evidence: `RAW07_01_missing_required_biol_site_id_blocked.png` and `RAW07_02_optional_wq_rhs_absent_non_blocking.png`. Historical `ST-07C` remains historical only. |
+| Browser/manual verification required | Yes |
+| Gap | The previous classification inconsistency and RHS/WQ supplied-invalid warning gap are closed, with current browser evidence retained. |
 | Severity | Major |
-| Recommended action | Freeze required-vs-optional schema severity, test every source, and verify stale downstream actions are disabled. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-08
 
@@ -244,21 +242,22 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Error scenario | Metadata lacks `biol_site_id`. |
 | Trigger | Parse/upload mapping used by Biology-related work without `biol_site_id`. |
 | Affected workflow/task | Stage 1 site mapping; Biology import, O:E, join. |
-| Blocking classification | Blocking when the selected Task requires Biology; potentially non-blocking for a source-only mapping, so Task-aware classification is not fully explicit. |
+| Blocking classification | Blocking for the core site-mapping artifact; optional WQ/RHS file absence remains non-blocking. |
 | Expected user-facing message | “The metadata file is missing the required column biol_site_id.” |
 | Implemented message | “Mapping CSV is missing required column(s): biol_site_id.” |
 | Recovery action | Add `biol_site_id`, re-upload/revalidate, then resume the earliest blocked Stage. |
 | Expected retained state | Entered mapping and unrelated valid artifacts remain; Biology-dependent outputs are blocked/stale, not silently reused. |
-| Implementation evidence | `validate_supporting_mapping()` at `R/dashboard_backlog_helpers.R:22-86`; upload feedback at `server.R:686-719`; Task resume at `R/workflow_state.R:234-287`. |
+| Implementation evidence | Uploaded and pasted metadata both pass through `prepare_site_metadata_result()` and `validate_supporting_mapping()`. A replacement first clears `current_site_metadata`; invalid data blocks `site_mapping`, while a valid retry installs and completes the new mapping. |
 | Automated test | `tests/testthat/test-dashboard-backlog-helpers.R:4`, “mapping validation reports a missing biol_site_id column”; resume/stale state tests in `tests/testthat/test-workflow-state.R:116-145` are cross-cutting, not the upload trigger. |
 | Manual test | `TC-003`; upload missing `biol_site_id`, confirm error, correct file, resume, and verify prior unrelated artifacts. |
-| Current execution result | Pass — direct validation test passed; browser recovery was not executed. |
-| Release evidence | Section 5 current test record only. |
-| RC re-test required | Yes |
-| Gap | No current end-to-end retry, Task-aware severity, retained-state, or stale-use proof. |
+| Phase 2B automated test | `tests/testthat/test-dashboard-backlog-helpers.R` covers missing `biol_site_id`. `tests/testthat/test-server-local-flow-source.R` covers upload and paste replacement invalidation, equivalent outcomes, retained unrelated artifacts, and same-session retry. |
+| Current execution result | Pass — direct validation automation and final browser upload/paste equivalence verification passed. |
+| Release evidence | Current browser evidence: `RAW08_01_invalid_upload_validation.png` and `RAW08_02_invalid_paste_validation.png`. |
+| Browser/manual verification required | Yes |
+| Gap | The previous upload/paste inconsistency and stale-current gap are closed in automation and current browser evidence. |
 | Severity | Major |
-| Recommended action | Add Shiny-server invalid-to-valid mapping test plus RC browser evidence of resume and state retention. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-09
 
@@ -273,16 +272,17 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Implemented message | Mapping: “Mapping CSV is missing required column(s): flow_site_id.” Local Flow: “Local flow CSV is missing required column(s): flow_site_id.” |
 | Recovery action | Add/rename `flow_site_id`, upload again, validate Flow, then recalculate affected downstream outputs. |
 | Expected retained state | Biology and unrelated inputs/results remain; Flow-derived statistics, join, HEV/model/download become blocked/stale until regeneration. |
-| Implementation evidence | `R/dashboard_backlog_helpers.R:22-86,102-158`; source revision reset `server.R:250-275,1254-1280`; stale propagation `R/workflow_state.R:179-204`. |
+| Implementation evidence | Core mapping validation requires non-blank `flow_site_id`; Local Flow applies the same value rule. Mapping replacement clears the active mapping and invalidates Flow-derived revisions. External Flow import additionally requires a current validated `site_mapping`. Missing/blank `flow_input` still defaults to HDE. |
 | Automated test | Near-scenario: `tests/testthat/test-local-flow-contract.R:38-55`, including missing/blank `flow_site_id`; stale replacement tests `tests/testthat/test-server-local-flow-source.R:162-260`. No exact metadata-file RAW trigger test. |
 | Manual test | `TC-003`, `TC-013`; validate mapping and Local Flow variants, recover, then prove old Flow stats/join/download cannot be reused. |
-| Current execution result | Pass — Local Flow and stale-state slices passed; exact mapping/browser path was not executed. |
-| Release evidence | Section 5 current test record only. |
-| RC re-test required | Yes |
-| Gap | Exact metadata scenario and UI recovery are not automated; download-currentness remains unproved. |
+| Phase 2B automated test | `tests/testthat/test-local-flow-contract.R` covers missing/blank Local Flow `flow_site_id`. `tests/testthat/test-server-local-flow-source.R` covers exact uploaded/pasted mapping replacement, Flow/downstream invalidation, corrected retry, import blocking, and RAW-10 HDE default/provenance. |
+| Current execution result | Pass — Local Flow/stale-state automation and final browser missing/blank `flow_site_id` verification passed. |
+| Release evidence | Current browser evidence: `RAW09_01_missing_flow_site_id_blocked.png` and `RAW09_02_blank_flow_site_id_blocked.png`. |
+| Browser/manual verification required | Yes |
+| Gap | The metadata required-value gap is closed in server automation and current browser evidence. |
 | Severity | Major |
-| Recommended action | Add exact mapping trigger plus stale join/HEV/model/download browser assertions. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (near-scenario); Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-10
 
@@ -294,19 +294,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Stage 1 mapping; external Flow source selection. |
 | Blocking classification | Non-blocking under the later HDE-default contract. |
 | Expected user-facing message | RAW authority: “The metadata file is missing the required column flow_input.” Later guidance: “HDE was selected as the default Flow source.” |
-| Implemented message | No error; HDE is assigned with provenance. Upload success text does not explicitly announce every defaulted row. |
+| Implemented message | Informational, non-blocking UI notice: “Flow source was not specified for [n] site(s). HDE has been selected as the default source.” HDE provenance remains row-level and explicit. |
 | Recovery action | Review the provenance/default; change individual sites to NRFA if required, then re-import/recalculate Flow-derived outputs. |
 | Expected retained state | Mapping and unrelated artifacts remain; changing a source invalidates Flow-derived artifacts without session reset. |
-| Implementation evidence | `normalise_site_metadata_flow_input()` at `R/site_mapping_helpers.R:71-114`; use in `server.R:696-724,749-765`; Flow invalidation at `server.R:250-275`. |
-| Automated test | `tests/testthat/test-flow-metadata-defaults.R:17-78`; `tests/testthat/test-flow-mapping-contract.R:17-29`; provenance/server tests `tests/testthat/test-server-local-flow-source.R:93-160`. |
-| Manual test | `TC-002`, `TC-015`; historical FT-01G/H were not run on the updated implementation. RC must confirm visible default/provenance and source-change recovery. |
-| Current execution result | Pass — default/provenance automation passed. |
-| Release evidence | Section 5 current test record; no current browser/RC evidence. |
-| RC re-test required | Yes |
-| Gap | Authority and later scope differ; UI acknowledgement and RC provenance evidence are missing. |
+| Implementation evidence | `normalise_site_metadata_flow_input()` in `R/site_mapping_helpers.R`; `flow_source_default_status` in `server.R`; mapping status placement in `ui.R`. |
+| Automated test | `tests/testthat/test-flow-metadata-defaults.R`; `tests/testthat/test-flow-mapping-contract.R`; `tests/testthat/test-server-local-flow-source.R`, including info styling/message for uploaded and pasted missing/blank values. |
+| Manual test | `TC-002`, `TC-015`; historical FT-01G/H were not run on the updated implementation. Browser/manual verification must confirm visible default/provenance and source-change recovery. |
+| Current execution result | Pass — default/provenance automation and final browser missing/blank `flow_input` verification passed. |
+| Release evidence | Current browser evidence: `RAW10_01_missing_flow_input_defaults_HDE.png` and `RAW10_02_blank_flow_input_defaults_HDE.png`. |
+| Browser/manual verification required | Yes |
+| Gap | UI acknowledgement is implemented and current browser/manual provenance evidence is retained. |
 | Severity | Minor |
-| Recommended action | Formally annotate RAW-10 as superseded by the HDE-default decision and add a browser assertion for visible provenance. |
-| Coverage states | Documented: Yes; Implemented: Yes (prevention/scope change); Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes (later HDE-default decision); Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-11
 
@@ -322,15 +322,15 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Recovery action | Return to Data Input, import/validate Flow, then recalculate from the same session. |
 | Expected retained state | Metadata, Biology, Environment, donor inputs and unrelated artifacts remain; no previous stale Flow statistics are exposed as current. |
 | Implementation evidence | Alert `server.R:1987-2004`; current-revision gate `server.R:1952-1967`; Flow reset `server.R:250-275`. |
-| Automated test | No exact click-without-Flow assertion. `tests/testthat/test-server-local-flow-source.R:162-260` covers invalid replacement/stale state only. |
-| Manual test | Add RC case: click without Flow, navigate back, import valid Local Flow, retry, verify retained inputs and current-only results. |
-| Current execution result | Not Executed |
-| Release evidence | Historical normal Flow tests do not establish this recovery. |
-| RC re-test required | Yes |
-| Gap | No exact automation/browser recovery; possible simultaneous reactive console error and busy-state behaviour are unproved. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “Flow-statistics attempt without Flow input becomes recoverably blocked”, directly exercises the request without Flow and asserts blocked status, prerequisite guidance and no current Flow-statistics revision. The final automated gate passes. |
+| Manual test | Click without Flow, navigate back, import valid Local Flow, retry, and verify retained inputs and current-only results. |
+| Current execution result | Pass — direct workflow-server automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW11_01_flow_processing_blocked_without_flow.png`. Automated coverage is direct and passing; historical normal Flow tests remain supporting context only. |
+| Browser/manual verification required | Yes |
+| Gap | Automated prerequisite handling and current browser-visible blocking behaviour are covered. |
 | Severity | Major |
-| Recommended action | Add a Shiny server test for the prerequisite alert and a browser retry/state-retention case. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No (only indirect state tests); Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (direct workflow-server coverage); Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-12
 
@@ -342,19 +342,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Biology processing / O:E; downstream join, HEV, model. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please import biology data before running this calculation.” |
-| Implemented message | “Please import biology data.” |
+| Implemented message | “Biology data are required before calculating O:E ratios. Import or restore Biology data, then calculate O:E ratios again.” |
 | Recovery action | Return to Data Input, import Biology, complete required processing, and retry. |
 | Expected retained state | Metadata, Environment, Flow and unrelated outputs remain; no stale O:E/join/HEV/model is current. |
-| Implementation evidence | Alert `server.R:1667-1684`; workflow artifacts `server.R:1652-1665`; dependency invalidation `R/workflow_state.R:179-204`. |
-| Automated test | No exact missing-Biology click/recovery assertion; workflow-state tests are indirect. |
-| Manual test | RC: trigger without Biology, verify alert/UI/console/spinner, navigate back, import, retry, and check no unnecessary re-upload. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `TC-014`/`ST-04A` are happy paths, not current recovery. |
-| RC re-test required | Yes |
-| Gap | No exact test or current recovery evidence; old artifacts and loading behaviour unproved. |
+| Implementation evidence | The priority O:E action preflight in `server.R` checks the current Biology artifact before setting an accepted request or running state; the O:E calculation listens only to accepted requests. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing Biology, blocked/not-running state, retained Environment/Flow, import and successful retry. |
+| Manual test | Browser/manual: trigger without Biology, verify alert/UI/console/spinner, navigate back, import, retry, and check no unnecessary re-upload. |
+| Current execution result | Pass — targeted automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW12_01_oe_blocked_without_biology.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Automated recovery/state and current browser evidence gaps are closed. |
 | Severity | Major |
-| Recommended action | Add direct prerequisite/server test and RC browser recovery capture. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-13
 
@@ -366,19 +366,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Biology processing / RICT; O:E and downstream analysis. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please import environmental data before running RICT predictions.” |
-| Implemented message | “Please import environmental base data.” |
+| Implemented message | “Current Environmental data are required before running RICT predictions. Import or regenerate Environmental data, then run RICT predictions again.” |
 | Recovery action | Import Environmental data, then rerun RICT. |
 | Expected retained state | Metadata, Biology, Flow and unrelated artifacts remain; no stale prediction/O:E is current. |
-| Implementation evidence | Alert `server.R:1567-1583`; unguarded import/calculation path `server.R:1375-1379,1544-1555`. |
-| Automated test | None for this trigger. |
-| Manual test | RC: click RICT without Environment, verify blocking message and no console-only failure, import data, retry, inspect retained state. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-04A`/`FT-06A` are success paths only. |
-| RC re-test required | Yes |
-| Gap | No exact automation/recovery; Environment import has no uniform external-error wrapper. |
+| Implementation evidence | The priority RICT action preflight in `server.R` validates the current Environmental artifact before accepting a request or entering running; prediction processing listens only to accepted requests. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing and stale Environmental states, retained Biology, re-import and successful retry. |
+| Manual test | Browser/manual: click RICT without Environment, verify blocking message and no console-only failure, import data, retry, inspect retained state. |
+| Current execution result | Pass — targeted automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW13_01_rict_blocked_without_environment.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Prerequisite recovery is automated and current browser evidence is retained; external-import recovery is tracked under RAW-22. |
 | Severity | Major |
-| Recommended action | Test prerequisite and external-import failure separately; capture both recovery paths on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-14
 
@@ -390,19 +390,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Biology processing / O:E. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please run RICT predictions before calculating O:E ratios.” |
-| Implemented message | “Please run RICT predictions.” |
+| Implemented message | “Current RICT predictions are required before calculating O:E ratios. Run RICT predictions before calculating O:E ratios.” |
 | Recovery action | Run RICT successfully, then retry O:E. |
 | Expected retained state | Biology/Environment/Flow inputs remain; failed O:E does not clear RICT prerequisites or mark downstream outputs current. |
-| Implementation evidence | Alert `server.R:1700-1717`; O:E reactive `server.R:1632-1650`. |
-| Automated test | None for this trigger/retry. |
-| Manual test | RC: skip RICT, request O:E, verify alert/spinner/navigation, run RICT, retry O:E, verify prior inputs retained. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-04A` is a completed sequence, not missing-prerequisite recovery. |
-| RC re-test required | Yes |
-| Gap | No exact automation/browser evidence and no proof the reactive error is also represented in UI. |
+| Implementation evidence | The O:E action preflight in `server.R` validates the current RICT artifact before accepting the request; the O:E event reactive cannot access predictions for a blocked click. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing RICT predictions, retained Biology/Environment, RICT run and successful O:E retry. |
+| Manual test | Browser/manual: skip RICT, request O:E, verify alert/spinner/navigation, run RICT, retry O:E, verify prior inputs retained. |
+| Current execution result | Pass — targeted automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW14_01_oe_blocked_without_rict.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Automated block/retry, controlled messaging and current browser evidence are complete. |
 | Severity | Major |
-| Recommended action | Add prerequisite test and RC recovery screenshot/log with artifact-state assertions. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-15
 
@@ -414,19 +414,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Build Joined HE dataset”; Stage 3 Processing / join; downstream HEV/model/download. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please calculate flow statistics before joining biology and flow data.” |
-| Implemented message | “Flow statistics are missing.” |
+| Implemented message | “Flow Statistics are missing or out of date. Calculate or regenerate Flow Statistics, then build the Joined HE Dataset again.” |
 | Recovery action | Return to Flow processing, calculate statistics from the current source, return to join, and rerun. |
 | Expected retained state | Valid Biology/O:E and mapping remain; completed old join/HEV/model/download must be stale/blocked, not usable as success. |
-| Implementation evidence | Alert `server.R:2160-2177`; revision gates `server.R:1952-1967,2050-2079`; state invalidation `server.R:250-275`, `R/workflow_state.R:179-204`. |
-| Automated test | No exact missing-prerequisite UI test. Indirect stale tests: `tests/testthat/test-server-local-flow-source.R:213-260`, `tests/testthat/test-workflow-server.R:127-205`. |
-| Manual test | RC: attempt join before stats; then create stats and join; change Flow source and verify old join, HEV, model and every download cannot be used until regeneration. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-05A` failed for another backend error; it is not current RAW-15 evidence. |
-| RC re-test required | Yes |
-| Gap | Missing one-to-one test, current browser recovery, and download-currentness proof. |
+| Implementation evidence | The priority join preflight in `server.R` checks current Flow Statistics before creating `join_request` or entering running; join result reactives listen only to accepted requests. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale Flow Statistics, no join calls, retained O:E, regeneration and successful retry. |
+| Manual test | Browser/manual: attempt join before stats; then create stats and join; change Flow source and verify old join, HEV, model and every download cannot be used until regeneration. |
+| Current execution result | Pass with Warning — targeted automation passed; final browser block/retry verification passed with a non-blocking Biology/Flow temporal coverage warning. |
+| Release evidence | Current browser evidence: `RAW15_01_join_blocked_without_flow_statistics.png` and `RAW15_02_join_retry_after_flow_statistics.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Direct automation, stale-input non-consumption and current browser block/retry evidence are complete. |
 | Severity | Major |
-| Recommended action | Add direct prerequisite and stale-download tests; execute full recovery chain on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No (indirect state tests only); Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current evidence and documented non-blocking warning with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass with Warning. |
 
 ### RAW-16
 
@@ -438,19 +438,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Build Joined HE dataset”; Stage 3 join; downstream HEV/model/download. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please calculate O:E ratios before joining biology and flow data.” |
-| Implemented message | “Processed biology data are missing.” |
+| Implemented message | “Current O:E ratios are required before building the Joined HE Dataset. Calculate or regenerate O:E ratios, then build the Joined HE Dataset again.” |
 | Recovery action | Complete RICT and O:E, return to Analysis, and rerun join. |
 | Expected retained state | Mapping, Flow and Flow statistics remain; incomplete/stale joined/HEV/model/download artifacts remain blocked. |
-| Implementation evidence | Alert `server.R:2141-2158`; join uses `biol_all()` at `server.R:2050-2063`; stale dependencies at `R/workflow_state.R:5-25,179-204`. |
-| Automated test | No exact trigger/retry assertion; workflow state/config tests are indirect. |
-| Manual test | RC: attempt join before O:E; complete O:E; retry; verify Flow stats retained and no stale output/download use. |
-| Current execution result | Not Executed |
-| Release evidence | None current; July join records are historical and encountered other failures. |
-| RC re-test required | Yes |
-| Gap | Runtime wording is less specific; no exact test or browser recovery/state evidence. |
+| Implementation evidence | The priority join preflight in `server.R` checks the current O:E artifact before creating `join_request`; the join result reactives reject missing/stale O:E. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale O:E, no join calls, retained Flow Statistics, O:E regeneration and successful retry. |
+| Manual test | Browser/manual: attempt join before O:E; complete O:E; retry; verify Flow stats retained and no stale output/download use. |
+| Current execution result | Pass with Warning — targeted automation passed; final browser block/retry verification passed with a non-blocking Biology/Flow temporal coverage warning. |
+| Release evidence | Current browser evidence: `RAW16_01_join_blocked_without_oe.png` and `RAW16_02_join_retry_after_oe.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Runtime wording, automated recovery and current browser recovery/state evidence are complete. |
 | Severity | Major |
-| Recommended action | Align the prerequisite message, add a direct test, and capture RC retry plus stale gates. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current evidence and documented non-blocking warning with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass with Warning. |
 
 ### RAW-17
 
@@ -462,19 +462,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Task “Generate HEV plots”; Stage 4 HEV. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “Please join biology and flow data before creating an HEV plot.” |
-| Implemented message | “Paired biology-flow data are missing.” |
+| Implemented message | “The Joined HE Dataset is missing or out of date. Rebuild or regenerate the Joined HE Dataset, then create the HEV plot again.” |
 | Recovery action | Return to the earliest blocked Stage, regenerate join, return to HEV, and render again. |
 | Expected retained state | Inputs and current upstream artifacts remain; an old HEV plot/download cannot be used as current; no session reset or re-upload should be needed. |
-| Implementation evidence | Alert `server.R:2426-2443`; revision gate `server.R:2356-2397`; resume logic `R/workflow_state.R:234-287`. |
-| Automated test | No exact HEV click/recovery test. Cross-cutting resume/stale tests: `tests/testthat/test-workflow-state.R:116-145`, `tests/testthat/test-workflow-server.R:127-205`. |
-| Manual test | `TC-016` normal path; historical `ST-06` saw the message but was blocked. RC must test missing and stale joins, back navigation, regeneration, plot and download. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-06` at an older build only; no current/final RC recovery packet. |
-| RC re-test required | Yes |
-| Gap | No current browser or exact automation; HEV download does not itself assert artifact currentness. |
+| Implementation evidence | The priority HEV action preflight in `server.R` checks the current Joined HE Dataset before accepting a plot request or entering running; HEV plot/download evaluation is gated by the accepted request and current join. |
+| Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale join, blocked/not-running HEV, old plot unavailable, retained upstream, rebuild and successful retry/current result. |
+| Manual test | `TC-016` normal path; historical `ST-06` saw the message but was blocked. Browser/manual verification must test missing and stale joins, back navigation, regeneration, plot and download. |
+| Current execution result | Pass — targeted automation and final browser block/rebuild/retry verification passed. |
+| Release evidence | Current browser evidence: `RAW17_01_hev_blocked_without_joined_he.png` and `RAW17_02_hev_retry_after_joined_he.png`. |
+| Browser/manual verification required | Yes |
+| Gap | Exact automation, current-only HEV evaluation and current browser recovery evidence are complete. |
 | Severity | Major |
-| Recommended action | Add HEV prerequisite/stale download test and execute the whole retry chain on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-18
 
@@ -486,19 +486,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | WQ/RHS plots, WQ summary, PCA/heatmap, analysis plots, HEV. |
 | Blocking classification | Blocking for that plot only; normally non-blocking for other workflows. |
 | Expected user-facing message | “The plot could not be created because the required data is missing or invalid.” |
-| Implemented message | WQ/RHS helpers return specific friendly messages such as “A WQ time series needs a date-like column”; model plotting is guarded. Legacy/HEV plotting has no general safe wrapper. |
+| Implemented message | WQ/RHS helpers retain their specific friendly validation; the shared plot-specific boundary and HEV status now use “The plot could not be created because the required data is missing or invalid. Check the plot inputs and current results, then try again.” |
 | Recovery action | Keep valid data and selections, choose valid variables/date range or regenerate prerequisites, then retry the plot. |
 | Expected retained state | Upstream data/results and prior valid artifacts remain; failed new plot is not marked complete; other pages stay usable. |
-| Implementation evidence | Partial: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. |
-| Automated test | `tests/test_wq_rhs_plots.R:36-91` includes missing date/numeric friendly-message assertions; model plot/error tests in `tests/test_model_interface_helpers.R`; no legacy/HEV exception test. |
+| Implementation evidence | Historical partial evidence retained: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; formerly unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. Completion evidence: `R/plot_recovery_helpers.R` retains no-file-device preflight and adds `safe_final_plot_render()`, which draws accepted `ggplot`, `ggmatrix`, `grob`, `gtable`, `recordedplot`, `trellis` and nested/list results on the graphics device already opened by Shiny. `output$HEV_plot` calls that helper inside `renderPlot()` and returns invisibly, so the real output draw is controlled and is not repeated outside the boundary. HEV generation failure still finalises `hev_result` as failed while retaining previous plot/data/provenance and download history. |
+| Automated test | Historical helper evidence retained: `tests/test_wq_rhs_plots.R:36-91` and `tests/test_model_interface_helpers.R`. `tests/testthat/test-plot-recovery.R` covers thrown, NULL, unsupported and delayed-render ggplot failures; all accepted plot classes; an object whose validation draw succeeds and final draw fails; nested/list final-draw failure; generic user text with retained diagnostics; and unchanged device state after validation/final-render success and failure. `tests/testthat/test-workflow-server.R` covers HEV exception/unusable result, safe UI text, failed-not-running/current state, retained upstream/HEV history and same-session retry success. |
 | Manual test | `TC-007`, `TC-009`, `TC-016–TC-021`; execute missing/invalid data and forced plotting error on every plot family. |
-| Current execution result | Pass — WQ/RHS/model helper slices passed; HEV/legacy/browser recovery was not executed. |
-| Release evidence | Section 5 current helper results; existing plot images are output examples, not recovery evidence. |
-| RC re-test required | Yes |
-| Gap | Partial coverage only; no application-wide plot wrapper, exact HEV test, loading/state retention, or browser evidence. |
+| Current execution result | Pass — targeted deterministic plot-boundary/workflow-server automation and final browser controlled-failure/retry verification passed. |
+| Release evidence | Current browser evidence: `RAW18_01_hev_plot_failure_controlled.png` and `RAW18_02_hev_plot_retry_success.png`. Historical plot images remain output examples, not recovery evidence. |
+| Browser/manual verification required | Yes |
+| Gap | The actual HEV Shiny output draw is now inside the controlled boundary. A focused browser smoke rechecked normal render, unusable `2026–2026` failure and corrected `1990–2025` retry; no artificial browser draw-time object injection is claimed. |
 | Severity | Major |
-| Recommended action | Standardise a safe plot result contract and add tests for every plot family before RC rerun. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: Yes (partial); Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-19
 
@@ -510,43 +510,43 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | WQ/RHS CSV/PNG, exclusion log, HEV plot, table/download outputs. |
 | Blocking classification | Blocking for the download; non-blocking for the already completed analysis. |
 | Expected user-facing message | “The file could not be created. Please try again or check file permissions.” |
-| Implemented message | Only “No ... data are available to download” preconditions on selected WQ/RHS downloads; no write-failure catch. |
+| Implemented message | Preconditions remain specific to the source artifact. Writer/copy/export failures now use: “The file could not be created or saved. Check that the destination is available and writable, then try again.” |
 | Recovery action | Preserve the completed in-memory result; retry download, regenerate only if necessary, and contact support if persistent. |
 | Expected retained state | All inputs and completed artifacts remain; no re-upload/reprocessing solely because a file write failed. |
-| Implementation evidence | Unguarded handlers `server.R:741-747,967-985,1048-1056,1182-1196,1313-1316`; HEV module `global.R:879-890`. |
-| Automated test | None for write failure or retained state. |
-| Manual test | `TC-008`, `TC-010`, `TC-016`, `TC-022`, `TC-033` cover happy paths only. RC fault injection must force writer/permission failure, verify UI message and successful retry. |
-| Current execution result | Not Executed |
-| Release evidence | None. Existing downloaded/plot files do not prove failure recovery. |
-| RC re-test required | Yes |
-| Gap | No safe write boundary, no error UI, no automation, no browser evidence. |
+| Implementation evidence | Historical gap retained: unguarded handlers formerly at `server.R:741-747,967-985,1048-1056,1182-1196,1313-1316`; HEV module formerly at `global.R:879-890`. Completion evidence: `R/file_operation_helpers.R` provides the file-only result boundary; `server.R` applies it to demo metadata copy, mapped WQ/RHS CSV, WQ contract summary CSV, mapped WQ/RHS PNG, exclusion log CSV and processed Joined HE checkpoint; `global.R` applies it to HEV plot downloads and records HEV download history only after the file writer succeeds. |
+| Automated test | `tests/testthat/test-file-operation-recovery.R` covers success, writer failure, safe text, retained source state, no false success record and same-session retry. `tests/testthat/test-workflow-server.R` covers HEV writer failure, safe UI condition, retained plot, unchanged history, successful retry and one success record only. |
+| Manual test | `TC-008`, `TC-010`, `TC-016`, `TC-022`, `TC-033` retain happy-path coverage. Browser/manual fault injection must force writer failure and verify the controlled message, retained result and successful retry. |
+| Current execution result | Pass — automated writer-failure recovery passed and the browser normal PDF/JPEG/PNG download path passed; manual writer-failure injection was not executed. |
+| Release evidence | Current browser evidence: `RAW19_01_hev_pdf_download_and_open.png` and `RAW19_02_hev_all_formats_downloaded.png`. Writer-failure recovery evidence remains automated. |
+| Browser/manual verification required | Yes |
+| Gap | Automated write-failure/retention/retry coverage and browser normal-path evidence are complete; manual browser writer-failure injection was not executed. |
 | Severity | Major |
-| Recommended action | Wrap every download writer in one sanitised error contract and test failure plus retry without recomputation. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the automated failure-recovery and browser normal-path evidence; do not describe the browser session as writer-failure injection. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser normal path: Pass; Manual writer-failure injection: Not Executed. |
 
 ### RAW-20
 
 | Field | Required content |
 |---|---|
 | RAW ID | RAW-20 |
-| Error scenario | A required runtime-generated Flow CSV is absent. |
-| Trigger | A downstream step attempts to read an expected temporary/generated Flow file that was never created or was removed. |
-| Affected workflow/task | Flow import/processing and all Flow-dependent outputs. |
-| Blocking classification | Blocking |
+| Error scenario | Historical: a required runtime-generated Flow CSV is absent. |
+| Trigger | Historical: a downstream step attempts to read an expected temporary/generated Flow file that was never created or was removed. |
+| Affected workflow/task | Historical Flow import/processing and all Flow-dependent outputs. The current supported Flow path has no generated-file reopen step. |
+| Blocking classification | Superseded / N/A for the current supported Flow architecture. Equivalent current Flow import failures remain blocking for Flow-dependent outputs. |
 | Expected user-facing message | “The required temporary flow file could not be found. Please re-import the flow data.” |
-| Implemented message | No explicit generated-file handler found. Current application code does not directly reference `27034.csv`; the RAW scenario may be legacy, but it has not been formally retired. |
-| Recovery action | Re-import current Flow data, recalculate statistics, then regenerate join/HEV/model/download. |
-| Expected retained state | Mapping, Biology/Environment/O:E and user settings remain; Flow-derived outputs are stale/blocked. |
-| Implementation evidence | No matching runtime handler/reference. General Flow source revision reset at `server.R:250-275` is not a missing-file recovery. |
-| Automated test | None. |
-| Manual test | RC/contract review first confirms whether generated files still exist. If applicable, remove only an isolated temp file, trigger read, verify message/state, re-import and regenerate. If obsolete, record justified N/A and retire the RAW definition formally. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
-| RC re-test required | Yes |
-| Gap | Applicability unclear; no formal retirement, implementation, test, or evidence. |
+| Implemented message | No dedicated generated-Flow-file message is required because the current dashboard never creates and reopens per-site Flow CSVs. Current Flow import failures use “Flow data could not be retrieved or processed. Check the selected sites, source and date range, then try again.” Current RHS temporary-filesystem failures use the existing sanitised file-operation message. |
+| Recovery action | Retry the current HDE/NRFA Flow import in the same session; a failed import is not current and Flow-dependent outputs remain invalidated. For the current RHS temporary-file path, correct the transient filesystem/service condition and retry; cleanup and working-directory restoration run on exit. |
+| Expected retained state | Mapping, Biology/Environment/O:E, optional unrelated inputs and user settings remain. Failed current Flow results are not marked current. A classified RHS temporary-filesystem failure retains the previous RHS data and workflow registry; a general failed RHS replacement is not treated as current. |
+| Implementation evidence | **Superseded by current implementation / no additional code required.** `normalise_site_metadata_flow_input()` accepts only `HDE` and `NRFA`; `import_dashboard_flow()` calls `hetoolkit::import_flow()` and returns its data frame directly; `server.R` keeps that result in `external_flow_data()`/`flow_data()` and never writes or reopens a site CSV. Current installed `hetoolkit` HDE/NRFA import functions contain no file operations; its separate `FLOWFILES` reader is not reachable through the supported dashboard contract. Repository history, including the initial dashboard implementation, likewise calls `import_flow()` directly and contains no `27034.csv`/generated-Flow-CSV reopen path. The closest current supporting-file path is RHS: `import_rhs_in_temp_directory()` creates a unique temporary directory under `safe_file_operation()`, restores the previous working directory and removes the directory through `on.exit()`; `server.R` sanitises both classified filesystem failures and importer failures, preserves unrelated state, rejects failed replacement data and permits retry. Missing Shiny upload temp paths are independently guarded by `read_site_metadata_csv()`/`read_dashboard_csv()` and are not a remaining RAW-20 gap. |
+| Automated test | `tests/testthat/test-file-operation-recovery.R` covers sanitised RHS setup failure, working-directory restoration, cleanup and retry. `tests/testthat/test-donor-external-recovery.R` covers RHS file/import failure, retained or invalidated state as appropriate, redaction and same-session retry, and covers current in-memory Flow import failure/retry. `tests/testthat/test-workflow-server.R` and `tests/test_site_mapping.R` retain workflow and supported HDE/NRFA mapping coverage. |
+| Manual test | The historical generated-Flow-file deletion scenario is N/A. Browser/manual verification remains pending for current Flow failure/retry and RHS temporary-file recovery, including retained unrelated state and no raw path/error disclosure. |
+| Current execution result | Superseded / N/A. |
+| Release evidence | Current-code/history trace and automated recovery tests support the superseded disposition; no dedicated browser screenshot is required. |
+| Browser/manual verification required | No dedicated RAW-20 browser scenario required. |
+| Gap | No current production-code or browser-evidence gap for the superseded historical mechanism. |
 | Severity | Major |
-| Recommended action | Decide whether RAW-20 is live; implement/test it or record an approved scope retirement with replacement architecture evidence. |
-| Coverage states | Documented: Yes; Implemented: No / applicability unclear; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain RAW-20 as a formally superseded historical case. |
+| Coverage states | Documented: Yes; Disposition: Superseded / N/A; Additional implementation required: No; Replacement-path automated test exists: Yes; Executed current branch: Yes; Dedicated browser verification: N/A. |
 
 ### RAW-21
 
@@ -558,19 +558,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Downloads, plot export, RHS temp import, any runtime file use. |
 | Blocking classification | Blocking for the file operation; non-blocking for retained completed analysis. |
 | Expected user-facing message | “The dashboard could not save a temporary file. Please check file permissions or try again.” |
-| Implemented message | None general. |
+| Implemented message | “The file could not be created or saved. Check that the destination is available and writable, then try again.” The wording does not claim a specific permission cause and does not expose paths or system details. |
 | Recovery action | Preserve current results; use an authorised writable runtime location/retry; do not require data re-upload unless the source itself is inaccessible. |
 | Expected retained state | Inputs, completed artifacts, plots/tables and navigation remain usable; failed file is not presented as downloaded. |
-| Implementation evidence | Unguarded writers listed under RAW-19; temp RHS helper `R/site_mapping_helpers.R:215-232` has cleanup but no user-facing permission contract. |
-| Automated test | None. |
-| Manual test | In an isolated RC sandbox, inject a non-writable target/temp directory without altering production data; verify friendly message, no leaked path, result retention, and retry. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
-| RC re-test required | Yes |
-| Gap | No permission handler, safe fault-injection test, or recovery evidence. |
+| Implementation evidence | Historical gap retained: unguarded writers listed under RAW-19; the RHS temp helper formerly had cleanup but no user-facing permission contract. Completion evidence: `R/file_operation_helpers.R` catches filesystem failures with safe user text plus internal diagnostics; `R/site_mapping_helpers.R` uses it for RHS temp-directory creation, working-directory access, restoration and cleanup; `server.R` restores the retained workflow registry and RHS data after a temp-filesystem failure while allowing retry. All RAW-19 writers reuse the same contract. |
+| Automated test | `tests/testthat/test-file-operation-recovery.R` injects a path-bearing permission-style temp-directory failure, verifies redaction/current-directory retention/cleanup and retries successfully. `tests/testthat/test-donor-external-recovery.R` verifies a current RHS result and workflow registry survive a filesystem failure and a same-session retry succeeds. HEV coverage in `tests/testthat/test-workflow-server.R` verifies permission-style export failure does not create history. |
+| Manual test | In an isolated browser/manual sandbox, inject a non-writable target/temp directory without altering production data; verify friendly text, no leaked path, result retention and retry. |
+| Current execution result | Pass — targeted deterministic permission/filesystem retained-state and retry automation passed; destructive browser permission/filesystem fault injection was not executed. |
+| Release evidence | Automated recovery evidence only; no dedicated browser screenshot is required. |
+| Browser/manual verification required | Yes |
+| Gap | Automated implementation and deterministic permission/filesystem retention/retry coverage are complete; destructive browser fault injection remains intentionally unexecuted. |
 | Severity | Major |
-| Recommended action | Centralise file operations with sanitised permission errors and deterministic isolated tests. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the automated recovery evidence; do not claim destructive browser permission/filesystem injection. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Destructive browser fault injection: Not Executed. |
 
 ### RAW-22
 
@@ -582,19 +582,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Stage 1 external imports and every dependent Task. |
 | Blocking classification | Blocking for a required requested source; non-blocking for optional WQ/RHS and for workflows with an operational local alternative. |
 | Expected user-facing message | “The external data source could not be reached. Please check the connection and try again.” |
-| Implemented message | WQ: “WQ data could not be imported ... Check the IDs, dates, and network connection.” RHS has similar guarded result. Biology, Environment and external Flow have no uniform catch. |
+| Implemented message | Biology, Environment, Flow, additional donor Flow, WQ and RHS use source-specific controlled “could not be retrieved or processed” messages with a correction/retry action. No message claims a network outage when the exact cause is unknown. |
 | Recovery action | Keep IDs/date ranges/local uploads; retry service once, use approved local alternative where supported, or continue core workflow without optional WQ/RHS. |
 | Expected retained state | All local inputs and unrelated current artifacts remain; failed source/dependent outputs are not successful; optional failure does not block core. |
-| Implementation evidence | Partial: WQ catch `server.R:848-864`; RHS catch `server.R:897-920`; unguarded required imports `server.R:1335-1339,1375-1379,1438-1447`; external Flow wrapper directly calls service at `R/site_mapping_helpers.R:117-124`. |
-| Automated test | No failure/timeout test. `tests/test_server_site_import.R` and `tests/testthat/test-server-local-flow-source.R` mock successful external imports/local precedence only. |
-| Manual test | RC isolated service stubs: timeout/HTTP/empty response for all five sources, retry success, optional-source continuation, local Flow fallback/precedence, retained state and spinner termination. Do not use real services for fault injection. |
-| Current execution result | Not Executed — the mocked success test ran (with two Leaflet warnings) but the RAW failure trigger did not. |
-| Release evidence | Historical live-service successes are not outage recovery and not RC evidence. |
-| RC re-test required | Yes |
-| Gap | Partial implementation, inconsistent blocking classification, no deterministic failure automation or RC browser evidence. |
+| Implementation evidence | Previously partial boundary resolved on `qa/raw-user-facing-recovery`: `safe_external_import()` classifies request errors, NULL/empty results and unusable result structures; `server.R` applies it to Biology, Environment, external Flow, additional donor Flow, WQ and RHS, records internal diagnostics separately from UI text, and updates workflow currentness only after usable success. The unused internal `donor_flow_import_running` and `flow_imputation_running` flags were intentionally removed during final RAW-only simplification without reducing behavioural recovery coverage. |
+| Automated test | `tests/testthat/test-donor-external-recovery.R` uses mocked failures/results for all covered paths, including service error, NULL/empty and invalid schema classification, failed-currentness, unrelated-state retention, retry results and call counts. Existing local-Flow precedence and site-import tests remain linked regression coverage. |
+| Manual test | Use isolated service stubs for timeout/HTTP/empty response across all five sources, retry success, optional-source continuation, local Flow fallback/precedence, retained state and spinner termination. Do not use real services for fault injection. |
+| Current execution result | Pass — automated failure/retry cases and final browser additional-donor failure/retry verification passed. |
+| Release evidence | Current browser evidence: `RAW22_01_additional_donor_external_failure_safe.png` and `RAW22_02_additional_donor_retry_success.png`. Historical live-service successes remain historical context only. |
+| Browser/manual verification required | Yes |
+| Gap | Previously identified scoped application-boundary, deterministic automation and current browser evidence gaps are resolved. The application-wide lifecycle limitation remains deferred under RAW-25. |
 | Severity | Major |
-| Recommended action | Use one external-call result contract with timeout/fallback semantics and stubbed failure tests for every source. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: No for failure recovery; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the current automated and browser evidence; track application-wide lifecycle consistency separately as RAW-25. |
+| Coverage states | Documented: Yes; Implemented: Yes for the scoped external operations; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-23
 
@@ -606,19 +606,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Application-wide; especially Flow statistics, join, HEV, model and downloads. |
 | Blocking classification | Blocking for the failed operation; other valid workflows should remain usable. |
 | Expected user-facing message | “Something went wrong while processing this step. Please check your input and try again.” |
-| Implemented message | Upload/model/WQ/RHS paths have local catches. There is no application-wide boundary; model catch includes raw `conditionMessage(e)` in parentheses. |
+| Implemented message | Scoped upload, workbook-preview, model, external-import, plot and file-operation paths use controlled user-facing messages. Raw model diagnostics are kept separate from UI messages. |
 | Recovery action | End loading, show sanitised step-specific feedback, preserve existing valid state, allow back navigation and one retry; never mark failed output complete. |
 | Expected retained state | Existing valid data/artifacts are intentionally unchanged unless their source changed; target artifact becomes failed/blocked, not success; no session reset. |
-| Implementation evidence | Partial model wrapper `R/model_interface_helpers.R:27-82`; artifact failure path `server.R:2287-2320`; many legacy reactives remain unguarded, e.g. `server.R:1335-1470,1544-1650,1952-2063,2356-2477`. |
-| Automated test | Partial: `tests/test_model_interface_helpers.R` asserts friendly results for no data/invalid variables/forced errors; workflow failed-state/resume tests in `tests/testthat/test-workflow-state.R:133-145`. No application-wide reactive exception test. |
-| Manual test | `TC-021`, `TC-036–TC-039`; RC must inject backend failures at Flow stats, join, HEV, model and download, observe UI and R Console together, retry, and verify retained/current state. |
-| Current execution result | Pass — model-interface slice passed; general Shiny error recovery was not executed. |
-| Release evidence | Current helper result in Section 5. Historical `ST-05A`/`BUG-001` and `FT-07A`/`BUG-003` prove earlier raw/permanent failures, not current recovery. |
-| RC re-test required | Yes |
-| Gap | No global/step boundary, path-safe message guarantee, browser recovery, or complete target-state assertions. |
-| Severity | Blocker |
-| Recommended action | Before RC sign-off, add safe boundaries around critical reactives and deterministic failure/retry tests; remove raw exception text from user messages. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: Yes (model slice only); Executed current main: Yes (model slice only); Final RC evidence: No. |
+| Implementation evidence | Historical finding: model handling and several legacy reactives previously had incomplete boundaries and could expose raw detail. Current scoped completion: `R/model_interface_helpers.R` separates safe messages from diagnostics; the workbook preview observer guards missing/empty sheet input; shared external-import, plot and file-operation boundaries protect the critical recovery paths in scope; workflow artifact failure handling preserves valid upstream state. |
+| Automated test | `tests/testthat/test-workflow-server.R` covers the workbook preview guard and workflow failure/retry state; `tests/testthat/test-user-facing-error-safety.R` covers model and user-facing message safety; targeted donor/external, plot and file recovery suites cover their critical boundaries. The final automated gate passes. |
+| Manual test | Use `TC-021` and `TC-036–TC-039` plus scoped fault injection to observe UI and R Console together, retry, and verify retained/current state. |
+| Current execution result | Pass — basic browser smoke passed and scoped automated edge-case coverage passed; invalid-sheet browser injection was not executed. |
+| Release evidence | Browser smoke completed without a retained screenshot; NULL/empty/NA/blank/invalid sheet states are covered by automation. Historical `ST-05A`/`BUG-001` and `FT-07A`/`BUG-003` remain historical evidence only. |
+| Browser/manual verification required | Yes |
+| Gap | The scoped recovery, user-message safety and basic browser-smoke gaps are closed. Invalid-sheet browser injection was not executed; application-wide lifecycle consistency remains deferred under RAW-25. |
+| Severity | Current residual QA evidence gap; not a current Blocker on the basis of the superseded historical RAW-23 finding. |
+| Recommended action | Retain the automated edge-case result and record that no browser screenshot was retained and invalid-sheet browser injection was not executed. |
+| Coverage states | Documented: Yes; Implemented: Yes for the scoped recovery paths; Automated test exists: Yes; Executed current branch: Yes; Basic browser smoke: Pass; Screenshot: Not retained; Invalid-sheet browser injection: Not Executed. |
 
 ### RAW-24
 
@@ -626,23 +626,23 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 |---|---|
 | RAW ID | RAW-24 |
 | Error scenario | Local/developer filesystem path is exposed to the user. |
-| Trigger | A parser/model/file exception contains `C:/Users/...` or another internal path and `conditionMessage(e)` reaches UI. |
+| Trigger | A parser/model/file exception contains a POSIX, Windows drive or UNC absolute path and historically reached UI. |
 | Affected workflow/task | Upload, donor input, model, download/temp and any fallback exception path. |
 | Blocking classification | Blocking for the failed operation; information-disclosure risk application-wide. |
 | Expected user-facing message | “An internal file-reading error occurred. Please check your input and try again.” |
-| Implemented message | Upload wrappers sanitise selected read failures; metadata normalisation and donor/model paths can display `conditionMessage(e)`. |
+| Implemented message | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Upload, donor, external-import, plot and file-operation boundaries use stable messages; model fitting, processed-checkpoint loading and workspace-save fallback presentation now keep raw diagnostics internal and expose only controlled actionable wording. |
 | Recovery action | Correct/retry input without seeing internal details; preserve valid state; support logs may retain details only in an authorised location. |
 | Expected retained state | Existing valid artifacts and inputs remain, failed target is not successful, and no local path appears in UI/download filename. |
-| Implementation evidence | Partial safe upload messages `R/dashboard_backlog_helpers.R:1-19`, `server.R:448-478`; leaks possible at `server.R:696-704,752-756,1788-1792` and `R/model_interface_helpers.R:70-74`. |
-| Automated test | None explicitly injects a path-bearing condition and asserts it is absent from rendered UI. |
+| Implementation evidence | `R/model_interface_helpers.R` separates `messages` from `diagnostic`; `server.R` records model/checkpoint/workspace diagnostics internally and sanitises the affected UI fallback messages. `R/user_message_safety_helpers.R` protects complete HTTP/HTTPS URL tokens before boundary-aware detection for absolute POSIX paths, Windows drive paths with either separator and UNC share paths. POSIX paths remain unsafe after ordinary punctuation such as a label colon, while URL paths and hash routes are not reclassified as filesystem paths. POSIX root `/` is intentionally treated as an absolute path. Existing `safe_external_import()`, `safe_plot_result()` and `safe_file_operation()` contracts remain separate. |
+| Automated test | `tests/testthat/test-user-facing-error-safety.R` covers `/Library/Frameworks`, `/Applications`, `/Volumes`, `/srv`, `/var`, `/Users`, `/home`, `/tmp` and root `/`; colon-adjacent POSIX paths; Windows `C:/` and `D:\\` paths; UNC paths; HTTP/HTTPS URLs including multiple components and hash routes; exact fallback wording; and retained `input/output`, `numerator/denominator` and `yes/no` prose. `tests/testthat/test-workflow-server.R` retains path-bearing checkpoint/workspace UI boundary, state and retry coverage. Existing donor/external, plot and file recovery tests retain targeted negative-disclosure assertions. |
 | Manual test | Inject a synthetic error containing a fake path in every exception boundary; assert UI/DOM/screenshot lacks path/stack trace while authorised console log can be correlated. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
-| RC re-test required | Yes |
-| Gap | No systematic sanitisation, negative disclosure test, or browser/RC evidence. |
+| Current execution result | Pass — targeted automated RAW-24 coverage plus final browser evidence reused from RAW-02, RAW-06, RAW-18 and RAW-22. |
+| Release evidence | No dedicated RAW-24 screenshot required; current browser evidence is reused from RAW-02, RAW-06, RAW-18 and RAW-22. |
+| Browser/manual verification required | Yes |
+| Gap | Previously identified implementation, negative-disclosure automation and browser/manual evidence gaps are resolved. |
 | Severity | Major |
-| Recommended action | Separate user-safe errors from internal diagnostics and add path/stack-trace redaction tests. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain the automated evidence and reused browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Direct; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass via reused RAW-02/06/18/22 evidence. |
 
 ### RAW-25
 
@@ -652,181 +652,83 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Error scenario | Backend processing fails or stalls and the dashboard remains permanently loading. |
 | Trigger | Flow statistics/join/plot/external operation fails, hangs, or leaves Shiny busy state unresolved. |
 | Affected workflow/task | Application-wide; critical historical examples are Flow statistics and Biology–Flow pairing. |
-| Blocking classification | Blocking |
+| Blocking classification | Deferred / Known limitation |
 | Expected user-facing message | “The operation could not be completed. Please check your input and try again.” |
-| Implemented message | No timeout/cancel/busy-recovery message on current main. `add_busy_spinner()` only reflects busy state. |
+| Implemented message | Not implemented in the current scope. No application-wide timeout/cancellation/busy-recovery contract is claimed. |
 | Recovery action | Loading must terminate; prevent duplicate submission; show safe failure; keep other controls/pages usable; allow back navigation and retry without session reset. |
 | Expected retained state | All previously valid artifacts and input selections remain; no half-built/stale target is usable; no re-upload unless the input source itself changed. |
-| Implementation evidence | Spinner at `ui.R:205`; no timeout/cancel guard found. Critical processing paths remain unguarded at `server.R:1952-2063,2356-2477`. |
-| Automated test | None on current main for timeout/permanent-loading/browser busy recovery. |
-| Manual test | RC deterministic delay/error injection for Flow stats, join, external import and plot: assert spinner ends, button re-enables, duplicate clicks blocked, safe UI message, navigation/back works, artifacts retained, retry succeeds. |
-| Current execution result | Not Executed |
-| Release evidence | Historical `ST-05A`, `FT-07A`, `FT-07A-R1`, `BUG-001`, and `BUG-003` record 99%/permanent loading on older builds. They are failure evidence, not current/final RC recovery evidence. |
-| RC re-test required | Yes |
-| Gap | No timeout/cancellation/recovery implementation, automation, current browser result, or RC evidence. |
-| Severity | Blocker |
-| Recommended action | Treat busy-state recovery as an RC gate: implement bounded operations/finalisation and add deterministic browser tests before formal use. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Implementation evidence | Application-wide timeout, lifecycle, repeated-click protection and button-state consistency would require broader architectural changes and carry disproportionate regression risk relative to the current scope. Existing scoped mitigation provides dedicated recovery boundaries for external import, donor recovery, plot recovery, file/download/filesystem recovery, prerequisite/currentness, and user-safe error presentation. |
+| Automated test | Scoped recovery boundaries have deterministic automated coverage. No application-wide timeout/lifecycle test is claimed for RAW-25. |
+| Manual test | Future dedicated lifecycle/refactoring work should define deterministic delay/error injection and browser acceptance criteria for long-running and asynchronous actions. |
+| Current execution result | Deferred; not implemented in the current scope. |
+| Release evidence | Historical `ST-05A`, `FT-07A`, `FT-07A-R1`, `BUG-001`, and `BUG-003` record 99%/permanent loading on older builds. They remain historical failure evidence, not proof of current application-wide recovery. |
+| Browser/manual verification required | No closure claim is made: application-wide RAW-25 consistency remains Deferred / Known Limitation. |
+| Gap | Remaining limitation: application-wide timeout, lifecycle, repeated-click and button-state consistency is not guaranteed for every long-running or asynchronous action. |
+| Severity | Deferred / Known limitation |
+| Recommended action | Future dedicated lifecycle/refactoring work. RAW-25 is not an immediate implementation task for this branch. |
+| Coverage states | Documented: Yes; Status: Deferred / Known limitation; Implemented in current scope: No; Existing scoped mitigations: Yes; Application-wide automated/browser verification: Not claimed. |
 
 ## 5. Current Executable Test Results
 
-All commands ran from the repository root on `9d0c7e9336e30c4e16ee83579a0cbcf39af0a3ca`. Times are Europe/London (`+01:00`). No test command contacted a real external service or modified tracked application/test/evidence files.
+Final verified code baseline: `99b2a04` (committed local verification baseline).
 
-### Automated test inventory
+The final automated regression suite was executed against committed baseline `99b2a04`. The verification worktree was clean except for the temporary `Rplots.pdf` generated by testthat; that artifact was removed and `git status` returned clean.
 
-All discovered testthat files were included by the runner. “Cross-cutting” means the file tests state/navigation/currentness relevant to recovery, but does not execute the named RAW trigger.
+| Suite | Total | Pass | Pass with Warning | Fail | Other results | Exit code |
+|---|---:|---:|---:|---:|---|---:|
+| Full testthat | 165 cases / 1176 expectations | 1176 expectations | 0 | 0 | 0 errors; 0 warnings; 0 skips | 0 |
+| Standalone scripts | 18 | 16 | 2 | 0 | — | 18/18 scripts exited 0 |
 
-| Test file | RAW relationship | Current disposition |
-|---|---|---|
-| `tests/testthat/test-dashboard-backlog-helpers.R` | RAW-08 direct missing-`biol_site_id` validation | Executed; Pass |
-| `tests/testthat/test-flow-mapping-contract.R` | RAW-10 Flow-source contract; RAW-07 mapping-schema context | Executed; Pass |
-| `tests/testthat/test-flow-metadata-defaults.R` | RAW-10 missing/blank/default/provenance | Executed; Pass |
-| `tests/testthat/test-local-flow-contract.R` | RAW-05–07 and RAW-09 local-upload/column/value slices | Executed; Pass |
-| `tests/testthat/test-rhs-contract.R` | RAW-07 RHS identifier/schema slice | Executed; Pass |
-| `tests/testthat/test-server-local-flow-source.R` | RAW-05–07/09/10 recovery and invalidation slices; RAW-11/15/17 stale-state context | Executed; Pass |
-| `tests/testthat/test-setup.R` | Runner integrity only; no RAW trigger | Executed; Pass |
-| `tests/testthat/test-site-metadata-helpers.R` | RAW-05/06 empty/missing/unreadable file slices; RAW-08–10 context | Executed; Pass |
-| `tests/testthat/test-workflow-config.R` | Cross-cutting prerequisite/reuse/currentness contract for RAW-11–17/23/25 | Executed; Pass; no RAW trigger |
-| `tests/testthat/test-workflow-server.R` | Cross-cutting retained state, stale propagation and completed-artifact state for RAW-11–17/23/25 | Executed; Pass; no RAW trigger |
-| `tests/testthat/test-workflow-state.R` | Cross-cutting stale/failed/resume/currentness for RAW-11–17/23/25 | Executed; Pass; no RAW trigger |
-| `tests/testthat/test-workflow-ui.R` | Cross-cutting checkpoint/recovery guidance/navigation markup for RAW-11–17/23/25 | Executed; Pass; no RAW trigger |
-| `tests/test_backlog_helpers.R` | RAW-07–10 and RAW-18 helper slices | Executed; Pass |
-| `tests/test_exclusion_log_helpers.R` | Cross-cutting silent deletion/warning/audit-log risk | Executed; Pass; no RAW trigger |
-| `tests/test_filtering_helpers.R` | Cross-cutting deletion/retention/warning classification risk | Executed; Pass; no RAW trigger |
-| `tests/test_model_interface_helpers.R` | RAW-18/23 partial safe-model/plot error; RAW-24 context | Executed; Pass |
-| `tests/test_server_site_import.R` | RAW-22 mocked success context only; not outage/failure recovery | Executed; Pass with Warning |
-| `tests/test_site_mapping.R` | RAW-08–10 validation/default slices; RAW-22 import helper context | Executed; Pass |
-| `tests/test_wq_contract_helpers.R` | RAW-07/18-related data errors/warnings and explicit aggregation/exclusion provenance | Executed; Pass |
-| `tests/test_wq_rhs_plots.R` | RAW-18 invalid/missing plot-input messages | Executed; Pass |
+The two historical standalone Pass with Warning results are:
 
-### Execution log
+- `tests/test_mixed_model_helpers.R`
+- `tests/test_server_site_import.R`
 
-| Command | Start | End | Exit | Result | RAW association |
-|---|---|---|---:|---|---|
-| `C:\Program Files\R\R-4.6.1\bin\Rscript.exe --vanilla tests/testthat.R` | 17:24:01.387 | 17:24:20.342 | 0 | Pass; testthat summary reporter showed no failure/error/warning/skip | RAW-05–10, RAW-23 slices; cross-cutting state/resume/stale coverage |
-| `...\Rscript.exe --vanilla tests/test_backlog_helpers.R` | 17:24:36.267 | 17:24:37.095 | 0 | Pass | RAW-07–10, RAW-18 helper coverage |
-| `...\Rscript.exe --vanilla tests/test_exclusion_log_helpers.R` | 17:24:37.100 | 17:24:37.385 | 0 | Pass | Cross-cutting silent exclusion/logging risk; not a one-to-one RAW trigger |
-| `...\Rscript.exe --vanilla tests/test_filtering_helpers.R` | 17:24:37.386 | 17:24:37.627 | 0 | Pass | Cross-cutting delete/retain/warning risk; not a one-to-one RAW trigger |
-| `...\Rscript.exe --vanilla tests/test_model_interface_helpers.R` | 17:24:37.627 | 17:24:38.342 | 0 | Pass | RAW-18, RAW-23 partial |
-| `...\Rscript.exe --vanilla tests/test_server_site_import.R` | 17:24:38.343 | 17:24:42.183 | 0 | Pass with Warning at batch scope; two Leaflet warnings appeared | RAW-22 success/mocked-import context only; RAW-22 failure recovery not executed |
-| `...\Rscript.exe --vanilla tests/test_site_mapping.R` | 17:24:42.184 | 17:24:42.858 | 0 | Pass | RAW-08–10 |
-| `...\Rscript.exe --vanilla tests/test_wq_contract_helpers.R` | 17:24:42.859 | 17:24:43.787 | 0 | Pass | RAW-07/18-related data validation and explicit WQ transformations |
-| `...\Rscript.exe --vanilla tests/test_wq_rhs_plots.R` | 17:24:43.787 | 17:24:45.010 | 0 | Pass | RAW-18 partial |
-| Confirming rerun: `...\Rscript.exe --vanilla tests/test_server_site_import.R 2>&1` | 17:24:56.404 | 17:25:00.333 | 0 | **Pass with Warning**; exactly two `derivePoints(...): restarting interrupted promise evaluation` warnings | Confirms warning source; not a RAW-22 outage test |
+The expanded automated inventory includes RAW-labelled deterministic recovery tests and cross-cutting workflow/currentness coverage, including direct passing RAW-11 workflow-server coverage. The final counts supersede the old eight-script and 12-testthat-file inventory.
 
-The eight standalone scripts were enumerated by `tests/test_*.R` and all were executed. The repository also contains:
-
-- 12 files under `tests/testthat/`, all included by `tests/testthat.R`.
-- `tests/manual/generate_plot_smoke_tests.R`, not executed because it writes/overwrites plot evidence.
-- `TC-001`–`TC-039` in `tests/manual_test_matrix.csv` / `tests/manual_test_cases.md`, not executed because they require an interactive browser and an authorised evidence session.
-- Historical July smoke/functional/bug records, inspected but not re-executed.
-
-Tests not executed:
-
-- Browser E2E/manual cases: require interactive UI and retained screenshots/logs tied to a selected RC.
-- Real Biology/HDE/NRFA/WQ/RHS calls: prohibited external services.
-- Missing-package, permission, timeout and service-failure injection: no existing safe isolated harness; dependency/environment mutation was prohibited.
-- Plot smoke generator: would overwrite existing evidence.
-- Final RC rerun: no frozen/identified final RC exists in this audit.
+The full browser/manual suite was not rerun for the final corrective implementation. Because production HEV rendering changed, a focused RAW-18 Chrome smoke reused the pilot mapping and passed normal render, controlled unusable-range failure, and corrected same-session retry. Other row-level browser outcomes remain from the already completed final session and stay distinct from the final automated gate.
 
 ## 6. Missing Evidence
 
-### Implementation gap
+### Current implementation limitations
 
-- RAW-01–03, RAW-19–21 and RAW-25 have no adequate implementation.
-- RAW-18, RAW-22–24 are only partially guarded.
-- Required external imports (Biology, Environment, Flow) lack the WQ/RHS-style safe wrapper.
-- Download writers do not catch or sanitise file-creation failures.
-- Busy/loading has no timeout, cancellation or guaranteed finalisation path.
-- `conditionMessage(e)` can expose internal details.
-- Stale-state metadata exists, but not every download/UI consumer explicitly checks currentness.
+- RAW-25 is explicitly **Deferred / Known limitation**. Application-wide timeout, lifecycle, repeated-click protection and button-state consistency are not guaranteed for every long-running or asynchronous action.
+- RAW-01 implementation and automated verification pass. Missing-`ggnewscale` browser dependency injection was not performed and remains explicitly **Not Executed**; no manual dependency-failure claim is made.
+- DATA-01 and DATA-02 remain unresolved scientific-risk decisions, as recorded in Section 7.
 
-### Automation gap
+The former gaps for RAW-02/03 donor parsing, RAW-18 plot recovery, RAW-19/21 file recovery, RAW-22 external imports, RAW-23 scoped safe boundaries and RAW-24 user-facing redaction are closed by the current implementation and automated evidence. RAW-20 is Superseded / N/A and requires no additional production implementation.
 
-- No test contains a RAW ID, so traceability is inferred rather than contractual.
-- No exact automation for RAW-01–04, RAW-11–17, RAW-19–22, RAW-24 or RAW-25.
-- No path-redaction, download-write-failure, permission, timeout, spinner-finalisation, duplicate-click, or app-wide reactive-error test.
-- No automated browser assertion that stale output cannot feed join, HEV, model or download.
+### Remaining QA evidence limitations
 
-### Manual execution gap
-
-- No RAW-01–25 scenario was executed in a current browser session during this audit.
-- Retained input/artifact state, back navigation, no-session-reset, no-re-upload, and retry success are therefore unproved.
-- `TC-001`–`TC-039` exist, but they are not RAW-linked and have no current execution packet.
-
-### Browser E2E gap
-
-- No current-main browser run proves UI message, spinner termination, control re-enable, no raw console-only failure, stale-output blocking, download behaviour and recovery in one trace.
-- Historical July screenshots target older builds and include failures; they cannot be promoted to current or final RC evidence.
-
-### RC-only verification gap
-
-- There is no identified frozen RC/tag/manifest in scope.
-- All 25 rows lack RC commit/environment, start/end, actor/reviewer, actual-vs-expected, safe screenshot/log, output hash and sign-off.
-- Fault injection must use isolated RC stubs/sandboxes, never production services or customer data.
+- RAW-01 missing-`ggnewscale` browser dependency injection was not executed; this is a browser-evidence limitation, not an implementation or automated-coverage gap.
+- RAW-19 manual writer-failure injection and RAW-21 destructive browser permission/filesystem fault injection were not executed; their failure-recovery results are automated. RAW-19 also has a passing browser normal download path.
+- RAW-23 basic browser smoke passed without a retained screenshot; automated edge-case coverage passed, but invalid-sheet browser injection was not executed.
+- Historical July screenshots and failure records remain historical evidence and are not promoted to current browser/manual results.
+- Automated results are not presented as destructive browser fault injection.
 
 ## 7. Risks
 
-### Blocker
+### Historical risk
 
-- **RAW-23:** no application-wide safe reactive boundary. Historical join/Flow failures showed R Console errors and missing UI recovery; current code still has critical unguarded paths.
-- **RAW-25:** no permanent-loading recovery. Historical `ST-05A`, `FT-07A` and `FT-07A-R1` recorded 99%/loading defects, and current main has no timeout/finalisation test.
+- Historical RAW-02/03 parser failures, RAW-18 plotting failures, RAW-19/21 file failures, RAW-22 import failures, RAW-23 raw/console-only failures and RAW-24 path disclosure remain valuable defect provenance. They are not current Major or Blocker risks merely because they were severe before implementation.
+- Historical `ST-05A`, `FT-07A`, `FT-07A-R1`, `BUG-001` and `BUG-003` retain evidence of loading/raw-error failures on older builds. They do not establish the current automated or browser result.
+
+### Current residual risk
+
 - **DATA-01:** `server.R:1637` silently keeps only the first Biology row per `biol_site_id`/Year/Season before O:E. No user message, provenance or direct regression test proves this deletion is scientifically intended.
 - **DATA-02:** `server.R:1378` silently converts Environmental `NA` values to zero before RICT. This can change scientific outputs without a visible warning or retained source-vs-normalised audit trail.
+- **RAW-25 — Deferred / Known limitation:** application-wide lifecycle consistency is not guaranteed for every long-running or asynchronous action. This is recommended for future dedicated lifecycle/refactoring work, not immediate implementation on this branch.
+- **Browser/manual QA evidence:** the final smoke session is complete with the explicit RAW-01 browser-injection, RAW-19, RAW-21 and RAW-23 limitations above.
+- **RAW-01:** dependency recovery is implemented and automated verification passes; only missing-dependency browser injection remains Not Executed.
 
-### Major
+WQ contract exclusions and below-detection transformations remain explicit and covered by standalone tests. They do not mitigate DATA-01 or DATA-02.
 
-- **RAW IDs:** RAW-01–03, RAW-05–09, RAW-11–22 and RAW-24.
-- **Stale-output use:** state tests mark outputs stale, but direct browser/download currentness tests are absent; stale join/HEV/model/download use remains an RC risk.
-- **State recovery:** in-memory state has no cross-session recovery; a reset requires re-upload, and no serialised checkpoint restoration exists.
-- **Silent expansion/performance:** `server.R:2112-2117` creates site/year/season combinations and `server.R:2368-2377` creates daily rows from 1990 to current date before joins. Row-count/provenance guards and loading recovery are absent.
-- **Warning/blocker mismatch:** WQ/RHS missing identifiers can be warnings while later operations require them; required-vs-optional severity is not consistently frozen across all UI paths.
-- **Download and path disclosure:** writer failures are unhandled and several user-facing paths include raw `conditionMessage(e)`.
+## 8. Final Browser/Manual Verification Outcome
 
-### Minor
-
-- **RAW-04:** blank donor inputs have guards but wording, whitespace handling and recovery evidence are incomplete.
-- **RAW-10:** later HDE-default behaviour is implemented/tested, but the original RAW definition has not been formally marked superseded and browser provenance is missing.
-
-### Enhancement
-
-- Add explicit RAW IDs to automated/manual test metadata and emit a machine-readable recovery manifest.
-- Add a non-production fault-injection profile for package/service/filesystem/timeout failures.
-
-Notes on data transformations:
-
-- WQ contract exclusions and below-detection transformations at `R/wq_contract_helpers.R:150-181` do emit warnings and are covered by standalone tests.
-- The mean bar plot at `R/wq_rhs_plot_helpers.R:181` is explicitly a “Mean” plot, but RC should still capture the aggregation choice and record count.
-- These explicit paths do not mitigate the silent Biology deletion and Environment NA-to-zero risks above.
-
-## 8. RC Re-test Plan
-
-All RAW-01–25 require re-test after the final RC is frozen.
-
-### Required baseline for every RC run
-
-1. Record RC commit/tag, clean `git status`, `origin/main` relationship, OS/R/package lock/manifest and fixture checksums.
-2. Use isolated synthetic fixtures and stubbed external services; never real customer data or production APIs.
-3. For each trigger, capture start/end, command/manual ID, UI screenshot/DOM text, relevant safe console log, spinner/button state, artifact registry/currentness, retained inputs, navigation/back behaviour, retry result and reviewer.
-4. Verify the failed operation never reports success and stale outputs cannot feed join, HEV, model or any download.
-5. Run the valid recovery action and retain output/download hashes where applicable.
-
-| RC batch | RAW IDs | Required execution | Evidence required |
-|---|---|---|---|
-| Dependency and donor parsing | RAW-01–04 | Isolated missing-package preflight; malformed/path-like/empty/whitespace donor mapping and donor list; correct-and-retry | Safe UI text, no path/stack, spinner end, donor/input retention, successful retry |
-| Local upload recovery | RAW-05–07 | Zero-byte, header-only, malformed and missing-column variants for metadata/Biology/Flow/WQ/RHS; replace with valid files | Per-control screenshots, no session reset, required/optional severity, old-source invalidation, retained unrelated artifacts |
-| Mapping fields/default | RAW-08–10 | Missing `biol_site_id`, missing `flow_site_id`, missing/blank `flow_input`, explicit HDE/NRFA; repair and resume | Message/provenance, Task-aware blocking, stage resume, Flow-derived invalidation |
-| Prerequisite chain | RAW-11–17 | Trigger each action out of order; then complete the missing prerequisite and retry | Exact message, UI plus console correlation, no permanent loading, retained upstream state, no stale join/HEV/model/download |
-| Plot recovery | RAW-18 | Missing/empty/invalid WQ/RHS/PCA/heatmap/analysis/HEV data and a forced plotting exception | Friendly message for every plot family, retained data/selections, failed artifact state, successful retry |
-| File/download faults | RAW-19–21 | Isolated writer failure, missing temp/generated file if still applicable, and permission denial | Sanitised message, no leaked path, in-memory result retention, retry/download hash; approved N/A record if RAW-20 retired |
-| External outage | RAW-22 | Stub timeout/HTTP/empty response for Biology/Environment/Flow/WQ/RHS; retry; local/optional fallback | Per-source classification, retained IDs/dates/local data, core workflow availability, spinner termination |
-| General exception/redaction/loading | RAW-23–25 | Inject failures containing fake raw R text/path plus deterministic delays/errors in Flow stats/join/HEV/model/download | No raw/path UI, safe console correlation, target not successful, loading ends, button re-enables, duplicate click blocked, navigation/retry |
-| Full regression | RAW-01–25 | Re-run `tests/testthat.R`, all eight standalone tests, all linked manual cases, then two clean full workflow paths | Timestamped logs, screenshots, artifact/currentness checks, downloads and hashes, issue links, reviewer sign-off |
-
-RC exit rule: every RAW row must be `Pass` or an explicitly approved, justified N/A; no open Blocker; every Major has an approved disposition; command-level warnings must be recorded as `Pass with Warning`, not Pass.
+The final browser/manual recovery smoke session is complete with documented limitations. RAW-01 passes based on implementation plus automated verification, while missing-`ggnewscale` browser injection remains Not Executed. RAW-20 is Superseded / N/A, and RAW-25 remains Deferred / Known Limitation. RAW-19/21 destructive browser fault injection and RAW-23 invalid-sheet browser injection were not executed.
 
 ## 9. Recommended Next Actions
 
-1. **Close the two release-blocking recovery boundaries:** implement and automate safe critical-reactive finalisation for RAW-23/25, including spinner/button recovery, sanitised UI feedback, retained state and retry.
-2. **Create one deterministic RAW fault-injection suite:** cover donor/upload/package, external stub failures, path redaction, download/permission failures and stale-output prevention; label every test with RAW IDs.
-3. **Freeze the RC and execute the full 25-row browser packet:** include the DATA-01/DATA-02 scientific transformation decisions, exact commit/environment, screenshots/logs, currentness checks, download hashes and reviewer sign-off.
+1. Retain the final QA evidence/report with the automated baseline, qualified browser/manual results, RAW-20 Superseded / N/A disposition, RAW-25 Deferred limitation, and DATA-01/DATA-02 risks.
+2. If browser evidence is later required for RAW-01, perform only the isolated missing-dependency injection and recovery verification; do not relabel general navigation smoke as RAW-01.
+3. Schedule RAW-25 only as future dedicated lifecycle/refactoring work.

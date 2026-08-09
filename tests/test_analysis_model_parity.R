@@ -5,6 +5,7 @@
 # Run in RStudio: Source this file. Expect the "all checks passed" line.
 
 source(file.path("R", "analysis_model_helpers.R"))
+source(file.path("R", "mixed_model_helpers.R"))
 
 joined <- read.csv(file.path("tests", "fixtures", "analysis_dataset.csv"),
                    stringsAsFactors = FALSE, colClasses = c(sample_id = "character"))

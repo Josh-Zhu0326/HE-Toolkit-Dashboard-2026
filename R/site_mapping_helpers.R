@@ -1,15 +1,24 @@
-parse_site_metadata <- function(text) {
-  if (is.null(text) || !nzchar(trimws(text))) {
-    return(list(data = NULL, error = "Please add site metadata.", warnings = character(0)))
+normalise_parsed_site_metadata <- function(data) {
+  if (is.null(data)) {
+    return(list(
+      data = NULL,
+      error = paste(
+        "Site metadata could not be read or validated.",
+        "Please correct the CSV structure and try again."
+      ),
+      warnings = character(0)
+    ))
   }
 
-  data <- tryCatch(
-    data.table::fread(text = text, colClasses = "character", data.table = FALSE),
-    error = function(e) NULL
-  )
-
-  if (is.null(data) || nrow(data) == 0 || ncol(data) == 0) {
-    return(list(data = NULL, error = "Site metadata could not be read. Please paste a CSV header and at least one data row.", warnings = character(0)))
+  if (nrow(data) == 0 || ncol(data) == 0) {
+    return(list(
+      data = NULL,
+      error = paste(
+        "Site metadata is empty.",
+        "Please provide a CSV header and at least one data row."
+      ),
+      warnings = character(0)
+    ))
   }
 
   names(data) <- tolower(trimws(names(data)))
@@ -51,21 +60,114 @@ parse_site_metadata <- function(text) {
   list(data = data, error = NULL, warnings = warnings)
 }
 
+parse_site_metadata <- function(text) {
+  if (is.null(text) || !nzchar(trimws(text))) {
+    return(list(
+      data = NULL,
+      error = "Please add site metadata, then validate the mapping again.",
+      warnings = character(0)
+    ))
+  }
+
+  normalise_parsed_site_metadata(read_character_csv(text = text))
+}
+
 read_site_metadata_csv <- function(path) {
   if (is.null(path) || !file.exists(path)) {
-    return(list(data = NULL, error = "The selected site metadata CSV could not be found.", warnings = character(0)))
+    return(list(
+      data = NULL,
+      error = "The selected site metadata CSV could not be found. Please select the file and upload it again.",
+      warnings = character(0)
+    ))
+  }
+
+  normalise_parsed_site_metadata(read_character_csv(path = path))
+}
+
+donor_mapping_error_message <- function() {
+  paste(
+    "The donor mapping could not be read or validated.",
+    "Please correct the two-column donor-site mapping and try again."
+  )
+}
+
+parse_donor_mapping <- function(text, reader = read_character_csv) {
+  if (is.null(text) || !nzchar(trimws(text))) {
+    return(list(
+      data = NULL,
+      error = "If imputing flows please add donor mapping."
+    ))
   }
 
   data <- tryCatch(
-    data.table::fread(path, colClasses = "character", data.table = FALSE, encoding = "UTF-8"),
-    error = function(e) NULL
+    reader(text = text),
+    error = function(error) NULL
   )
-
-  if (is.null(data)) {
-    return(list(data = NULL, error = "The selected file could not be read as CSV.", warnings = character(0)))
+  if (
+    is.null(data) || !is.data.frame(data) || nrow(data) == 0L ||
+      ncol(data) != 2L || anyDuplicated(names(data))
+  ) {
+    return(list(data = NULL, error = donor_mapping_error_message()))
   }
 
-  parse_site_metadata(readr::format_csv(data))
+  data[] <- lapply(data, function(column) trimws(as.character(column)))
+  unusable <- vapply(
+    data,
+    function(column) any(is.na(column) | !nzchar(column)),
+    logical(1)
+  )
+  if (any(unusable)) {
+    return(list(data = NULL, error = donor_mapping_error_message()))
+  }
+
+  list(data = data, error = NULL)
+}
+
+donor_site_list_error_message <- function() {
+  paste(
+    "The donor site list is invalid or could not be read.",
+    "Please include a flow_site_id column, use NRFA or HDE for flow_input,",
+    "and try again."
+  )
+}
+
+parse_donor_site_list <- function(text, reader = read_character_csv) {
+  if (is.null(text) || !nzchar(trimws(text))) {
+    return(list(
+      data = NULL,
+      error = "If importing additional donor flows, please add the donor site list."
+    ))
+  }
+
+  data <- tryCatch(
+    reader(text = text),
+    error = function(error) NULL
+  )
+  if (
+    is.null(data) || !is.data.frame(data) || nrow(data) == 0L ||
+      ncol(data) == 0L
+  ) {
+    return(list(data = NULL, error = donor_site_list_error_message()))
+  }
+
+  names(data) <- tolower(trimws(names(data)))
+  if (anyDuplicated(names(data)) || !"flow_site_id" %in% names(data)) {
+    return(list(data = NULL, error = donor_site_list_error_message()))
+  }
+  data[] <- lapply(data, function(column) trimws(as.character(column)))
+  if (any(is.na(data$flow_site_id) | !nzchar(data$flow_site_id))) {
+    return(list(data = NULL, error = donor_site_list_error_message()))
+  }
+
+  data <- tryCatch(
+    normalise_site_metadata_flow_input(data),
+    error = function(error) NULL
+  )
+  if (is.null(data)) {
+    return(list(data = NULL, error = donor_site_list_error_message()))
+  }
+
+  list(data = data, error = NULL)
 }
 
 normalise_site_metadata_flow_input <- function(metadata) {
@@ -123,6 +225,16 @@ import_dashboard_flow <- function(sites, inputs, start_date, end_date) {
   )
 }
 
+import_dashboard_wq <- function(sites, start_date, end_date) {
+  hetoolkit::import_wq(
+    sites = sites,
+    dets = "default",
+    start_date = start_date,
+    end_date = end_date,
+    save = FALSE
+  )
+}
+
 validate_dashboard_site_metadata <- function(metadata) {
   has_rhs_site_id <- "rhs_site_id" %in% names(metadata)
   has_rhs_survey_id <- "rhs_survey_id" %in% names(metadata)
@@ -146,7 +258,10 @@ validate_dashboard_site_metadata <- function(metadata) {
     if (grepl("Invalid flow_input value", conditionMessage(flow_validation), fixed = TRUE)) {
       return("flow_input values must be NRFA or HDE for this dashboard workflow.")
     }
-    return(conditionMessage(flow_validation))
+    if (grepl("without flow_site_id", conditionMessage(flow_validation), fixed = TRUE)) {
+      return("flow_input cannot be validated without flow_site_id. Add flow_site_id or remove flow_input.")
+    }
+    return("Site metadata could not be validated. Please correct the mapping columns and try again.")
   }
 
   NULL
@@ -212,14 +327,58 @@ map_rhs_records_to_biology <- function(rhs_data, metadata) {
     dplyr::relocate(biol_site_id, .before = rhs_survey_id)
 }
 
-import_rhs_in_temp_directory <- function(surveys, importer = hetoolkit::import_rhs) {
-  import_dir <- tempfile("hetoolkit-rhs-")
-  dir.create(import_dir, recursive = TRUE)
-  on.exit(unlink(import_dir, recursive = TRUE, force = TRUE), add = TRUE)
+import_rhs_in_temp_directory <- function(
+    surveys,
+    importer = hetoolkit::import_rhs,
+    directory_factory = function() tempfile("hetoolkit-rhs-"),
+    create_directory = function(path) dir.create(path, recursive = TRUE),
+    set_working_directory = setwd,
+    remove_directory = function(path) unlink(path, recursive = TRUE, force = TRUE)) {
+  import_dir <- NULL
+  previous_dir <- NULL
+  setup_result <- safe_file_operation(function() {
+    import_dir <<- directory_factory()
+    created <- create_directory(import_dir)
+    if (!isTRUE(created) && !dir.exists(import_dir)) {
+      stop("The RHS runtime directory could not be created.", call. = FALSE)
+    }
+    previous_dir <<- getwd()
+    set_working_directory(import_dir)
+    invisible(import_dir)
+  })
 
-  previous_dir <- getwd()
-  setwd(import_dir)
-  on.exit(setwd(previous_dir), add = TRUE)
+  if (!identical(setup_result$status, "success")) {
+    if (!is.null(import_dir) && nzchar(import_dir)) {
+      cleanup_result <- safe_file_operation(function() {
+        remove_directory(import_dir)
+        if (dir.exists(import_dir)) {
+          stop("The RHS runtime directory could not be removed.", call. = FALSE)
+        }
+        invisible(TRUE)
+      })
+      if (!identical(cleanup_result$status, "success")) {
+        message("RAW-21 RHS temporary-file cleanup diagnostic: ", cleanup_result$diagnostic)
+      }
+    }
+    abort_file_operation(setup_result)
+  }
+
+  on.exit({
+    restore_result <- safe_file_operation(function() set_working_directory(previous_dir))
+    if (!identical(restore_result$status, "success")) {
+      message("RAW-21 RHS working-directory restore diagnostic: ", restore_result$diagnostic)
+    }
+    cleanup_result <- safe_file_operation(function() {
+      remove_directory(import_dir)
+      if (dir.exists(import_dir)) {
+        stop("The RHS runtime directory could not be removed.", call. = FALSE)
+      }
+      invisible(TRUE)
+    })
+    if (!identical(cleanup_result$status, "success")) {
+      message("RAW-21 RHS temporary-file cleanup diagnostic: ", cleanup_result$diagnostic)
+    }
+  }, add = TRUE)
 
   rhs_data <- importer(
     source = NULL,
