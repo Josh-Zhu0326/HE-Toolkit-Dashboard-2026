@@ -1,3 +1,4 @@
+source(testthat::test_path("..", "..", "R", "csv_input_helpers.R"))
 source(testthat::test_path("..", "..", "R", "site_mapping_helpers.R"))
 
 metadata_fixture <- function(name) {

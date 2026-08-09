@@ -1,4 +1,5 @@
 source(testthat::test_path("..", "..", "R", "file_operation_helpers.R"))
+source(testthat::test_path("..", "..", "R", "csv_input_helpers.R"))
 source(testthat::test_path("..", "..", "R", "site_mapping_helpers.R"))
 
 testthat::test_that("RAW-19 file boundary returns success and sanitises writer failures", {

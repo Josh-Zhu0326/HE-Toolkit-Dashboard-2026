@@ -2,6 +2,7 @@
 # Run in RStudio: open the project, then Source this file.
 # Expect: "test_model_interface_helpers.R: all checks passed"
 
+source(file.path("R", "csv_input_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
 source(file.path("R", "model_interface_helpers.R"))
 
