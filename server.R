@@ -261,6 +261,37 @@ function(input, output, session){
     invisible(FALSE)
   }
 
+  workflow_fail_external_import <- function(artifact_id, message, next_action) {
+    workflow_set_artifact(
+      artifact_id,
+      "failed",
+      blocking_reason = message,
+      next_action = next_action,
+      invalidate_downstream = TRUE
+    )
+    showNotification(message, type = "error", duration = 10)
+    invisible(FALSE)
+  }
+
+  record_external_import_diagnostic <- function(context, result) {
+    detail <- result$diagnostic
+    if (is.null(detail) || !nzchar(detail)) {
+      detail <- result$failure
+    }
+    current <- isolate(external_import_diagnostics())
+    external_import_diagnostics(rbind(
+      current,
+      data.frame(
+        recorded_at = Sys.time(),
+        context = context,
+        failure = result$failure,
+        detail = detail,
+        stringsAsFactors = FALSE
+      )
+    ))
+    invisible(NULL)
+  }
+
   workflow_checkpoint_card <- function(artifact_id, complete_message, blocked_message) {
     artifact <- workflow_artifacts()[[artifact_id]]
     if (artifact_is_current(artifact)) {
@@ -280,6 +311,15 @@ function(input, output, session){
   hev_revision <- reactiveVal(NULL)
   rict_request <- reactiveVal(NULL)
   oe_request <- reactiveVal(NULL)
+  biology_import_request <- reactiveVal(NULL)
+  environment_import_request <- reactiveVal(NULL)
+  external_import_diagnostics <- reactiveVal(data.frame(
+    recorded_at = as.POSIXct(character()),
+    context = character(),
+    failure = character(),
+    detail = character(),
+    stringsAsFactors = FALSE
+  ))
   hev_request <- reactiveVal(NULL)
   join_request <- reactiveVal(NULL)
   join_settings_used <- reactiveVal(NULL)
@@ -333,11 +373,31 @@ function(input, output, session){
   }
 
   observeEvent(input$import_inv, {
+    biology_import_request(NULL)
+    if (!workflow_artifact_is_current("site_mapping")) {
+      workflow_block_artifact(
+        "biology_input",
+        "Current site metadata with valid biol_site_id values are required before importing Biology data.",
+        "Correct and validate the site metadata, then import Biology data again."
+      )
+      return()
+    }
+    biology_import_request(input$import_inv)
     workflow_begin_artifact("biology_input", "Complete the Biology import.")
-  }, ignoreInit = TRUE, priority = 100)
+  }, ignoreInit = FALSE, priority = 50)
   observeEvent(input$import_env, {
+    environment_import_request(NULL)
+    if (!workflow_artifact_is_current("site_mapping")) {
+      workflow_block_artifact(
+        "environment_input",
+        "Current site metadata with valid biol_site_id values are required before importing Environmental data.",
+        "Correct and validate the site metadata, then import Environmental data again."
+      )
+      return()
+    }
+    environment_import_request(input$import_env)
     workflow_begin_artifact("environment_input", "Complete the environmental-data import.")
-  }, ignoreInit = TRUE, priority = 100)
+  }, ignoreInit = FALSE, priority = 50)
   observeEvent(input$run_rict, {
     rict_request(NULL)
     if (!workflow_artifact_is_current("environment_input")) {
@@ -1160,6 +1220,13 @@ function(input, output, session){
     if (!is.null(parsed$error)) {
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = parsed$error))
+      workflow_set_artifact(
+        "wq_input",
+        "blocked",
+        blocking_reason = parsed$error,
+        next_action = "Correct the WQ site mapping and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(parsed$error, type = "error")
       return()
     }
@@ -1170,6 +1237,13 @@ function(input, output, session){
       message <- "No confirmed WQ site IDs are available yet. Please provide WQ site IDs before importing WQ data."
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "warning", messages = message))
+      workflow_set_artifact(
+        "wq_input",
+        "blocked",
+        blocking_reason = message,
+        next_action = "Add valid wq_site_id values and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(message, type = "warning")
       return()
     }
@@ -1180,31 +1254,52 @@ function(input, output, session){
       message <- "The WQ end date must be later than the start date. Water Quality Explorer data are available from 2000 onwards."
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = message))
+      workflow_set_artifact(
+        "wq_input",
+        "blocked",
+        blocking_reason = message,
+        next_action = "Correct the WQ date range and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(message, type = "error")
       return()
     }
 
-    imported <- tryCatch(
-      hetoolkit::import_wq(
-        sites = usable_wq_ids,
-        dets = "default",
-        start_date = format(start_date, "%Y-%m-%d"),
-        end_date = format(end_date, "%Y-%m-%d"),
-        save = FALSE
-      ),
-      error = function(e) NULL
+    workflow_begin_artifact("wq_input", "Complete the WQ import.")
+    has_biology_mapping <- all(c("biol_site_id", "wq_site_id") %in% names(site_metadata))
+    import_result <- safe_external_import(
+      function() {
+        imported <- import_dashboard_wq(
+          sites = usable_wq_ids,
+          start_date = format(start_date, "%Y-%m-%d"),
+          end_date = format(end_date, "%Y-%m-%d")
+        )
+        if (has_biology_mapping) {
+          map_wq_records_to_biology(imported, site_metadata)
+        } else {
+          imported
+        }
+      },
+      required_columns = "wq_site_id"
     )
 
-    if (is.null(imported) || nrow(imported) == 0) {
-      message <- "WQ data could not be imported for the supplied site IDs and date range. Check the IDs, dates, and network connection."
+    if (!identical(import_result$status, "success")) {
+      record_external_import_diagnostic("wq", import_result)
+      message <- paste(
+        "WQ data could not be retrieved or processed.",
+        "Check the supplied site IDs and dates, then try again."
+      )
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = message))
-      showNotification(message, type = "error")
+      workflow_fail_external_import(
+        "wq_input",
+        message,
+        "Check the WQ site IDs and date range, then try the import again."
+      )
       return()
     }
 
-    has_biology_mapping <- all(c("biol_site_id", "wq_site_id") %in% names(site_metadata))
-    output_data <- if (has_biology_mapping) map_wq_records_to_biology(imported, site_metadata) else imported
+    output_data <- import_result$data
     mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
       length(unique(stats::na.omit(output_data$biol_site_id)))
     } else {
@@ -1233,6 +1328,13 @@ function(input, output, session){
     if (!is.null(parsed$error)) {
       rhs_site_import_data(NULL)
       rhs_site_import_result(list(status = "error", messages = parsed$error))
+      workflow_set_artifact(
+        "rhs_input",
+        "blocked",
+        blocking_reason = parsed$error,
+        next_action = "Correct the RHS site mapping and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(parsed$error, type = "error")
       return()
     }
@@ -1243,25 +1345,48 @@ function(input, output, session){
       message <- "No confirmed RHS survey IDs are available yet. Please provide rhs_survey_id values before importing RHS data."
       rhs_site_import_data(NULL)
       rhs_site_import_result(list(status = "warning", messages = message))
+      workflow_set_artifact(
+        "rhs_input",
+        "blocked",
+        blocking_reason = message,
+        next_action = "Add valid rhs_survey_id values and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(message, type = "warning")
       return()
     }
 
-    imported <- tryCatch(
-      import_rhs_in_temp_directory(usable_rhs_ids),
-      error = function(e) NULL
+    workflow_begin_artifact("rhs_input", "Complete the RHS import.")
+    has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
+    import_result <- safe_external_import(
+      function() {
+        imported <- import_rhs_in_temp_directory(usable_rhs_ids)
+        if (has_biology_mapping) {
+          map_rhs_records_to_biology(imported, site_metadata)
+        } else {
+          imported
+        }
+      },
+      required_columns = "rhs_survey_id"
     )
 
-    if (is.null(imported) || nrow(imported) == 0) {
-      message <- "RHS data could not be imported for the supplied survey IDs. Check the IDs and network connection."
+    if (!identical(import_result$status, "success")) {
+      record_external_import_diagnostic("rhs", import_result)
+      message <- paste(
+        "RHS data could not be retrieved or processed.",
+        "Check the supplied survey IDs, then try again."
+      )
       rhs_site_import_data(NULL)
       rhs_site_import_result(list(status = "error", messages = message))
-      showNotification(message, type = "error")
+      workflow_fail_external_import(
+        "rhs_input",
+        message,
+        "Check the RHS survey IDs, then try the import again."
+      )
       return()
     }
 
-    has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
-    output_data <- if (has_biology_mapping) map_rhs_records_to_biology(imported, site_metadata) else imported
+    output_data <- import_result$data
     mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
       length(unique(stats::na.omit(output_data$biol_site_id)))
     } else {
@@ -1657,6 +1782,7 @@ function(input, output, session){
         return()
       }
       external_import_requested_revision(isolate(flow_source_revision()))
+      workflow_begin_artifact("flow_input", "Complete the external Flow import.")
     } else {
       external_import_requested_revision(NULL)
     }
@@ -1715,11 +1841,34 @@ function(input, output, session){
   
   ## Biology data ----
   ### importing ----
-  biol_data <- eventReactive(input$import_inv, {
+  biol_data <- eventReactive(biology_import_request(), {
+    req(!is.null(biology_import_request()))
     biol_sites <- as.character(metadata()$biol_site_id)
-    
-    import_inv(source = "parquet", sites = biol_sites, start_date = input$date_range_biol[1],
-               end_date = input$date_range_biol[2])
+    result <- safe_external_import(
+      function() {
+        import_inv(
+          source = "parquet",
+          sites = biol_sites,
+          start_date = input$date_range_biol[1],
+          end_date = input$date_range_biol[2]
+        )
+      },
+      required_columns = "biol_site_id"
+    )
+    if (!identical(result$status, "success")) {
+      record_external_import_diagnostic("biology", result)
+      message <- paste(
+        "Biology data could not be retrieved or processed.",
+        "Check the selected sites and date range, then try again."
+      )
+      workflow_fail_external_import(
+        "biology_input",
+        message,
+        "Check the Biology site IDs and date range, then try the import again."
+      )
+      validate(need(FALSE, message))
+    }
+    result$data
   })
 
   observeEvent(biol_data(), {
@@ -1755,10 +1904,30 @@ function(input, output, session){
   
   ## Environmental data ----
   ### importing ----
-  env_data <- eventReactive(input$import_env, {
+  env_data <- eventReactive(environment_import_request(), {
+    req(!is.null(environment_import_request()))
     biol_sites <- as.character(metadata()$biol_site_id)
-    
-    import_env(sites = biol_sites) %>% mutate(across(BOULDERS_COBBLES: SILT_CLAY, ~tidyr::replace_na(.,0)))
+    result <- safe_external_import(
+      function() {
+        import_env(sites = biol_sites) %>%
+          mutate(across(BOULDERS_COBBLES:SILT_CLAY, ~tidyr::replace_na(., 0)))
+      },
+      required_columns = "biol_site_id"
+    )
+    if (!identical(result$status, "success")) {
+      record_external_import_diagnostic("environment", result)
+      message <- paste(
+        "Environmental data could not be retrieved or processed.",
+        "Check the selected sites, then try again."
+      )
+      workflow_fail_external_import(
+        "environment_input",
+        message,
+        "Check the Biology site IDs, then try the Environmental import again."
+      )
+      validate(need(FALSE, message))
+    }
+    result$data
   })
 
   observeEvent(env_data(), {
@@ -1823,11 +1992,35 @@ function(input, output, session){
     flow_sites <- as.character(metadata()$flow_site_id)
     flow_inputs <- as.character(metadata()$flow_input)
 
-    imported <- import_dashboard_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
-                                      end_date = input$date_range_flow[2])
+    result <- safe_external_import(
+      function() {
+        import_dashboard_flow(
+          sites = flow_sites,
+          inputs = flow_inputs,
+          start_date = input$date_range_flow[1],
+          end_date = input$date_range_flow[2]
+        )
+      },
+      required_columns = c("flow_site_id", "date", "flow")
+    )
+    if (!identical(result$status, "success")) {
+      record_external_import_diagnostic("flow", result)
+      external_flow_loaded(FALSE)
+      external_flow_revision(NULL)
+      message <- paste(
+        "Flow data could not be retrieved or processed.",
+        "Check the selected sites, source and date range, then try again."
+      )
+      workflow_fail_external_import(
+        "flow_input",
+        message,
+        "Check the Flow site IDs, source and date range, then try the import again."
+      )
+      validate(need(FALSE, message))
+    }
     external_flow_loaded(TRUE)
     external_flow_revision(isolate(flow_source_revision()))
-    imported
+    result$data
   })
 
   observeEvent(external_flow_data(), {
@@ -2100,16 +2293,15 @@ function(input, output, session){
   ## Flow imputation----
   ### donor mapping ----
   #### upload ----
-  donor_mapping <- reactive({ 
+  donor_mapping_result <- reactive({
     donor_text <- paste(input$donor_mapping_paste, collapse = "\n")
-    
-  ##### error message for absent donor mapping ----
-    validate(
-      need(nzchar(trimws(donor_text)), "If imputing flows please add donor mapping.")
-    )
-    
-    donor_mapping <- fread(donor_text, colClasses = "character")
-    as.data.frame(donor_mapping)
+    parse_donor_mapping(donor_text)
+  })
+
+  donor_mapping <- reactive({
+    result <- donor_mapping_result()
+    validate(need(is.null(result$error), result$error))
+    result$data
   })
   
   #### display ----
@@ -2131,25 +2323,15 @@ function(input, output, session){
   
   ### donor site list ----
   #### upload ----
-  donor_list <- reactive({ 
+  donor_list_result <- reactive({
     donor_text <- paste(input$donor_list_paste, collapse = "\n")
-    
-  ##### error message for absent extra flow site list ----
-    validate(
-      need(
-        nzchar(trimws(donor_text)),
-        "If importing additional donor flows, please add the donor site list."
-      )
-    )
-    
-    donor_list <- fread(donor_text, colClasses = "character")
-    donor_list <- as.data.frame(donor_list)
-    donor_list <- tryCatch(
-      normalise_site_metadata_flow_input(donor_list),
-      error = function(e) e
-    )
-    validate(need(!inherits(donor_list, "error"), if (inherits(donor_list, "error")) conditionMessage(donor_list) else ""))
-    donor_list
+    parse_donor_site_list(donor_text)
+  })
+
+  donor_list <- reactive({
+    result <- donor_list_result()
+    validate(need(is.null(result$error), result$error))
+    result$data
   })
   
   #### display ----
@@ -2175,41 +2357,76 @@ function(input, output, session){
   
   ### impute flow data ----
   #### get extra flow data if needed ----
-  flow_data_extra <- reactive({
-    req(input$import_donor_flow)
-    
-    donor_sites <- as.character(donor_list()$flow_site_id)
-    donor_inputs <- as.character(donor_list()$flow_input)
-    
-    donor_data <- import_dashboard_flow(sites = donor_sites, inputs = donor_inputs, start_date = input$date_range_flow[1],
-                                        end_date = input$date_range_flow[2])
-    
-    bind_rows(flow_data(), donor_data)
-    
-  })
-  
-  #### alert message for successful import ----
-  
+  donor_flow_import_data <- reactiveVal(NULL)
+  donor_flow_import_running <- reactiveVal(FALSE)
+  donor_flow_import_result <- reactiveVal(list(
+    status = "info",
+    messages = "Add donor sites, then import the additional Flow data if required."
+  ))
   import_donor_flow_success <- reactiveVal(FALSE)
-  
-  observe({
-    req(flow_data_extra())
-    import_donor_flow_success(TRUE)
+
+  flow_data_extra <- reactive({
+    req(donor_flow_import_data())
+    donor_flow_import_data()
   })
-  
+
   observeEvent(input$import_donor_flow, {
-    
-    if(import_donor_flow_success()) {
-      
-      shinyalert(title = "Additional flow data successfully imported",
-                 type = "success")
-    } 
-    
+    import_donor_flow_success(FALSE)
+    donor_flow_import_data(NULL)
+    parsed <- donor_list_result()
+    if (!is.null(parsed$error)) {
+      donor_flow_import_result(list(status = "error", messages = parsed$error))
+      showNotification(parsed$error, type = "error", duration = 10)
+      return()
+    }
+    if (!workflow_artifact_is_current("flow_input")) {
+      message <- paste(
+        "Current Flow data are required before importing additional donor Flow data.",
+        "Import or validate Flow data, then try again."
+      )
+      donor_flow_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    donor_flow_import_running(TRUE)
+    on.exit(donor_flow_import_running(FALSE), add = TRUE)
+    donor_sites <- as.character(parsed$data$flow_site_id)
+    donor_inputs <- as.character(parsed$data$flow_input)
+    import_result <- safe_external_import(
+      function() {
+        import_dashboard_flow(
+          sites = donor_sites,
+          inputs = donor_inputs,
+          start_date = input$date_range_flow[1],
+          end_date = input$date_range_flow[2]
+        )
+      },
+      required_columns = c("flow_site_id", "date", "flow")
+    )
+    if (!identical(import_result$status, "success")) {
+      record_external_import_diagnostic("additional_donor_flow", import_result)
+      message <- paste(
+        "Additional donor Flow data could not be retrieved or processed.",
+        "Check the donor site list, source and date range, then try again."
+      )
+      donor_flow_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    combined <- bind_rows(flow_data(), import_result$data)
+    donor_flow_import_data(combined)
+    import_donor_flow_success(TRUE)
+    donor_flow_import_result(list(
+      status = "success",
+      messages = sprintf("Imported additional Flow data for %d donor site(s).", length(unique(import_result$data$flow_site_id)))
+    ))
+    shinyalert(title = "Additional flow data successfully imported", type = "success")
   })
   
   #### warning message for unID'd donor sites ----
-  observeEvent(input$import_donor_flow, {
-    
+  observeEvent(flow_data_extra(), {
     missed_donor_sites <- donor_list() %>% filter(!flow_site_id %in% flow_data_extra()$flow_site_id) %>% select(flow_site_id)
     missed_donor_sites_text <- gsub("c\\(|\\)",'', missed_donor_sites)
     
@@ -2223,33 +2440,83 @@ function(input, output, session){
   
   #### run imputation ----
   
-  extra_check <- reactiveVal(TRUE)
-  
-  observeEvent(flow_data_extra(), {
-    extra_check(!extra_check())
-  })
-  
   flow_data_forimp <- reactive({
-    
-    if (extra_check()){
-      flow_data_forimp <- flow_data()
-      
+    if (isTRUE(import_donor_flow_success())) {
+      flow_data_extra()
+    } else {
+      flow_data()
     }
-    else{
-      flow_data_forimp <- flow_data_extra()
-      
-    }
-    
   })
-  
+
+  flow_imputation_running <- reactiveVal(FALSE)
+  flow_imputation_result <- reactiveVal(list(
+    status = "info",
+    messages = "Add a donor mapping, then run Flow imputation.",
+    data = NULL
+  ))
+
+  observeEvent(input$impute_flow, {
+    parsed <- donor_mapping_result()
+    if (!is.null(parsed$error)) {
+      flow_imputation_result(list(status = "error", messages = parsed$error, data = NULL))
+      showNotification(parsed$error, type = "error", duration = 10)
+      return()
+    }
+    if (!workflow_artifact_is_current("flow_input")) {
+      message <- "Current Flow data are required before imputation. Import or validate Flow data, then try again."
+      flow_imputation_result(list(status = "error", messages = message, data = NULL))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    mapping <- parsed$data
+    available_sites <- unique(c(metadata()$flow_site_id, flow_data_forimp()$flow_site_id))
+    if (!all(mapping[[1L]] %in% metadata()$flow_site_id) || !all(mapping[[2L]] %in% available_sites)) {
+      message <- paste(
+        "The donor mapping contains receiving or donor Flow sites that are not available.",
+        "Correct the donor mapping or import the required donor sites, then try again."
+      )
+      flow_imputation_result(list(status = "error", messages = message, data = NULL))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    flow_imputation_running(TRUE)
+    on.exit(flow_imputation_running(FALSE), add = TRUE)
+    imputation <- safe_external_import(
+      function() {
+        impute_flow(
+          flow_data_forimp(),
+          site_col = "flow_site_id",
+          date_col = "date",
+          flow_col = "flow",
+          method = "equipercentile",
+          donor = as.data.frame(mapping)
+        )
+      },
+      required_columns = c("flow_site_id", "date", "flow")
+    )
+    if (!identical(imputation$status, "success")) {
+      record_external_import_diagnostic("flow_imputation", imputation)
+      message <- paste(
+        "Flow imputation could not be completed from the donor mapping.",
+        "Check the mapping and available donor Flow data, then try again."
+      )
+      flow_imputation_result(list(status = "error", messages = message, data = NULL))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+    flow_imputation_result(list(
+      status = "success",
+      messages = "Flow imputation completed successfully.",
+      data = imputation$data
+    ))
+  })
+
   flow_data_imputed <- reactive({
-    req(input$impute_flow)
-    
-    donor_mapping <- as.data.frame(donor_mapping())
-    
-    impute_flow(flow_data_forimp(), site_col = "flow_site_id", date_col = "date", flow_col = "flow", 
-                method = "equipercentile", donor = donor_mapping)
-    
+    result <- flow_imputation_result()
+    validate(need(identical(result$status, "success"), result$messages))
+    result$data
   })
   
   #### displaying ----
@@ -2288,23 +2555,13 @@ function(input, output, session){
   
   ### run calculation ----
   
-  imp_check <- reactiveVal(TRUE)
-  
-  observeEvent(flow_data_imputed(), {
-    imp_check(!imp_check())
-  })
-  
   flow_data_final <- reactive({
-    
-    if (imp_check()){
-      flow_data_final <- flow_data()
-      
+    result <- flow_imputation_result()
+    if (identical(result$status, "success")) {
+      result$data
+    } else {
+      flow_data()
     }
-    else{
-      flow_data_final <- flow_data_imputed()
-      
-    }
-    
   })
   
   flow_stats_result <- eventReactive(input$calc_flow_stats, {

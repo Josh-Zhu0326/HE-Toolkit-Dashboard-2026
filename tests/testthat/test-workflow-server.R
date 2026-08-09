@@ -204,11 +204,11 @@ testthat::test_that("Flow-statistics attempt without Flow input becomes recovera
 })
 
 testthat::test_that("RAW-04 donor inputs reject all-whitespace text and allow in-session retry", {
-  fread_calls <- 0L
+  reader_calls <- 0L
   rlang::local_bindings(
-    fread = function(input, ...) {
-      fread_calls <<- fread_calls + 1L
-      data.table::fread(text = input, ..., data.table = FALSE)
+    read_character_csv = function(path = NULL, text = NULL) {
+      reader_calls <<- reader_calls + 1L
+      data.table::fread(text = text, colClasses = "character", data.table = FALSE)
     },
     .env = environment(workflow_dashboard_server)
   )
@@ -259,7 +259,7 @@ testthat::test_that("RAW-04 donor inputs reject all-whitespace text and allow in
       testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
       testthat::expect_false(identical(workflow_artifacts()$flow_statistics$status, "running"))
     }
-    testthat::expect_identical(fread_calls, 0L)
+    testthat::expect_identical(reader_calls, 0L)
 
     muffle_interrupted_workflow_promise(session$setInputs(
       donor_mapping_paste = paste(
@@ -278,7 +278,7 @@ testthat::test_that("RAW-04 donor inputs reject all-whitespace text and allow in
     testthat::expect_identical(donor_mapping()$donor_flow_site_id, "F2")
     testthat::expect_identical(donor_list()$flow_site_id, "F2")
     testthat::expect_identical(donor_list()$flow_input, "HDE")
-    testthat::expect_identical(fread_calls, 2L)
+    testthat::expect_identical(reader_calls, 2L)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
   })
 })

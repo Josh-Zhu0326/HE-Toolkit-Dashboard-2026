@@ -102,19 +102,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Flow processing / donor mapping and imputation. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “The donor-site input could not be read. Please check the required format and try again.” |
-| Implemented message | None for parse failure; only later validation messages such as “Donee flow sites not detected in original metadata”. |
+| Implemented message | “The donor mapping could not be read or validated. Please correct the two-column donor-site mapping and try again.” Blank/whitespace input retains “If imputing flows please add donor mapping.” |
 | Recovery action | Correct the donor mapping text and resubmit; the UI must remain responsive and must not require re-import of already valid metadata/Flow. |
 | Expected retained state | Donor text, metadata, imported Flow, chosen dates/settings, and prior valid artifacts remain; failed imputation/join outputs are not marked successful. |
-| Implementation evidence | `server.R:1746-1756`, especially unguarded `fread()` at 1754. |
-| Automated test | None. |
+| Implementation evidence | Previously unguarded parser resolved on `qa/raw-user-facing-recovery`: `parse_donor_mapping()` in `R/site_mapping_helpers.R` forces text parsing, rejects parser warnings/errors and invalid two-column structures, and `server.R` routes failed attempts to a controlled result without replacing Flow Statistics. |
+| Automated test | `tests/testthat/test-donor-external-recovery.R` covers blank-before-parser, malformed/path-like input, schema failure, redaction, retained Flow Statistics, running reset and same-session retry; `tests/testthat/test-workflow-server.R` retains RAW-04 regression coverage. |
 | Manual test | Paste malformed/path-like donor mapping; submit; assert no raw console-only failure, friendly UI feedback, loading ends, controls/navigation work, correct-and-retry succeeds without re-upload. |
-| Current execution result | Not Executed |
+| Current execution result | Automated Pass on `qa/raw-user-facing-recovery`; browser verification pending. |
 | Release evidence | Historical `ST-04B` covers a valid donor path/warnings, not this parse failure or recovery. |
 | RC re-test required | Yes |
-| Gap | Unguarded parser; no automation; no current browser recovery/retention evidence. |
+| Gap | Previously identified implementation gap resolved on `qa/raw-user-facing-recovery`. Browser recovery/retention evidence is still pending. |
 | Severity | Major |
-| Recommended action | Wrap donor parsing, validate schema before use, preserve text, and add malformed-to-valid recovery automation. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Run the malformed-to-valid browser recovery case on the selected RC and retain screenshot/log evidence. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-03
 
@@ -126,19 +126,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Flow processing / donor mapping, donor list, imputation. |
 | Blocking classification | Blocking |
 | Expected user-facing message | “The input format is invalid. Please check the donor-site format before importing.” |
-| Implemented message | Donor mapping has none; donor list normalisation catches only the later normalisation error and can display raw `conditionMessage(e)`. |
+| Implemented message | Donor mapping and donor-list parser failures now use stable messages. Donor list failures state that the list is invalid or unreadable, identify `flow_site_id` and accepted `flow_input` values, and instruct the user to retry. |
 | Recovery action | Keep pasted text available, show the expected format, allow correction and retry without session reset. |
 | Expected retained state | Metadata, imported Flow, prior completed artifacts, date range and donor inputs remain; no stale imputation/statistic/join may be treated as current. |
-| Implementation evidence | Unguarded mapping/list reads at `server.R:1754` and `server.R:1786`; raw `conditionMessage()` at `server.R:1788-1792`. |
-| Automated test | None. |
+| Implementation evidence | Previously unguarded reads resolved on `qa/raw-user-facing-recovery`: `parse_donor_site_list()` in `R/site_mapping_helpers.R` sanitises parser/normalisation failures and validates the existing `flow_site_id` plus NRFA/HDE contract; `server.R` prevents malformed input reaching the donor importer and finalises donor import state on every return path. |
+| Automated test | `tests/testthat/test-donor-external-recovery.R` covers blank, malformed and invalid donor-list structures, importer non-invocation, controlled external failure, state retention, finalisation and same-session retry. |
 | Manual test | Exercise malformed mapping and malformed donor-list variants separately; verify safe UI message, no path/stack trace, spinner exit, retained inputs, back navigation, and successful retry. |
-| Current execution result | Not Executed |
+| Current execution result | Automated Pass on `qa/raw-user-facing-recovery`; browser verification pending. |
 | Release evidence | None; historical `ST-04B` is a successful/expected-warning path only. |
 | RC re-test required | Yes |
-| Gap | Parser errors are not consistently caught or sanitised. |
+| Gap | Previously identified implementation gap resolved on `qa/raw-user-facing-recovery`. Browser recovery/retention evidence is still pending. |
 | Severity | Major |
-| Recommended action | Introduce one safe donor parser with schema validation and tests for mapping/list invalid-to-valid recovery. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Run separate malformed mapping and donor-list correct-and-retry browser cases on the selected RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-04
 
@@ -587,19 +587,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Stage 1 external imports and every dependent Task. |
 | Blocking classification | Blocking for a required requested source; non-blocking for optional WQ/RHS and for workflows with an operational local alternative. |
 | Expected user-facing message | “The external data source could not be reached. Please check the connection and try again.” |
-| Implemented message | WQ: “WQ data could not be imported ... Check the IDs, dates, and network connection.” RHS has similar guarded result. Biology, Environment and external Flow have no uniform catch. |
+| Implemented message | Biology, Environment, Flow, additional donor Flow, WQ and RHS use source-specific controlled “could not be retrieved or processed” messages with a correction/retry action. No message claims a network outage when the exact cause is unknown. |
 | Recovery action | Keep IDs/date ranges/local uploads; retry service once, use approved local alternative where supported, or continue core workflow without optional WQ/RHS. |
 | Expected retained state | All local inputs and unrelated current artifacts remain; failed source/dependent outputs are not successful; optional failure does not block core. |
-| Implementation evidence | Partial: WQ catch `server.R:848-864`; RHS catch `server.R:897-920`; unguarded required imports `server.R:1335-1339,1375-1379,1438-1447`; external Flow wrapper directly calls service at `R/site_mapping_helpers.R:117-124`. |
-| Automated test | No failure/timeout test. `tests/test_server_site_import.R` and `tests/testthat/test-server-local-flow-source.R` mock successful external imports/local precedence only. |
+| Implementation evidence | Previously partial boundary resolved on `qa/raw-user-facing-recovery`: `safe_external_import()` classifies request errors, NULL/empty results and unusable result structures; `server.R` applies it to Biology, Environment, external Flow, additional donor Flow, WQ and RHS, records internal diagnostics separately from UI text, updates workflow currentness only after usable success, and resets donor running flags with `on.exit()`. |
+| Automated test | `tests/testthat/test-donor-external-recovery.R` uses mocked failures/results for all covered paths, including service error, NULL/empty and invalid schema classification, failed-currentness, unrelated-state retention, running reset and success after retry. Existing local-Flow precedence and site-import tests remain linked regression coverage. |
 | Manual test | RC isolated service stubs: timeout/HTTP/empty response for all five sources, retry success, optional-source continuation, local Flow fallback/precedence, retained state and spinner termination. Do not use real services for fault injection. |
-| Current execution result | Not Executed — the mocked success test ran (with two Leaflet warnings) but the RAW failure trigger did not. |
+| Current execution result | Automated failure/retry cases Pass on `qa/raw-user-facing-recovery`; browser verification pending. |
 | Release evidence | Historical live-service successes are not outage recovery and not RC evidence. |
 | RC re-test required | Yes |
-| Gap | Partial implementation, inconsistent blocking classification, no deterministic failure automation or RC browser evidence. |
+| Gap | Previously identified application-boundary and deterministic automation gaps resolved on `qa/raw-user-facing-recovery`. RC browser evidence and application-wide timeout/button-lock policy remain pending. |
 | Severity | Major |
-| Recommended action | Use one external-call result contract with timeout/fallback semantics and stubbed failure tests for every source. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: No for failure recovery; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Run RC browser/fault-injection verification for each source; address global timeout/cancellation and application-wide button-lock consistency under RAW-25. |
+| Coverage states | Documented: Yes; Implemented: Yes for the scoped external operations; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-23
 
