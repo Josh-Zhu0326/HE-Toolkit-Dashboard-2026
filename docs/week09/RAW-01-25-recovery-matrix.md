@@ -15,7 +15,7 @@ Final documentation cleanup baseline: 2026-08-09 on `qa/raw-user-facing-recovery
 | Full testthat | 154 cases; 1056 expectations; 1056 passed; 0 failures; 0 errors; 0 warnings; 0 skips; exit code 0 |
 | Standalone scripts | 18 total; 16 Pass; 2 Pass with Warning; 0 Fail |
 | Historical Pass with Warning | `tests/test_mixed_model_helpers.R`; `tests/test_server_site_import.R` |
-| Browser/manual verification | Pending; no Browser Pass is claimed by this automated gate |
+| Browser/manual verification | Final browser/manual smoke session completed separately; see row-level results and the final report |
 
 ### Historical audit baseline
 
@@ -27,8 +27,8 @@ Interpretation used in this audit:
 - **Implemented** means the scoped runtime recovery path prevents or handles the scenario.
 - **Automated test exists** means a test asserts this scenario or a close, explicitly identified slice. Merely loading the file does not count.
 - **Executed current branch** means that linked automation was run at the final automated-gate commit.
-- **Browser/manual verification** is separate from automated coverage and remains pending.
-- A row-level automated `Pass` does not claim a Browser Pass.
+- **Browser/manual verification** is separate from automated coverage and is recorded from the completed final smoke session at row level.
+- A row-level automated `Pass` does not imply destructive browser fault injection; any unexecuted browser injection is stated explicitly.
 
 ## 2. Source of RAW-01–25
 
@@ -48,17 +48,17 @@ Conclusion: a complete RAW-01–25 definition set does exist.
 
 | Disposition | RAW IDs | Current evidence state |
 |---|---|---|
-| Implemented / scoped recovery complete | RAW-02–RAW-10, RAW-12–RAW-19, RAW-21–RAW-24 | Implementation complete; browser/manual verification pending. |
-| RAW-11 | RAW-11 | Implemented with direct passing workflow-server automation; browser/manual verification pending. |
-| Superseded / N/A | RAW-20 | No additional production implementation required; replacement-path automation passes; browser/manual verification pending. |
+| Implemented / scoped recovery complete | RAW-02–RAW-10, RAW-12–RAW-19, RAW-21–RAW-24 | Implementation complete; final browser/manual outcomes are recorded per row, including qualified automated-only fault-recovery evidence where applicable. |
+| RAW-11 | RAW-11 | Implemented with direct passing workflow-server automation and passing final browser prerequisite verification. |
+| Superseded / N/A | RAW-20 | No additional production implementation or dedicated browser screenshot required. |
 | Deferred / Known limitation | RAW-25 | Not implemented in the current scope; future dedicated lifecycle/refactoring work recommended. |
-| Retained row disposition | RAW-01 | Preserve the row's documented implementation and execution status; browser/manual verification has not occurred. |
+| Not Executed / Outstanding | RAW-01 | Missing-`ggnewscale` dependency injection was not performed; no implementation, automated test or browser verification is claimed. |
 
-All 25 RAW identifiers remain documented. RAW-labelled deterministic tests now exist for multiple recovery paths, alongside cross-cutting workflow tests. Automated coverage and browser/manual verification are reported separately.
+All 25 RAW identifiers remain documented. RAW-labelled deterministic tests exist for multiple recovery paths alongside cross-cutting workflow tests. Automated coverage and browser/manual verification are reported separately, with RAW-01 outstanding, RAW-20 Superseded / N/A and RAW-25 Deferred / Known Limitation.
 
 ### Command-level result
 
-The final testthat gate passed 154 cases and 1056 expectations with no failures, errors, warnings or skips. The standalone gate ran 18 scripts: 16 Pass, 2 historical Pass with Warning, and 0 Fail. The two Pass with Warning scripts are `tests/test_mixed_model_helpers.R` and `tests/test_server_site_import.R`. No browser/manual coverage is claimed.
+The final testthat gate passed 154 cases and 1056 expectations with no failures, errors, warnings or skips. The standalone gate ran 18 scripts: 16 Pass, 2 historical Pass with Warning, and 0 Fail. The two Pass with Warning scripts are `tests/test_mixed_model_helpers.R` and `tests/test_server_site_import.R`. Browser/manual results come from the separate completed final smoke session, not from this automated gate.
 
 ## 4. RAW-01–25 Matrix
 
@@ -78,13 +78,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Not implemented. Direct calls at `global.R:485,524,565,605,637,675,715,755`; no `requireNamespace()`/friendly dependency guard was found. |
 | Automated test | None. |
 | Manual test | Browser/manual fault-injection step: in an isolated environment only, make `ggnewscale` unavailable, render each HEV variant, verify friendly message, spinner termination, navigation, retained join, and recovery after restoring the approved environment. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
+| Current execution result | Not Executed / Outstanding. The missing-`ggnewscale` dependency failure was not injected during the final browser/manual session. |
+| Release evidence | No current implementation, automated test or browser evidence is claimed. The general task/stage navigation smoke is not RAW-01 evidence. |
 | Browser/manual verification required | Yes |
 | Gap | No dependency guard, no test, no retained-state/browser evidence. Raw R error and permanent loading remain possible. |
 | Severity | Major |
 | Recommended action | Add an environment preflight and feature-level safe message in a future code change; add an isolated missing-package recovery test and browser/manual screenshot/log. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current branch: No; Browser/manual verification: Pending. |
+| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current branch: No; Browser/manual verification: Not Executed / Outstanding. |
 
 ### RAW-02
 
@@ -102,13 +102,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Previously unguarded parser resolved on `qa/raw-user-facing-recovery`: `parse_donor_mapping()` in `R/site_mapping_helpers.R` forces text parsing, rejects parser warnings/errors and invalid two-column structures, and `server.R` routes failed attempts to a controlled result without replacing Flow Statistics. |
 | Automated test | `tests/testthat/test-donor-external-recovery.R` covers blank-before-parser, malformed/path-like input, schema failure, redaction, retained Flow Statistics, running reset and same-session retry; `tests/testthat/test-workflow-server.R` retains RAW-04 regression coverage. |
 | Manual test | Paste malformed/path-like donor mapping; submit; assert no raw console-only failure, friendly UI feedback, loading ends, controls/navigation work, correct-and-retry succeeds without re-upload. |
-| Current execution result | Automated Pass on `qa/raw-user-facing-recovery`; browser/manual verification pending. |
-| Release evidence | Implementation complete; browser/manual verification pending. Historical `ST-04B` covers a valid donor path/warnings, not this parse failure or recovery. |
+| Current execution result | Pass — automated coverage and final browser/manual recovery verification passed. |
+| Release evidence | Current browser evidence: `RAW02_01_path_like_donor_mapping_safe_failure.png` and `RAW02_02_invalid_donor_mapping_schema_blocked.png`. Historical `ST-04B` remains supporting context only. |
 | Browser/manual verification required | Yes |
-| Gap | Previously identified implementation gap resolved on `qa/raw-user-facing-recovery`. Browser recovery/retention evidence is still pending. |
+| Gap | Previously identified implementation and browser recovery/retention evidence gaps are resolved. |
 | Severity | Major |
-| Recommended action | Run the malformed-to-valid browser recovery case during final browser/manual verification and retain screenshot/log evidence. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-03
 
@@ -126,13 +126,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Previously unguarded reads resolved on `qa/raw-user-facing-recovery`: `parse_donor_site_list()` in `R/site_mapping_helpers.R` sanitises parser/normalisation failures and validates the existing `flow_site_id` plus NRFA/HDE contract; `server.R` prevents malformed input reaching the donor importer and finalises donor import state on every return path. |
 | Automated test | `tests/testthat/test-donor-external-recovery.R` covers blank, malformed and invalid donor-list structures, importer non-invocation, controlled external failure, state retention, finalisation and same-session retry. |
 | Manual test | Exercise malformed mapping and malformed donor-list variants separately; verify safe UI message, no path/stack trace, spinner exit, retained inputs, back navigation, and successful retry. |
-| Current execution result | Automated Pass on `qa/raw-user-facing-recovery`; browser/manual verification pending. |
-| Release evidence | Implementation complete; browser/manual verification pending. Historical `ST-04B` is a successful/expected-warning path only. |
+| Current execution result | Pass — automated coverage and final browser/manual verification passed. |
+| Release evidence | Current browser evidence: `RAW03_01_invalid_flow_input_blocked.png` and `RAW03_02_blank_flow_site_id_blocked.png`. Historical `ST-04B` remains supporting context only. |
 | Browser/manual verification required | Yes |
-| Gap | Previously identified implementation gap resolved on `qa/raw-user-facing-recovery`. Browser recovery/retention evidence is still pending. |
+| Gap | Previously identified implementation and browser recovery/retention evidence gaps are resolved. |
 | Severity | Major |
-| Recommended action | Run separate malformed mapping and donor-list correct-and-retry browser cases during final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-04
 
@@ -150,13 +150,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Whitespace-aware `trimws()` guards run before either donor `fread()` call in `server.R`; validation does not change the Flow Statistics artifact. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-04 donor inputs reject all-whitespace text and allow in-session retry”: empty, spaces, tabs, newline, mixed whitespace, parser-not-called, retained Flow Statistics and valid retry. |
 | Manual test | Blank and whitespace-only mapping/list; verify blocker only when imputation is requested, message wording, no raw error, controls usable, and valid retry. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted automation and final browser/manual verification passed. |
+| Release evidence | Current browser evidence: `RAW04_01_blank_donor_mapping_blocked.png` and `RAW04_02_whitespace_donor_mapping_blocked.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Automated implementation gap closed; browser/manual evidence remains pending. |
+| Gap | Automated implementation and browser/manual evidence gaps are closed. |
 | Severity | Minor |
-| Recommended action | Run the final browser/manual donor recovery check and capture the retained-state evidence. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-05
 
@@ -175,13 +175,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Automated test | Near-scenario: `tests/testthat/test-site-metadata-helpers.R:31`, “header-only site metadata CSV is reported as empty”; replacement-state test `tests/testthat/test-server-local-flow-source.R:162`, “replacing valid Local Flow with an invalid file removes the previous local source”. |
 | Manual test | `TC-029`; historical `ST-07E`/`ST-07F`. Browser/manual verification must repeat zero-byte and header-only for every upload type, then valid replacement without restart. |
 | Phase 2B automated test | `tests/testthat/test-site-metadata-helpers.R` covers header-only metadata. `tests/testthat/test-server-local-flow-source.R` covers valid-to-invalid-to-valid replacement recovery for metadata, Local Flow, Local Biology, WQ, and RHS while checking retained unrelated state. |
-| Current execution result | Pass — linked automated slices passed; multi-source browser recovery was not executed. |
-| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. Historical `ST-07E`/`ST-07F` remains supporting evidence only. |
+| Current execution result | Pass — linked automated slices and final browser invalid-to-valid replacement verification passed. |
+| Release evidence | Current browser evidence: `RAW05_01_invalid_replacement_not_current.png` and `RAW05_02_valid_retry_restores_mapping.png`. Historical `ST-07E`/`ST-07F` remains supporting evidence only. |
 | Browser/manual verification required | Yes |
-| Gap | The previous stale-current replacement gap is closed in automated coverage. Per-control browser screenshots, file-input behaviour, and current browser/manual evidence remain pending. |
+| Gap | The previous stale-current replacement gap is closed by automated and current browser evidence; exhaustive per-control screenshots were not required for this smoke session. |
 | Severity | Major |
-| Recommended action | Execute invalid-to-valid browser recovery for each upload control during final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-06
 
@@ -200,13 +200,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Automated test | `tests/testthat/test-site-metadata-helpers.R:48`, “existing non-CSV input is reported as unreadable”; replacement test at `tests/testthat/test-server-local-flow-source.R:162`. |
 | Manual test | Historical `ST-07E` and recovery `ST-07F`; Browser/manual: malformed delimiter/quotes/inconsistent rows for each upload, followed by valid replacement. |
 | Phase 2B automated test | `tests/testthat/test-site-metadata-helpers.R` compares malformed uploaded and pasted metadata. `tests/testthat/test-server-local-flow-source.R` covers malformed Local Flow and WQ replacement, old-current invalidation, controlled text, and same-session retry. |
-| Current execution result | Pass — linked parser/replacement slices passed; full browser matrix was not executed. |
-| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. July `ST-07E/F` remains historical only. |
+| Current execution result | Pass — linked parser/replacement automation and final browser malformed-to-valid recovery verification passed. |
+| Release evidence | Current browser evidence: `RAW06_01_malformed_csv_controlled_failure.png` and `RAW06_02_valid_retry_after_malformed_csv.png`. July `ST-07E/F` remains historical only. |
 | Browser/manual verification required | Yes |
-| Gap | The previous raw-parser/stale-current gap is closed for the Phase 2B upload paths. Browser loading-state and final browser/manual screenshots remain pending. |
+| Gap | The previous raw-parser/stale-current gap is closed for the Phase 2B upload paths, with current browser evidence retained. |
 | Severity | Major |
-| Recommended action | Execute malformed-to-valid browser recovery for every Phase 2B upload control during final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-07
 
@@ -225,13 +225,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Automated test | `tests/testthat/test-local-flow-contract.R:38`, “missing required Local Flow columns are rejected”; `tests/testthat/test-dashboard-backlog-helpers.R:4`; standalone `tests/test_backlog_helpers.R:11-18`; WQ contract missing-column checks in `tests/test_wq_contract_helpers.R:94-97`. |
 | Manual test | `TC-003`, `TC-013`; historical `ST-07C`; repeat every upload contract during final browser/manual verification. |
 | Phase 2B automated test | `tests/testthat/test-dashboard-backlog-helpers.R` covers required core and optional-absence severity. `tests/testthat/test-server-local-flow-source.R` covers optional missing, valid, supplied-invalid, retained core join, and valid retry. |
-| Current execution result | Pass — linked schema tests passed. |
-| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. Historical `ST-07C` is not current browser/manual evidence. |
+| Current execution result | Pass — linked schema tests and final browser required/optional mapping verification passed. |
+| Release evidence | Current browser evidence: `RAW07_01_missing_required_biol_site_id_blocked.png` and `RAW07_02_optional_wq_rhs_absent_non_blocking.png`. Historical `ST-07C` remains historical only. |
 | Browser/manual verification required | Yes |
-| Gap | The previous classification inconsistency and RHS/WQ supplied-invalid warning gap are closed. Browser recovery and current browser/manual evidence remain pending. |
+| Gap | The previous classification inconsistency and RHS/WQ supplied-invalid warning gap are closed, with current browser evidence retained. |
 | Severity | Major |
-| Recommended action | Verify required/optional message severity and disabled stale actions in final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-08
 
@@ -250,13 +250,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Automated test | `tests/testthat/test-dashboard-backlog-helpers.R:4`, “mapping validation reports a missing biol_site_id column”; resume/stale state tests in `tests/testthat/test-workflow-state.R:116-145` are cross-cutting, not the upload trigger. |
 | Manual test | `TC-003`; upload missing `biol_site_id`, confirm error, correct file, resume, and verify prior unrelated artifacts. |
 | Phase 2B automated test | `tests/testthat/test-dashboard-backlog-helpers.R` covers missing `biol_site_id`. `tests/testthat/test-server-local-flow-source.R` covers upload and paste replacement invalidation, equivalent outcomes, retained unrelated artifacts, and same-session retry. |
-| Current execution result | Pass — direct validation test passed; browser recovery was not executed. |
-| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
+| Current execution result | Pass — direct validation automation and final browser upload/paste equivalence verification passed. |
+| Release evidence | Current browser evidence: `RAW08_01_invalid_upload_validation.png` and `RAW08_02_invalid_paste_validation.png`. |
 | Browser/manual verification required | Yes |
-| Gap | The previous upload/paste inconsistency and stale-current gap are closed in server automation. Browser retained-state evidence remains pending. |
+| Gap | The previous upload/paste inconsistency and stale-current gap are closed in automation and current browser evidence. |
 | Severity | Major |
-| Recommended action | Capture browser/manual evidence of upload/paste correction, resume, and state retention. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-09
 
@@ -275,13 +275,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Automated test | Near-scenario: `tests/testthat/test-local-flow-contract.R:38-55`, including missing/blank `flow_site_id`; stale replacement tests `tests/testthat/test-server-local-flow-source.R:162-260`. No exact metadata-file RAW trigger test. |
 | Manual test | `TC-003`, `TC-013`; validate mapping and Local Flow variants, recover, then prove old Flow stats/join/download cannot be reused. |
 | Phase 2B automated test | `tests/testthat/test-local-flow-contract.R` covers missing/blank Local Flow `flow_site_id`. `tests/testthat/test-server-local-flow-source.R` covers exact uploaded/pasted mapping replacement, Flow/downstream invalidation, corrected retry, import blocking, and RAW-10 HDE default/provenance. |
-| Current execution result | Pass — Local Flow and stale-state slices passed; exact mapping/browser path was not executed. |
-| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
+| Current execution result | Pass — Local Flow/stale-state automation and final browser missing/blank `flow_site_id` verification passed. |
+| Release evidence | Current browser evidence: `RAW09_01_missing_flow_site_id_blocked.png` and `RAW09_02_blank_flow_site_id_blocked.png`. |
 | Browser/manual verification required | Yes |
-| Gap | The exact metadata invalid-replacement gap is closed in server automation. Browser and download-currentness evidence remain pending. |
+| Gap | The metadata required-value gap is closed in server automation and current browser evidence. |
 | Severity | Major |
-| Recommended action | Run stale Flow/join/HEV/model/download browser assertions during final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-10
 
@@ -299,13 +299,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | `normalise_site_metadata_flow_input()` in `R/site_mapping_helpers.R`; `flow_source_default_status` in `server.R`; mapping status placement in `ui.R`. |
 | Automated test | `tests/testthat/test-flow-metadata-defaults.R`; `tests/testthat/test-flow-mapping-contract.R`; `tests/testthat/test-server-local-flow-source.R`, including info styling/message for uploaded and pasted missing/blank values. |
 | Manual test | `TC-002`, `TC-015`; historical FT-01G/H were not run on the updated implementation. Browser/manual verification must confirm visible default/provenance and source-change recovery. |
-| Current execution result | Pass — default/provenance automation passed. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
+| Current execution result | Pass — default/provenance automation and final browser missing/blank `flow_input` verification passed. |
+| Release evidence | Current browser evidence: `RAW10_01_missing_flow_input_defaults_HDE.png` and `RAW10_02_blank_flow_input_defaults_HDE.png`. |
 | Browser/manual verification required | Yes |
-| Gap | UI acknowledgement is implemented; final browser/manual provenance evidence remains pending. |
+| Gap | UI acknowledgement is implemented and current browser/manual provenance evidence is retained. |
 | Severity | Minor |
-| Recommended action | Confirm the informational notice and HDE provenance in final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes (later HDE-default decision); Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes (later HDE-default decision); Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-11
 
@@ -323,13 +323,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Alert `server.R:1987-2004`; current-revision gate `server.R:1952-1967`; Flow reset `server.R:250-275`. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “Flow-statistics attempt without Flow input becomes recoverably blocked”, directly exercises the request without Flow and asserts blocked status, prerequisite guidance and no current Flow-statistics revision. The final automated gate passes. |
 | Manual test | Click without Flow, navigate back, import valid Local Flow, retry, and verify retained inputs and current-only results. |
-| Current execution result | Pass — direct workflow-server automation; browser/manual verification pending. |
-| Release evidence | Implementation complete; browser/manual verification pending. Automated coverage is direct and passing; historical normal Flow tests remain historical supporting evidence only. |
+| Current execution result | Pass — direct workflow-server automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW11_01_flow_processing_blocked_without_flow.png`. Automated coverage is direct and passing; historical normal Flow tests remain supporting context only. |
 | Browser/manual verification required | Yes |
-| Gap | Automated prerequisite handling is covered; browser navigation, visible messaging, spinner behaviour, retained-state presentation and retry still require manual verification. |
+| Gap | Automated prerequisite handling and current browser-visible blocking behaviour are covered. |
 | Severity | Major |
-| Recommended action | Execute the browser retry/state-retention case during final browser/manual smoke verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (direct workflow-server coverage); Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (direct workflow-server coverage); Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-12
 
@@ -347,13 +347,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | The priority O:E action preflight in `server.R` checks the current Biology artifact before setting an accepted request or running state; the O:E calculation listens only to accepted requests. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing Biology, blocked/not-running state, retained Environment/Flow, import and successful retry. |
 | Manual test | Browser/manual: trigger without Biology, verify alert/UI/console/spinner, navigate back, import, retry, and check no unnecessary re-upload. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW12_01_oe_blocked_without_biology.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Automated recovery/state gap closed; browser spinner and navigation evidence remains pending. |
+| Gap | Automated recovery/state and current browser evidence gaps are closed. |
 | Severity | Major |
-| Recommended action | Capture the browser retry, spinner termination and retained-state evidence in final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-13
 
@@ -371,13 +371,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | The priority RICT action preflight in `server.R` validates the current Environmental artifact before accepting a request or entering running; prediction processing listens only to accepted requests. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing and stale Environmental states, retained Biology, re-import and successful retry. |
 | Manual test | Browser/manual: click RICT without Environment, verify blocking message and no console-only failure, import data, retry, inspect retained state. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW13_01_rict_blocked_without_environment.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Prerequisite recovery is automated; external-service failure handling remains outside Phase 2A and browser evidence is pending. |
+| Gap | Prerequisite recovery is automated and current browser evidence is retained; external-import recovery is tracked under RAW-22. |
 | Severity | Major |
-| Recommended action | Capture the prerequisite retry in final browser/manual verification; retain the separate external-import failure gap for later work. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-14
 
@@ -395,13 +395,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | The O:E action preflight in `server.R` validates the current RICT artifact before accepting the request; the O:E event reactive cannot access predictions for a blocked click. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing RICT predictions, retained Biology/Environment, RICT run and successful O:E retry. |
 | Manual test | Browser/manual: skip RICT, request O:E, verify alert/spinner/navigation, run RICT, retry O:E, verify prior inputs retained. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted automation and final browser prerequisite verification passed. |
+| Release evidence | Current browser evidence: `RAW14_01_oe_blocked_without_rict.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Automated block/retry and controlled message are complete; browser evidence remains pending. |
+| Gap | Automated block/retry, controlled messaging and current browser evidence are complete. |
 | Severity | Major |
-| Recommended action | Capture the blocked notification, spinner termination and retry in final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-15
 
@@ -419,13 +419,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | The priority join preflight in `server.R` checks current Flow Statistics before creating `join_request` or entering running; join result reactives listen only to accepted requests. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale Flow Statistics, no join calls, retained O:E, regeneration and successful retry. |
 | Manual test | Browser/manual: attempt join before stats; then create stats and join; change Flow source and verify old join, HEV, model and every download cannot be used until regeneration. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass with Warning — targeted automation passed; final browser block/retry verification passed with a non-blocking Biology/Flow temporal coverage warning. |
+| Release evidence | Current browser evidence: `RAW15_01_join_blocked_without_flow_statistics.png` and `RAW15_02_join_retry_after_flow_statistics.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Direct automation and stale-input non-consumption are complete; browser/download evidence remains pending. |
+| Gap | Direct automation, stale-input non-consumption and current browser block/retry evidence are complete. |
 | Severity | Major |
-| Recommended action | Execute the browser recovery chain and confirm current-only downloads on final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current evidence and documented non-blocking warning with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass with Warning. |
 
 ### RAW-16
 
@@ -443,13 +443,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | The priority join preflight in `server.R` checks the current O:E artifact before creating `join_request`; the join result reactives reject missing/stale O:E. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale O:E, no join calls, retained Flow Statistics, O:E regeneration and successful retry. |
 | Manual test | Browser/manual: attempt join before O:E; complete O:E; retry; verify Flow stats retained and no stale output/download use. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass with Warning — targeted automation passed; final browser block/retry verification passed with a non-blocking Biology/Flow temporal coverage warning. |
+| Release evidence | Current browser evidence: `RAW16_01_join_blocked_without_oe.png` and `RAW16_02_join_retry_after_oe.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Runtime wording and automated recovery are complete; browser recovery/state evidence remains pending. |
+| Gap | Runtime wording, automated recovery and current browser recovery/state evidence are complete. |
 | Severity | Major |
-| Recommended action | Capture the missing/stale O:E browser retry and retained Flow state in final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current evidence and documented non-blocking warning with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass with Warning. |
 
 ### RAW-17
 
@@ -467,13 +467,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | The priority HEV action preflight in `server.R` checks the current Joined HE Dataset before accepting a plot request or entering running; HEV plot/download evaluation is gated by the accepted request and current join. |
 | Automated test | `tests/testthat/test-workflow-server.R`, “RAW-12 to RAW-17 prerequisites block before run and recover in session”: missing/stale join, blocked/not-running HEV, old plot unavailable, retained upstream, rebuild and successful retry/current result. |
 | Manual test | `TC-016` normal path; historical `ST-06` saw the message but was blocked. Browser/manual verification must test missing and stale joins, back navigation, regeneration, plot and download. |
-| Current execution result | Pass — targeted automation. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted automation and final browser block/rebuild/retry verification passed. |
+| Release evidence | Current browser evidence: `RAW17_01_hev_blocked_without_joined_he.png` and `RAW17_02_hev_retry_after_joined_he.png`. |
 | Browser/manual verification required | Yes |
-| Gap | Exact automation and current-only HEV evaluation are complete; browser/download evidence remains pending. |
+| Gap | Exact automation, current-only HEV evaluation and current browser recovery evidence are complete. |
 | Severity | Major |
-| Recommended action | Confirm the blocked plot/download, rebuild and retry path in final browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-18
 
@@ -491,13 +491,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Historical partial evidence retained: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; formerly unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. Completion evidence: `R/plot_recovery_helpers.R` provides the plot-only result boundary; `server.R` applies it to WQ/RHS summary/mapped plots, PCA, both Flow heatmaps, analysis correlation/coverage, basic-model rendering and HEV. HEV failure finalises `hev_result` as failed while retaining previous plot/data/provenance and download history. |
 | Automated test | Historical helper evidence retained: `tests/test_wq_rhs_plots.R:36-91` and `tests/test_model_interface_helpers.R`. `tests/testthat/test-plot-recovery.R` covers thrown, NULL, unsupported and delayed-render failures plus a corrected retry; `tests/testthat/test-workflow-server.R` covers HEV exception/unusable result, safe UI text, failed-not-running/current state, retained upstream/HEV history and same-session retry success. |
 | Manual test | `TC-007`, `TC-009`, `TC-016–TC-021`; execute missing/invalid data and forced plotting error on every plot family. |
-| Current execution result | Pass — targeted deterministic plot-boundary and workflow-server automation; browser recovery was not executed. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. Historical plot images remain output examples, not recovery evidence. |
+| Current execution result | Pass — targeted deterministic plot-boundary/workflow-server automation and final browser controlled-failure/retry verification passed. |
+| Release evidence | Current browser evidence: `RAW18_01_hev_plot_failure_controlled.png` and `RAW18_02_hev_plot_retry_success.png`. Historical plot images remain output examples, not recovery evidence. |
 | Browser/manual verification required | Yes |
-| Gap | Automated implementation and exact HEV failure/finalisation/retention/retry coverage are complete; browser evidence remains pending. |
+| Gap | Automated implementation and exact HEV failure/finalisation/retention/retry coverage are complete, with current browser evidence retained. |
 | Severity | Major |
-| Recommended action | Verify the controlled messages and retry path for each listed plot family in the final browser/manual verification browser run. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-19
 
@@ -515,13 +515,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Historical gap retained: unguarded handlers formerly at `server.R:741-747,967-985,1048-1056,1182-1196,1313-1316`; HEV module formerly at `global.R:879-890`. Completion evidence: `R/file_operation_helpers.R` provides the file-only result boundary; `server.R` applies it to demo metadata copy, mapped WQ/RHS CSV, WQ contract summary CSV, mapped WQ/RHS PNG, exclusion log CSV and processed Joined HE checkpoint; `global.R` applies it to HEV plot downloads and records HEV download history only after the file writer succeeds. |
 | Automated test | `tests/testthat/test-file-operation-recovery.R` covers success, writer failure, safe text, retained source state, no false success record and same-session retry. `tests/testthat/test-workflow-server.R` covers HEV writer failure, safe UI condition, retained plot, unchanged history, successful retry and one success record only. |
 | Manual test | `TC-008`, `TC-010`, `TC-016`, `TC-022`, `TC-033` retain happy-path coverage. Browser/manual fault injection must force writer failure and verify the controlled message, retained result and successful retry. |
-| Current execution result | Pass — targeted deterministic file-boundary, HEV download/history and workflow-server automation; browser recovery was not executed. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. Existing downloaded/plot files remain output examples, not recovery evidence. |
+| Current execution result | Pass — automated writer-failure recovery passed and the browser normal PDF/JPEG/PNG download path passed; manual writer-failure injection was not executed. |
+| Release evidence | Current browser evidence: `RAW19_01_hev_pdf_download_and_open.png` and `RAW19_02_hev_all_formats_downloaded.png`. Writer-failure recovery evidence remains automated. |
 | Browser/manual verification required | Yes |
-| Gap | Automated implementation and write-failure/retention/retry coverage are complete; browser/manual evidence remains pending. |
+| Gap | Automated write-failure/retention/retry coverage and browser normal-path evidence are complete; manual browser writer-failure injection was not executed. |
 | Severity | Major |
-| Recommended action | Verify controlled download failure and retry for each listed output family during browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the automated failure-recovery and browser normal-path evidence; do not describe the browser session as writer-failure injection. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser normal path: Pass; Manual writer-failure injection: Not Executed. |
 
 ### RAW-20
 
@@ -539,13 +539,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | **Superseded by current implementation / no additional code required.** `normalise_site_metadata_flow_input()` accepts only `HDE` and `NRFA`; `import_dashboard_flow()` calls `hetoolkit::import_flow()` and returns its data frame directly; `server.R` keeps that result in `external_flow_data()`/`flow_data()` and never writes or reopens a site CSV. Current installed `hetoolkit` HDE/NRFA import functions contain no file operations; its separate `FLOWFILES` reader is not reachable through the supported dashboard contract. Repository history, including the initial dashboard implementation, likewise calls `import_flow()` directly and contains no `27034.csv`/generated-Flow-CSV reopen path. The closest current supporting-file path is RHS: `import_rhs_in_temp_directory()` creates a unique temporary directory under `safe_file_operation()`, restores the previous working directory and removes the directory through `on.exit()`; `server.R` sanitises both classified filesystem failures and importer failures, preserves unrelated state, rejects failed replacement data and permits retry. Missing Shiny upload temp paths are independently guarded by `read_site_metadata_csv()`/`read_dashboard_csv()` and are not a remaining RAW-20 gap. |
 | Automated test | `tests/testthat/test-file-operation-recovery.R` covers sanitised RHS setup failure, working-directory restoration, cleanup and retry. `tests/testthat/test-donor-external-recovery.R` covers RHS file/import failure, retained or invalidated state as appropriate, redaction and same-session retry, and covers current in-memory Flow import failure/retry. `tests/testthat/test-workflow-server.R` and `tests/test_site_mapping.R` retain workflow and supported HDE/NRFA mapping coverage. |
 | Manual test | The historical generated-Flow-file deletion scenario is N/A. Browser/manual verification remains pending for current Flow failure/retry and RHS temporary-file recovery, including retained unrelated state and no raw path/error disclosure. |
-| Current execution result | Automated Pass on `qa/raw-user-facing-recovery`; browser/manual verification pending. |
-| Release evidence | Current-code/history trace and automated recovery tests support superseded disposition; browser/manual verification pending. |
-| Browser/manual verification required | Yes |
-| Gap | No current production-code gap for RAW-20. Browser/manual verification of the replacement recovery paths remains pending. |
+| Current execution result | Superseded / N/A. |
+| Release evidence | Current-code/history trace and automated recovery tests support the superseded disposition; no dedicated browser screenshot is required. |
+| Browser/manual verification required | No dedicated RAW-20 browser scenario required. |
+| Gap | No current production-code or browser-evidence gap for the superseded historical mechanism. |
 | Severity | Major |
-| Recommended action | Retain RAW-20 as a formally superseded historical case; verify the current Flow and RHS recovery paths during final browser/manual testing. |
-| Coverage states | Documented: Yes; Disposition: Superseded / N/A; Additional implementation required: No; Replacement-path automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain RAW-20 as a formally superseded historical case. |
+| Coverage states | Documented: Yes; Disposition: Superseded / N/A; Additional implementation required: No; Replacement-path automated test exists: Yes; Executed current branch: Yes; Dedicated browser verification: N/A. |
 
 ### RAW-21
 
@@ -563,13 +563,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Historical gap retained: unguarded writers listed under RAW-19; the RHS temp helper formerly had cleanup but no user-facing permission contract. Completion evidence: `R/file_operation_helpers.R` catches filesystem failures with safe user text plus internal diagnostics; `R/site_mapping_helpers.R` uses it for RHS temp-directory creation, working-directory access, restoration and cleanup; `server.R` restores the retained workflow registry and RHS data after a temp-filesystem failure while allowing retry. All RAW-19 writers reuse the same contract. |
 | Automated test | `tests/testthat/test-file-operation-recovery.R` injects a path-bearing permission-style temp-directory failure, verifies redaction/current-directory retention/cleanup and retries successfully. `tests/testthat/test-donor-external-recovery.R` verifies a current RHS result and workflow registry survive a filesystem failure and a same-session retry succeeds. HEV coverage in `tests/testthat/test-workflow-server.R` verifies permission-style export failure does not create history. |
 | Manual test | In an isolated browser/manual sandbox, inject a non-writable target/temp directory without altering production data; verify friendly text, no leaked path, result retention and retry. |
-| Current execution result | Pass — targeted deterministic permission/filesystem, retained-state and retry automation; browser recovery was not executed. |
-| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted deterministic permission/filesystem retained-state and retry automation passed; destructive browser permission/filesystem fault injection was not executed. |
+| Release evidence | Automated recovery evidence only; no dedicated browser screenshot is required. |
 | Browser/manual verification required | Yes |
-| Gap | Automated implementation and deterministic permission/filesystem retention/retry coverage are complete; browser/manual evidence remains pending. |
+| Gap | Automated implementation and deterministic permission/filesystem retention/retry coverage are complete; destructive browser fault injection remains intentionally unexecuted. |
 | Severity | Major |
-| Recommended action | Verify controlled permission/filesystem failure and retry across the listed runtime file paths during browser/manual verification. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the automated recovery evidence; do not claim destructive browser permission/filesystem injection. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Destructive browser fault injection: Not Executed. |
 
 ### RAW-22
 
@@ -587,13 +587,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Previously partial boundary resolved on `qa/raw-user-facing-recovery`: `safe_external_import()` classifies request errors, NULL/empty results and unusable result structures; `server.R` applies it to Biology, Environment, external Flow, additional donor Flow, WQ and RHS, records internal diagnostics separately from UI text, and updates workflow currentness only after usable success. The unused internal `donor_flow_import_running` and `flow_imputation_running` flags were intentionally removed during final RAW-only simplification without reducing behavioural recovery coverage. |
 | Automated test | `tests/testthat/test-donor-external-recovery.R` uses mocked failures/results for all covered paths, including service error, NULL/empty and invalid schema classification, failed-currentness, unrelated-state retention, retry results and call counts. Existing local-Flow precedence and site-import tests remain linked regression coverage. |
 | Manual test | Use isolated service stubs for timeout/HTTP/empty response across all five sources, retry success, optional-source continuation, local Flow fallback/precedence, retained state and spinner termination. Do not use real services for fault injection. |
-| Current execution result | Automated failure/retry cases Pass on `qa/raw-user-facing-recovery`; browser/manual verification pending. |
-| Release evidence | Implementation complete; browser/manual verification pending. Historical live-service successes remain historical context, not outage-recovery evidence. |
+| Current execution result | Pass — automated failure/retry cases and final browser additional-donor failure/retry verification passed. |
+| Release evidence | Current browser evidence: `RAW22_01_additional_donor_external_failure_safe.png` and `RAW22_02_additional_donor_retry_success.png`. Historical live-service successes remain historical context only. |
 | Browser/manual verification required | Yes |
-| Gap | Previously identified scoped application-boundary and deterministic automation gaps are resolved. Browser/manual evidence remains pending; the application-wide lifecycle limitation is deferred under RAW-25. |
+| Gap | Previously identified scoped application-boundary, deterministic automation and current browser evidence gaps are resolved. The application-wide lifecycle limitation remains deferred under RAW-25. |
 | Severity | Major |
-| Recommended action | Run final browser/manual fault-injection verification for each source. Track application-wide lifecycle consistency separately as the deferred RAW-25 limitation. |
-| Coverage states | Documented: Yes; Implemented: Yes for the scoped external operations; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the current automated and browser evidence; track application-wide lifecycle consistency separately as RAW-25. |
+| Coverage states | Documented: Yes; Implemented: Yes for the scoped external operations; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass. |
 
 ### RAW-23
 
@@ -611,13 +611,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | Historical finding: model handling and several legacy reactives previously had incomplete boundaries and could expose raw detail. Current scoped completion: `R/model_interface_helpers.R` separates safe messages from diagnostics; the workbook preview observer guards missing/empty sheet input; shared external-import, plot and file-operation boundaries protect the critical recovery paths in scope; workflow artifact failure handling preserves valid upstream state. |
 | Automated test | `tests/testthat/test-workflow-server.R` covers the workbook preview guard and workflow failure/retry state; `tests/testthat/test-user-facing-error-safety.R` covers model and user-facing message safety; targeted donor/external, plot and file recovery suites cover their critical boundaries. The final automated gate passes. |
 | Manual test | Use `TC-021` and `TC-036–TC-039` plus scoped fault injection to observe UI and R Console together, retry, and verify retained/current state. |
-| Current execution result | Pass — scoped deterministic automation; browser/manual verification pending. |
-| Release evidence | Implementation complete; browser/manual verification pending. Historical `ST-05A`/`BUG-001` and `FT-07A`/`BUG-003` remain evidence of earlier raw/permanent failures, not the current disposition. |
+| Current execution result | Pass — basic browser smoke passed and scoped automated edge-case coverage passed; invalid-sheet browser injection was not executed. |
+| Release evidence | Browser smoke completed without a retained screenshot; NULL/empty/NA/blank/invalid sheet states are covered by automation. Historical `ST-05A`/`BUG-001` and `FT-07A`/`BUG-003` remain historical evidence only. |
 | Browser/manual verification required | Yes |
-| Gap | The scoped recovery and user-message safety gaps are closed. Application-wide lifecycle consistency outside these boundaries remains the deferred RAW-25 limitation; browser/manual evidence remains pending. |
+| Gap | The scoped recovery, user-message safety and basic browser-smoke gaps are closed. Invalid-sheet browser injection was not executed; application-wide lifecycle consistency remains deferred under RAW-25. |
 | Severity | Current residual QA evidence gap; not a current Blocker on the basis of the superseded historical RAW-23 finding. |
-| Recommended action | Complete final browser/manual smoke verification and retain message, retry and state evidence. |
-| Coverage states | Documented: Yes; Implemented: Yes for the scoped recovery paths; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the automated edge-case result and record that no browser screenshot was retained and invalid-sheet browser injection was not executed. |
+| Coverage states | Documented: Yes; Implemented: Yes for the scoped recovery paths; Automated test exists: Yes; Executed current branch: Yes; Basic browser smoke: Pass; Screenshot: Not retained; Invalid-sheet browser injection: Not Executed. |
 
 ### RAW-24
 
@@ -635,13 +635,13 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Implementation evidence | `R/model_interface_helpers.R` separates `messages` from `diagnostic`; `server.R` records model/checkpoint/workspace diagnostics internally and sanitises the affected UI fallback messages. Existing `safe_external_import()`, `safe_plot_result()` and `safe_file_operation()` contracts remain separate and unchanged. |
 | Automated test | `tests/testthat/test-user-facing-error-safety.R` and `tests/testthat/test-workflow-server.R` inject Windows/Unix path-bearing model/checkpoint/workspace errors, assert exact safe UI messages and retained internal diagnostics, verify upstream currentness, and prove retry. Existing donor/external, plot and file recovery tests retain targeted negative-disclosure assertions. |
 | Manual test | Inject a synthetic error containing a fake path in every exception boundary; assert UI/DOM/screenshot lacks path/stack trace while authorised console log can be correlated. |
-| Current execution result | Pass — targeted automated RAW-24 coverage executed; browser/manual verification pending. |
-| Release evidence | Implementation complete; browser/manual verification pending. |
+| Current execution result | Pass — targeted automated RAW-24 coverage plus final browser evidence reused from RAW-02, RAW-06, RAW-18 and RAW-22. |
+| Release evidence | No dedicated RAW-24 screenshot required; current browser evidence is reused from RAW-02, RAW-06, RAW-18 and RAW-22. |
 | Browser/manual verification required | Yes |
-| Gap | Previously identified implementation and negative-disclosure automation gap resolved on `qa/raw-user-facing-recovery`; browser/manual verification remains pending. |
+| Gap | Previously identified implementation, negative-disclosure automation and browser/manual evidence gaps are resolved. |
 | Severity | Major |
-| Recommended action | Complete the planned final browser/manual verification after the remaining RAW implementation and regression sequence. |
-| Coverage states | Documented: Yes; Implemented: Direct; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pending. |
+| Recommended action | Retain the automated evidence and reused browser evidence with the final QA packet. |
+| Coverage states | Documented: Yes; Implemented: Direct; Automated test exists: Yes; Executed current branch: Yes; Browser/manual verification: Pass via reused RAW-02/06/18/22 evidence. |
 
 ### RAW-25
 
@@ -661,7 +661,7 @@ The final testthat gate passed 154 cases and 1056 expectations with no failures,
 | Manual test | Future dedicated lifecycle/refactoring work should define deterministic delay/error injection and browser acceptance criteria for long-running and asynchronous actions. |
 | Current execution result | Deferred; not implemented in the current scope. |
 | Release evidence | Historical `ST-05A`, `FT-07A`, `FT-07A-R1`, `BUG-001`, and `BUG-003` record 99%/permanent loading on older builds. They remain historical failure evidence, not proof of current application-wide recovery. |
-| Browser/manual verification required | The scoped recovery paths require final browser/manual verification; application-wide RAW-25 consistency remains deferred. |
+| Browser/manual verification required | No closure claim is made: application-wide RAW-25 consistency remains Deferred / Known Limitation. |
 | Gap | Remaining limitation: application-wide timeout, lifecycle, repeated-click and button-state consistency is not guaranteed for every long-running or asynchronous action. |
 | Severity | Deferred / Known limitation |
 | Recommended action | Future dedicated lifecycle/refactoring work. RAW-25 is not an immediate implementation task for this branch. |
@@ -683,25 +683,25 @@ The two historical standalone Pass with Warning results are:
 
 The expanded automated inventory includes RAW-labelled deterministic recovery tests and cross-cutting workflow/currentness coverage, including direct passing RAW-11 workflow-server coverage. The final counts supersede the old eight-script and 12-testthat-file inventory.
 
-Browser/manual smoke cases were not run during this documentation-only cleanup. No browser coverage or Browser Pass is claimed.
+Browser/manual smoke cases were not rerun during this documentation-only cleanup. The row-level browser outcomes reconcile the already completed final smoke session and remain distinct from the automated gate.
 
 ## 6. Missing Evidence
 
 ### Current implementation limitations
 
 - RAW-25 is explicitly **Deferred / Known limitation**. Application-wide timeout, lifecycle, repeated-click protection and button-state consistency are not guaranteed for every long-running or asynchronous action.
-- RAW-01 retains its current row disposition; this summary does not invent a different implementation status.
+- RAW-01 is **Not Executed / Outstanding**. Missing-`ggnewscale` dependency injection was not performed, and no implementation or automated coverage is claimed.
 - DATA-01 and DATA-02 remain unresolved scientific-risk decisions, as recorded in Section 7.
 
 The former gaps for RAW-02/03 donor parsing, RAW-18 plot recovery, RAW-19/21 file recovery, RAW-22 external imports, RAW-23 scoped safe boundaries and RAW-24 user-facing redaction are closed by the current implementation and automated evidence. RAW-20 is Superseded / N/A and requires no additional production implementation.
 
-### Current QA evidence gap
+### Remaining QA evidence limitations
 
-- Final browser/manual smoke verification has not been performed.
-- UI/DOM wording, spinner termination, control re-enable, back navigation, retained-state presentation, stale-output blocking and same-session retry still require a current browser evidence packet where applicable.
-- Historical July screenshots and failure records remain historical evidence and cannot be promoted to current browser/manual results.
-- Automated tests include RAW-labelled deterministic recovery coverage, direct RAW-11 workflow-server coverage, path-redaction tests, write/permission failure tests, external-import retry tests, and plot recovery tests. No automated result is presented as browser coverage.
-- Fault injection for the final smoke verification must use isolated stubs/sandboxes and synthetic data, never production services or customer data.
+- RAW-01 missing-`ggnewscale` dependency injection was not executed and remains outstanding.
+- RAW-19 manual writer-failure injection and RAW-21 destructive browser permission/filesystem fault injection were not executed; their failure-recovery results are automated. RAW-19 also has a passing browser normal download path.
+- RAW-23 basic browser smoke passed without a retained screenshot; automated edge-case coverage passed, but invalid-sheet browser injection was not executed.
+- Historical July screenshots and failure records remain historical evidence and are not promoted to current browser/manual results.
+- Automated results are not presented as destructive browser fault injection.
 
 ## 7. Risks
 
@@ -715,24 +715,17 @@ The former gaps for RAW-02/03 donor parsing, RAW-18 plot recovery, RAW-19/21 fil
 - **DATA-01:** `server.R:1637` silently keeps only the first Biology row per `biol_site_id`/Year/Season before O:E. No user message, provenance or direct regression test proves this deletion is scientifically intended.
 - **DATA-02:** `server.R:1378` silently converts Environmental `NA` values to zero before RICT. This can change scientific outputs without a visible warning or retained source-vs-normalised audit trail.
 - **RAW-25 — Deferred / Known limitation:** application-wide lifecycle consistency is not guaranteed for every long-running or asynchronous action. This is recommended for future dedicated lifecycle/refactoring work, not immediate implementation on this branch.
-- **Browser/manual QA evidence:** the scoped implementation is automated, but current interactive evidence for visible messages, spinner/control state, navigation, retained state and retry remains pending.
-- **RAW-01:** retain the implementation risk documented in its row until its disposition is changed through a separate authorised implementation/evidence task.
+- **Browser/manual QA evidence:** the final smoke session is complete with the explicit RAW-01, RAW-19, RAW-21 and RAW-23 limitations above.
+- **RAW-01:** missing dependency recovery remains unimplemented and unverified until addressed through a separate authorised implementation/evidence task.
 
 WQ contract exclusions and below-detection transformations remain explicit and covered by standalone tests. They do not mitigate DATA-01 or DATA-02.
 
-## 8. Final Browser/Manual Verification Plan
+## 8. Final Browser/Manual Verification Outcome
 
-The next QA activity is final browser/manual smoke verification, not further implementation on this branch.
-
-1. Record branch/commit, environment and synthetic fixture identifiers.
-2. Exercise the current scoped recovery paths with isolated stubs/sandboxes: donor correction, invalid-to-valid upload, prerequisite recovery, plot failure/retry, file/download/filesystem failure, external import recovery and user-safe error presentation.
-3. Capture UI/DOM text, relevant safe console correlation, spinner/control state, artifact currentness, retained inputs, back navigation and retry result.
-4. Verify failed operations do not report success and stale outputs cannot feed join, HEV, model or downloads.
-5. Record RAW-20 as Superseded / N/A and RAW-25 as Deferred / Known limitation; do not turn RAW-25 into an implementation gate for this branch.
-6. Retain the final evidence packet for QA reporting. Do not promote historical screenshots to current evidence.
+The final browser/manual recovery smoke session is complete with documented limitations. The implemented scope was broadly verified; RAW-01 remains Not Executed / Outstanding, RAW-20 is Superseded / N/A, and RAW-25 remains Deferred / Known Limitation. RAW-19/21 destructive browser fault injection and RAW-23 invalid-sheet browser injection were not executed.
 
 ## 9. Recommended Next Actions
 
-1. Complete final browser/manual smoke verification without claiming a Browser Pass in advance.
-2. Prepare the final QA evidence/report, including the automated baseline, browser/manual results, RAW-20 Superseded / N/A disposition, RAW-25 Deferred limitation, and DATA-01/DATA-02 risks.
+1. Retain the final QA evidence/report with the automated baseline, qualified browser/manual results, RAW-20 Superseded / N/A disposition, RAW-25 Deferred limitation, and DATA-01/DATA-02 risks.
+2. Address RAW-01 only through a separately authorised implementation and isolated missing-dependency verification task.
 3. Schedule RAW-25 only as future dedicated lifecycle/refactoring work.
