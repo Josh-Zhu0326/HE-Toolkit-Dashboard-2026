@@ -1088,6 +1088,65 @@ testthat::test_that("a failed checkpoint upload does not replace current data", 
   })
 })
 
+testthat::test_that("RAW-19 HEV download records history only after a successful file write", {
+  plot_value <- ggplot2::ggplot(
+    data.frame(x = 1, y = 1),
+    ggplot2::aes(x, y)
+  ) + ggplot2::geom_point()
+  history <- empty_hev_download_history()
+  provenance <- list(
+    site_id = "B1",
+    biology_metrics = "LIFE_F_OE",
+    flow_metrics = "Q95z",
+    date_range = "2020-01-01-2020-12-31",
+    source_dataset = "joined_core",
+    source_fingerprint = "fixture-fingerprint",
+    filter_version = 0L
+  )
+  write_attempts <- 0L
+  write_plot <- function(file, plot) {
+    write_attempts <<- write_attempts + 1L
+    testthat::expect_identical(plot, plot_value)
+    if (write_attempts == 1L) {
+      stop("ggsave Permission denied C:/Users/private/hev.png", call. = FALSE)
+    }
+    writeLines("test image", file)
+  }
+  on_download <- function(format, file) {
+    history <<- append_hev_download_history(history, provenance, format)
+  }
+
+  shiny::testServer(
+    downloadServer,
+    args = list(
+      id = "hev_download_test",
+      plot = function() plot_value,
+      can_download = function() TRUE,
+      on_download = on_download,
+      write_plot = write_plot
+    ),
+    {
+      api <- session$getReturned()
+      output_path <- tempfile("hev-download-", fileext = ".png")
+      on.exit(unlink(output_path, force = TRUE), add = TRUE)
+
+      failure <- tryCatch(api$write_download(output_path, "PNG"), error = identity)
+      testthat::expect_s3_class(failure, "shiny.silent.error")
+      testthat::expect_match(conditionMessage(failure), "The file could not be created or saved", fixed = TRUE)
+      testthat::expect_false(grepl("ggsave|Permission denied|C:/Users", conditionMessage(failure)))
+      testthat::expect_equal(nrow(history), 0L)
+      testthat::expect_false(file.exists(output_path))
+
+      testthat::expect_error(api$write_download(output_path, "PNG"), NA)
+      testthat::expect_true(file.exists(output_path))
+      testthat::expect_equal(nrow(history), 1L)
+      testthat::expect_identical(history$format, "PNG")
+      testthat::expect_identical(write_attempts, 2L)
+      testthat::expect_identical(plot_value$data$x, 1)
+    }
+  )
+})
+
 testthat::test_that("RAW-01 missing HEV dependency blocks safely and ends the request", {
   rlang::local_bindings(
     hev_dependency_check = function(...) list(

@@ -338,3 +338,55 @@ testthat::test_that("RAW-22 optional WQ and RHS imports reject failed results an
     testthat::expect_false(any(vapply(workflow_artifacts(), function(item) identical(item$status, "running"), logical(1))))
   })
 })
+
+testthat::test_that("RAW-21 RHS temporary-file failure retains current results and retries", {
+  rhs_calls <- 0L
+  rlang::local_bindings(
+    import_rhs_in_temp_directory = function(...) {
+      rhs_calls <<- rhs_calls + 1L
+      if (rhs_calls == 2L) {
+        abort_file_operation(safe_file_operation(function() {
+          stop("Permission denied at C:/Users/private/hetoolkit-rhs", call. = FALSE)
+        }))
+      }
+      data.frame(rhs_survey_id = "R1", HQA = 40 + rhs_calls)
+    },
+    .env = environment(raw_recovery_server)
+  )
+
+  shiny::testServer(raw_recovery_server, {
+    raw_recovery_set_inputs(
+      session,
+      meta_paste = "biol_site_id,rhs_survey_id\nB1,R1"
+    )
+    session$flushReact()
+
+    raw_recovery_set_inputs(session, import_rhs_site_ids = 1)
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
+    retained_data <- rhs_site_import_data()
+    retained_registry <- workflow_artifacts()
+
+    raw_recovery_set_inputs(session, import_rhs_site_ids = 2)
+    session$flushReact()
+    failure_message <- paste(rhs_site_import_result()$messages, collapse = " ")
+    testthat::expect_identical(rhs_site_import_result()$status, "error")
+    testthat::expect_match(failure_message, "The file could not be created or saved", fixed = TRUE)
+    testthat::expect_false(grepl("Permission denied|C:/Users|hetoolkit-rhs", failure_message))
+    testthat::expect_identical(rhs_site_import_data(), retained_data)
+    testthat::expect_identical(workflow_artifacts(), retained_registry)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
+    testthat::expect_false(any(vapply(
+      workflow_artifacts(),
+      function(item) identical(item$status, "running"),
+      logical(1)
+    )))
+
+    raw_recovery_set_inputs(session, import_rhs_site_ids = 3)
+    session$flushReact()
+    testthat::expect_identical(rhs_calls, 3L)
+    testthat::expect_identical(rhs_site_import_result()$status, "success")
+    testthat::expect_identical(rhs_site_import_data()$HQA, 43)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
+  })
+})

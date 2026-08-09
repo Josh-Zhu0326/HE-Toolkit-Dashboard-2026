@@ -515,19 +515,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | WQ/RHS CSV/PNG, exclusion log, HEV plot, table/download outputs. |
 | Blocking classification | Blocking for the download; non-blocking for the already completed analysis. |
 | Expected user-facing message | “The file could not be created. Please try again or check file permissions.” |
-| Implemented message | Only “No ... data are available to download” preconditions on selected WQ/RHS downloads; no write-failure catch. |
+| Implemented message | Preconditions remain specific to the source artifact. Writer/copy/export failures now use: “The file could not be created or saved. Check that the destination is available and writable, then try again.” |
 | Recovery action | Preserve the completed in-memory result; retry download, regenerate only if necessary, and contact support if persistent. |
 | Expected retained state | All inputs and completed artifacts remain; no re-upload/reprocessing solely because a file write failed. |
-| Implementation evidence | Unguarded handlers `server.R:741-747,967-985,1048-1056,1182-1196,1313-1316`; HEV module `global.R:879-890`. |
-| Automated test | None for write failure or retained state. |
-| Manual test | `TC-008`, `TC-010`, `TC-016`, `TC-022`, `TC-033` cover happy paths only. RC fault injection must force writer/permission failure, verify UI message and successful retry. |
-| Current execution result | Not Executed |
-| Release evidence | None. Existing downloaded/plot files do not prove failure recovery. |
+| Implementation evidence | Historical gap retained: unguarded handlers formerly at `server.R:741-747,967-985,1048-1056,1182-1196,1313-1316`; HEV module formerly at `global.R:879-890`. Completion evidence: `R/file_operation_helpers.R` provides the file-only result boundary; `server.R` applies it to demo metadata copy, mapped WQ/RHS CSV, WQ contract summary CSV, mapped WQ/RHS PNG, exclusion log CSV and processed Joined HE checkpoint; `global.R` applies it to HEV plot downloads and records HEV download history only after the file writer succeeds. |
+| Automated test | `tests/testthat/test-file-operation-recovery.R` covers success, writer failure, safe text, retained source state, no false success record and same-session retry. `tests/testthat/test-workflow-server.R` covers HEV writer failure, safe UI condition, retained plot, unchanged history, successful retry and one success record only. |
+| Manual test | `TC-008`, `TC-010`, `TC-016`, `TC-022`, `TC-033` retain happy-path coverage. Browser/manual fault injection must force writer failure and verify the controlled message, retained result and successful retry. |
+| Current execution result | Pass — targeted deterministic file-boundary, HEV download/history and workflow-server automation; browser recovery was not executed. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. Existing downloaded/plot files remain output examples, not recovery evidence. |
 | RC re-test required | Yes |
-| Gap | No safe write boundary, no error UI, no automation, no browser evidence. |
+| Gap | Automated implementation and write-failure/retention/retry coverage are complete; browser/manual evidence remains pending. |
 | Severity | Major |
-| Recommended action | Wrap every download writer in one sanitised error contract and test failure plus retry without recomputation. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Verify controlled download failure and retry for each listed output family during browser/manual verification. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-20
 
@@ -563,19 +563,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | Downloads, plot export, RHS temp import, any runtime file use. |
 | Blocking classification | Blocking for the file operation; non-blocking for retained completed analysis. |
 | Expected user-facing message | “The dashboard could not save a temporary file. Please check file permissions or try again.” |
-| Implemented message | None general. |
+| Implemented message | “The file could not be created or saved. Check that the destination is available and writable, then try again.” The wording does not claim a specific permission cause and does not expose paths or system details. |
 | Recovery action | Preserve current results; use an authorised writable runtime location/retry; do not require data re-upload unless the source itself is inaccessible. |
 | Expected retained state | Inputs, completed artifacts, plots/tables and navigation remain usable; failed file is not presented as downloaded. |
-| Implementation evidence | Unguarded writers listed under RAW-19; temp RHS helper `R/site_mapping_helpers.R:215-232` has cleanup but no user-facing permission contract. |
-| Automated test | None. |
-| Manual test | In an isolated RC sandbox, inject a non-writable target/temp directory without altering production data; verify friendly message, no leaked path, result retention, and retry. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
+| Implementation evidence | Historical gap retained: unguarded writers listed under RAW-19; the RHS temp helper formerly had cleanup but no user-facing permission contract. Completion evidence: `R/file_operation_helpers.R` catches filesystem failures with safe user text plus internal diagnostics; `R/site_mapping_helpers.R` uses it for RHS temp-directory creation, working-directory access, restoration and cleanup; `server.R` restores the retained workflow registry and RHS data after a temp-filesystem failure while allowing retry. All RAW-19 writers reuse the same contract. |
+| Automated test | `tests/testthat/test-file-operation-recovery.R` injects a path-bearing permission-style temp-directory failure, verifies redaction/current-directory retention/cleanup and retries successfully. `tests/testthat/test-donor-external-recovery.R` verifies a current RHS result and workflow registry survive a filesystem failure and a same-session retry succeeds. HEV coverage in `tests/testthat/test-workflow-server.R` verifies permission-style export failure does not create history. |
+| Manual test | In an isolated browser/manual sandbox, inject a non-writable target/temp directory without altering production data; verify friendly text, no leaked path, result retention and retry. |
+| Current execution result | Pass — targeted deterministic permission/filesystem, retained-state and retry automation; browser recovery was not executed. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser/manual verification pending. |
 | RC re-test required | Yes |
-| Gap | No permission handler, safe fault-injection test, or recovery evidence. |
+| Gap | Automated implementation and deterministic permission/filesystem retention/retry coverage are complete; browser/manual evidence remains pending. |
 | Severity | Major |
-| Recommended action | Centralise file operations with sanitised permission errors and deterministic isolated tests. |
-| Coverage states | Documented: Yes; Implemented: No; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Verify controlled permission/filesystem failure and retry across the listed runtime file paths during browser/manual verification. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-22
 

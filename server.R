@@ -292,6 +292,30 @@ function(input, output, session){
     invisible(NULL)
   }
 
+  record_file_operation_diagnostic <- function(context, result) {
+    detail <- result$diagnostic
+    if (is.null(detail) || !nzchar(detail)) {
+      detail <- result$failure
+    }
+    message(sprintf(
+      "RAW-19/21 file-operation diagnostic [%s/%s]: %s",
+      context,
+      result$failure,
+      detail
+    ))
+    invisible(NULL)
+  }
+
+  safe_server_file_operation <- function(context, operation) {
+    result <- safe_file_operation(operation)
+    if (!identical(result$status, "success")) {
+      record_file_operation_diagnostic(context, result)
+      showNotification(result$message, type = "error", duration = 10)
+      validate(need(FALSE, result$message))
+    }
+    result$value
+  }
+
   safe_server_plot <- function(context, operation) {
     result <- safe_plot_result(operation)
     if (!identical(result$status, "success")) {
@@ -1152,7 +1176,13 @@ function(input, output, session){
   output$download_demo_site_metadata <- downloadHandler(
     filename = function() "demo_site_metadata.csv",
     content = function(file) {
-      file.copy("demo_site_metadata.csv", file, overwrite = TRUE)
+      safe_server_file_operation("demo site metadata", function() {
+        copied <- file.copy("demo_site_metadata.csv", file, overwrite = TRUE)
+        if (!isTRUE(copied)) {
+          stop("The demo metadata copy did not complete.", call. = FALSE)
+        }
+        invisible(copied)
+      })
     },
     contentType = "text/csv"
   )
@@ -1371,11 +1401,19 @@ function(input, output, session){
       return()
     }
 
+    retained_registry <- isolate(workflow_artifacts())
     workflow_begin_artifact("rhs_input", "Complete the RHS import.")
     has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
+    rhs_file_failure <- NULL
     import_result <- safe_external_import(
       function() {
-        imported <- import_rhs_in_temp_directory(usable_rhs_ids)
+        imported <- tryCatch(
+          import_rhs_in_temp_directory(usable_rhs_ids),
+          dashboard_file_operation_error = function(error) {
+            rhs_file_failure <<- error
+            stop(error)
+          }
+        )
         if (has_biology_mapping) {
           map_rhs_records_to_biology(imported, site_metadata)
         } else {
@@ -1384,6 +1422,15 @@ function(input, output, session){
       },
       required_columns = "rhs_survey_id"
     )
+
+    if (!is.null(rhs_file_failure)) {
+      file_result <- file_operation_condition_result(rhs_file_failure)
+      record_file_operation_diagnostic("RHS temporary import", file_result)
+      workflow_artifacts(retained_registry)
+      rhs_site_import_result(list(status = "error", messages = file_result$message))
+      showNotification(file_result$message, type = "error", duration = 10)
+      return()
+    }
 
     if (!identical(import_result$status, "success")) {
       record_external_import_diagnostic("rhs", import_result)
@@ -1448,7 +1495,10 @@ function(input, output, session){
     content = function(file) {
       data <- mapped_wq_plot_data()
       validate(need(!is.null(data) && nrow(data) > 0, "No mapped WQ data are available to download."))
-      readr::write_csv(data, file)
+      safe_server_file_operation(
+        "mapped WQ CSV",
+        function() readr::write_csv(data, file)
+      )
     },
     contentType = "text/csv"
   )
@@ -1458,7 +1508,10 @@ function(input, output, session){
     content = function(file) {
       data <- mapped_rhs_plot_data()
       validate(need(!is.null(data) && nrow(data) > 0, "No mapped RHS data are available to download."))
-      readr::write_csv(data, file)
+      safe_server_file_operation(
+        "mapped RHS CSV",
+        function() readr::write_csv(data, file)
+      )
     },
     contentType = "text/csv"
   )
@@ -1529,7 +1582,10 @@ function(input, output, session){
     content = function(file) {
       data <- wq_contract_summary_result()$data
       validate(need(!is.null(data) && nrow(data) > 0, "No WQ contract summary is available to download."))
-      readr::write_csv(data, file)
+      safe_server_file_operation(
+        "WQ contract summary CSV",
+        function() readr::write_csv(data, file)
+      )
     },
     contentType = "text/csv"
   )
@@ -1661,7 +1717,11 @@ function(input, output, session){
   output$download_wq_plot <- downloadHandler(
     filename = function() "mapped_wq_plot.png",
     content = function(file) {
-      ggplot2::ggsave(file, plot = current_wq_plot(), width = 10, height = 5, dpi = 150)
+      plot <- current_wq_plot()
+      safe_server_file_operation(
+        "mapped WQ plot",
+        function() ggplot2::ggsave(file, plot = plot, width = 10, height = 5, dpi = 150)
+      )
     },
     contentType = "image/png"
   )
@@ -1669,7 +1729,11 @@ function(input, output, session){
   output$download_rhs_plot <- downloadHandler(
     filename = function() "mapped_rhs_plot.png",
     content = function(file) {
-      ggplot2::ggsave(file, plot = current_rhs_plot(), width = 10, height = 5, dpi = 150)
+      plot <- current_rhs_plot()
+      safe_server_file_operation(
+        "mapped RHS plot",
+        function() ggplot2::ggsave(file, plot = plot, width = 10, height = 5, dpi = 150)
+      )
     },
     contentType = "image/png"
   )
@@ -1836,7 +1900,13 @@ function(input, output, session){
 
   output$download_exclusion_log <- downloadHandler(
     filename = function() paste0("exclusion_log_", format(Sys.Date(), "%Y%m%d"), ".csv"),
-    content  = function(file) utils::write.csv(exclusion_log_data(), file, row.names = FALSE)
+    content = function(file) {
+      data <- exclusion_log_data()
+      safe_server_file_operation(
+        "exclusion log CSV",
+        function() utils::write.csv(data, file, row.names = FALSE)
+      )
+    }
   )
 
   output$local_flow_preview <- DT::renderDataTable({
@@ -2950,10 +3020,14 @@ function(input, output, session){
           source_manifest$dataset_checksum
         }
       )
-      write_processed_dataset_checkpoint(
-        dataset = isolate(join_data()),
-        path = file,
-        provenance = provenance
+      dataset <- isolate(join_data())
+      safe_server_file_operation(
+        "processed dataset checkpoint",
+        function() write_processed_dataset_checkpoint(
+          dataset = dataset,
+          path = file,
+          provenance = provenance
+        )
       )
     }
   )

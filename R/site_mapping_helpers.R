@@ -437,14 +437,58 @@ map_rhs_records_to_biology <- function(rhs_data, metadata) {
     dplyr::relocate(biol_site_id, .before = rhs_survey_id)
 }
 
-import_rhs_in_temp_directory <- function(surveys, importer = hetoolkit::import_rhs) {
-  import_dir <- tempfile("hetoolkit-rhs-")
-  dir.create(import_dir, recursive = TRUE)
-  on.exit(unlink(import_dir, recursive = TRUE, force = TRUE), add = TRUE)
+import_rhs_in_temp_directory <- function(
+    surveys,
+    importer = hetoolkit::import_rhs,
+    directory_factory = function() tempfile("hetoolkit-rhs-"),
+    create_directory = function(path) dir.create(path, recursive = TRUE),
+    set_working_directory = setwd,
+    remove_directory = function(path) unlink(path, recursive = TRUE, force = TRUE)) {
+  import_dir <- NULL
+  previous_dir <- NULL
+  setup_result <- safe_file_operation(function() {
+    import_dir <<- directory_factory()
+    created <- create_directory(import_dir)
+    if (!isTRUE(created) && !dir.exists(import_dir)) {
+      stop("The RHS runtime directory could not be created.", call. = FALSE)
+    }
+    previous_dir <<- getwd()
+    set_working_directory(import_dir)
+    invisible(import_dir)
+  })
 
-  previous_dir <- getwd()
-  setwd(import_dir)
-  on.exit(setwd(previous_dir), add = TRUE)
+  if (!identical(setup_result$status, "success")) {
+    if (!is.null(import_dir) && nzchar(import_dir)) {
+      cleanup_result <- safe_file_operation(function() {
+        remove_directory(import_dir)
+        if (dir.exists(import_dir)) {
+          stop("The RHS runtime directory could not be removed.", call. = FALSE)
+        }
+        invisible(TRUE)
+      })
+      if (!identical(cleanup_result$status, "success")) {
+        message("RAW-21 RHS temporary-file cleanup diagnostic: ", cleanup_result$diagnostic)
+      }
+    }
+    abort_file_operation(setup_result)
+  }
+
+  on.exit({
+    restore_result <- safe_file_operation(function() set_working_directory(previous_dir))
+    if (!identical(restore_result$status, "success")) {
+      message("RAW-21 RHS working-directory restore diagnostic: ", restore_result$diagnostic)
+    }
+    cleanup_result <- safe_file_operation(function() {
+      remove_directory(import_dir)
+      if (dir.exists(import_dir)) {
+        stop("The RHS runtime directory could not be removed.", call. = FALSE)
+      }
+      invisible(TRUE)
+    })
+    if (!identical(cleanup_result$status, "success")) {
+      message("RAW-21 RHS temporary-file cleanup diagnostic: ", cleanup_result$diagnostic)
+    }
+  }, add = TRUE)
 
   rhs_data <- importer(
     source = NULL,
