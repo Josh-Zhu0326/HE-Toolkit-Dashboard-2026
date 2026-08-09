@@ -534,24 +534,24 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Field | Required content |
 |---|---|
 | RAW ID | RAW-20 |
-| Error scenario | A required runtime-generated Flow CSV is absent. |
-| Trigger | A downstream step attempts to read an expected temporary/generated Flow file that was never created or was removed. |
-| Affected workflow/task | Flow import/processing and all Flow-dependent outputs. |
-| Blocking classification | Blocking |
+| Error scenario | Historical: a required runtime-generated Flow CSV is absent. |
+| Trigger | Historical: a downstream step attempts to read an expected temporary/generated Flow file that was never created or was removed. |
+| Affected workflow/task | Historical Flow import/processing and all Flow-dependent outputs. The current supported Flow path has no generated-file reopen step. |
+| Blocking classification | Superseded / N/A for the current supported Flow architecture. Equivalent current Flow import failures remain blocking for Flow-dependent outputs. |
 | Expected user-facing message | “The required temporary flow file could not be found. Please re-import the flow data.” |
-| Implemented message | No explicit generated-file handler found. Current application code does not directly reference `27034.csv`; the RAW scenario may be legacy, but it has not been formally retired. |
-| Recovery action | Re-import current Flow data, recalculate statistics, then regenerate join/HEV/model/download. |
-| Expected retained state | Mapping, Biology/Environment/O:E and user settings remain; Flow-derived outputs are stale/blocked. |
-| Implementation evidence | No matching runtime handler/reference. General Flow source revision reset at `server.R:250-275` is not a missing-file recovery. |
-| Automated test | None. |
-| Manual test | RC/contract review first confirms whether generated files still exist. If applicable, remove only an isolated temp file, trigger read, verify message/state, re-import and regenerate. If obsolete, record justified N/A and retire the RAW definition formally. |
-| Current execution result | Not Executed |
-| Release evidence | None. |
+| Implemented message | No dedicated generated-Flow-file message is required because the current dashboard never creates and reopens per-site Flow CSVs. Current Flow import failures use “Flow data could not be retrieved or processed. Check the selected sites, source and date range, then try again.” Current RHS temporary-filesystem failures use the existing sanitised file-operation message. |
+| Recovery action | Retry the current HDE/NRFA Flow import in the same session; a failed import is not current and Flow-dependent outputs remain invalidated. For the current RHS temporary-file path, correct the transient filesystem/service condition and retry; cleanup and working-directory restoration run on exit. |
+| Expected retained state | Mapping, Biology/Environment/O:E, optional unrelated inputs and user settings remain. Failed current Flow results are not marked current. A classified RHS temporary-filesystem failure retains the previous RHS data and workflow registry; a general failed RHS replacement is not treated as current. |
+| Implementation evidence | **Superseded by current implementation / no additional code required.** `normalise_site_metadata_flow_input()` accepts only `HDE` and `NRFA`; `import_dashboard_flow()` calls `hetoolkit::import_flow()` and returns its data frame directly; `server.R` keeps that result in `external_flow_data()`/`flow_data()` and never writes or reopens a site CSV. Current installed `hetoolkit` HDE/NRFA import functions contain no file operations; its separate `FLOWFILES` reader is not reachable through the supported dashboard contract. Repository history, including the initial dashboard implementation, likewise calls `import_flow()` directly and contains no `27034.csv`/generated-Flow-CSV reopen path. The closest current supporting-file path is RHS: `import_rhs_in_temp_directory()` creates a unique temporary directory under `safe_file_operation()`, restores the previous working directory and removes the directory through `on.exit()`; `server.R` sanitises both classified filesystem failures and importer failures, preserves unrelated state, rejects failed replacement data and permits retry. Missing Shiny upload temp paths are independently guarded by `read_site_metadata_csv()`/`read_dashboard_csv()` and are not a remaining RAW-20 gap. |
+| Automated test | `tests/testthat/test-file-operation-recovery.R` covers sanitised RHS setup failure, working-directory restoration, cleanup and retry. `tests/testthat/test-donor-external-recovery.R` covers RHS file/import failure, retained or invalidated state as appropriate, redaction and same-session retry, and covers current in-memory Flow import failure/retry. `tests/testthat/test-workflow-server.R` and `tests/test_site_mapping.R` retain workflow and supported HDE/NRFA mapping coverage. |
+| Manual test | The historical generated-Flow-file deletion scenario is N/A. Browser/manual verification remains pending for current Flow failure/retry and RHS temporary-file recovery, including retained unrelated state and no raw path/error disclosure. |
+| Current execution result | Automated Pass on `qa/raw-user-facing-recovery`; browser/manual verification pending. |
+| Release evidence | Current-code/history trace and automated recovery tests support superseded disposition; no final RC browser evidence yet. |
 | RC re-test required | Yes |
-| Gap | Applicability unclear; no formal retirement, implementation, test, or evidence. |
+| Gap | No current production-code gap for RAW-20. Browser/manual verification of the replacement recovery paths remains pending. |
 | Severity | Major |
-| Recommended action | Decide whether RAW-20 is live; implement/test it or record an approved scope retirement with replacement architecture evidence. |
-| Coverage states | Documented: Yes; Implemented: No / applicability unclear; Automated test exists: No; Executed current main: No; Final RC evidence: No. |
+| Recommended action | Retain RAW-20 as a formally superseded historical case; verify the current Flow and RHS recovery paths during final browser/manual testing. |
+| Coverage states | Documented: Yes; Disposition: Superseded / N/A; Additional implementation required: No; Replacement-path automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-21
 
