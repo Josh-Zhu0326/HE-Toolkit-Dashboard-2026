@@ -177,16 +177,17 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Implemented message | Examples: “Local flow CSV appears to be empty”; “Your WQ file appears to be empty. Please upload a CSV file with at least one data row.” |
 | Recovery action | Select a non-empty valid CSV and retry; optional-source failure must not block the Biology+Flow core path. |
 | Expected retained state | Unrelated valid artifacts and mapping remain. An invalid replacement must not leave the old local source silently operational; browser file input may require re-selection, but no unrelated re-upload. |
-| Implementation evidence | `R/dashboard_backlog_helpers.R:1-19`; `server.R:448-478,481-490,526-535,1198-1227`; replacement invalidation at `server.R:1254-1256`. |
+| Implementation evidence | `read_dashboard_csv()` and the metadata reader reject empty content with controlled messages. Replacement observers reset the affected Biology, Flow, WQ, RHS, or site-mapping artifact before validation; only a valid retry completes it again. |
 | Automated test | Near-scenario: `tests/testthat/test-site-metadata-helpers.R:31`, “header-only site metadata CSV is reported as empty”; replacement-state test `tests/testthat/test-server-local-flow-source.R:162`, “replacing valid Local Flow with an invalid file removes the previous local source”. |
 | Manual test | `TC-029`; historical `ST-07E`/`ST-07F`. RC must repeat zero-byte and header-only for every upload type, then valid replacement without restart. |
+| Phase 2B automated test | `tests/testthat/test-site-metadata-helpers.R` covers header-only metadata. `tests/testthat/test-server-local-flow-source.R` covers valid-to-invalid-to-valid replacement recovery for metadata, Local Flow, Local Biology, WQ, and RHS while checking retained unrelated state. |
 | Current execution result | Pass — linked automated slices passed; multi-source browser recovery was not executed. |
-| Release evidence | Current command record in Section 5; old `ST-07E`/`ST-07F` text is historical and not RC evidence. |
+| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. Historical `ST-07E`/`ST-07F` remains supporting evidence only. |
 | RC re-test required | Yes |
-| Gap | No complete per-source recovery matrix, screenshots, file-input retention evidence, or final RC run. |
+| Gap | The previous stale-current replacement gap is closed in automated coverage. Per-control browser screenshots, file-input behaviour, and final RC evidence remain pending. |
 | Severity | Major |
-| Recommended action | Parameterise empty-file automation for all upload controls and execute invalid-to-valid browser recovery on RC. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (near-scenario); Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Execute invalid-to-valid browser recovery for each upload control on the selected RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-06
 
@@ -201,16 +202,17 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Implemented message | “... CSV could not be read. Please upload a valid CSV file.” / “Your WQ/RHS file could not be read as CSV. Please check that it is a valid comma-separated file.” |
 | Recovery action | Correct/re-export the CSV and replace it; remain in the current session. |
 | Expected retained state | Unrelated artifacts remain; failed replacement is not operational; no stale old source is used downstream. |
-| Implementation evidence | Safe reads at `R/dashboard_backlog_helpers.R:1-19`, `R/site_mapping_helpers.R:54-69`, `server.R:448-478`; upload rendering at `server.R:586-605,686-719,1198-1227`. |
+| Implementation evidence | `read_character_csv()` converts parser errors and structural parser warnings into a controlled invalid result. Both metadata routes and all local upload readers use this boundary; parser text, paths, and implementation details do not enter UI messages. |
 | Automated test | `tests/testthat/test-site-metadata-helpers.R:48`, “existing non-CSV input is reported as unreadable”; replacement test at `tests/testthat/test-server-local-flow-source.R:162`. |
 | Manual test | Historical `ST-07E` and recovery `ST-07F`; RC: malformed delimiter/quotes/inconsistent rows for each upload, followed by valid replacement. |
+| Phase 2B automated test | `tests/testthat/test-site-metadata-helpers.R` compares malformed uploaded and pasted metadata. `tests/testthat/test-server-local-flow-source.R` covers malformed Local Flow and WQ replacement, old-current invalidation, controlled text, and same-session retry. |
 | Current execution result | Pass — linked parser/replacement slices passed; full browser matrix was not executed. |
-| Release evidence | Section 5 current command record; July `ST-07E/F` is historical only. |
+| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. July `ST-07E/F` remains historical only. |
 | RC re-test required | Yes |
-| Gap | No exact all-control automation; no retained-state, loading, or final RC screenshots. |
+| Gap | The previous raw-parser/stale-current gap is closed for the Phase 2B upload paths. Browser loading-state and final RC screenshots remain pending. |
 | Severity | Major |
-| Recommended action | Add shared upload-contract tests and RC browser recovery evidence for every file control. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Execute malformed-to-valid browser recovery for every Phase 2B upload control on the selected RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-07
 
@@ -220,21 +222,22 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Error scenario | Required columns are missing after upload. |
 | Trigger | Upload a readable CSV that omits columns required by that source contract. |
 | Affected workflow/task | Stage 1 validation for mapping, Local Biology/Flow, WQ/RHS. |
-| Blocking classification | Blocking for required-source schema errors; WQ/RHS warning/error classification is path-specific and partly unclear. |
+| Blocking classification | Missing/invalid core `biol_site_id` or `flow_site_id` blocks site mapping. Missing WQ/RHS input is informational and non-blocking. A supplied WQ/RHS file without its usable identifier is invalid only for that optional feature. |
 | Expected user-facing message | “The uploaded file is missing required columns. Please check the file format and upload again.” |
 | Implemented message | Source-specific lists, e.g. “Local flow CSV is missing required column(s): ...”; WQ missing site ID is a warning, while RHS missing `rhs_survey_id` is also currently a warning. |
 | Recovery action | Add/rename required columns and re-upload; optional-source warning must not block core work. |
 | Expected retained state | Existing unrelated artifacts remain; invalid required source is blocked; old/stale source cannot continue into Flow stats/join/model/download. |
-| Implementation evidence | `R/dashboard_backlog_helpers.R:22-100,102-158`; WQ/RHS validators `server.R:481-570`; flow invalidation `server.R:1254-1280`. |
+| Implementation evidence | `validate_supporting_mapping()` freezes core required versus optional mapping severity. Local Biology/Flow validators remain blocking when their supplied file is invalid. WQ/RHS observers reset only their optional artifacts; their absence remains informational. |
 | Automated test | `tests/testthat/test-local-flow-contract.R:38`, “missing required Local Flow columns are rejected”; `tests/testthat/test-dashboard-backlog-helpers.R:4`; standalone `tests/test_backlog_helpers.R:11-18`; WQ contract missing-column checks in `tests/test_wq_contract_helpers.R:94-97`. |
 | Manual test | `TC-003`, `TC-013`; historical `ST-07C`; repeat every upload contract on RC. |
+| Phase 2B automated test | `tests/testthat/test-dashboard-backlog-helpers.R` covers required core and optional-absence severity. `tests/testthat/test-server-local-flow-source.R` covers optional missing, valid, supplied-invalid, retained core join, and valid retry. |
 | Current execution result | Pass — linked schema tests passed. |
-| Release evidence | Section 5 current command record; historical `ST-07C` is not current/RC. |
+| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. Historical `ST-07C` is not current/RC evidence. |
 | RC re-test required | Yes |
-| Gap | No single classification contract across sources; RHS required-column warning may incorrectly allow progress; browser recovery and stale-output blocking unproved. |
+| Gap | The previous classification inconsistency and RHS/WQ supplied-invalid warning gap are closed. Browser recovery and final RC evidence remain pending. |
 | Severity | Major |
-| Recommended action | Freeze required-vs-optional schema severity, test every source, and verify stale downstream actions are disabled. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Verify required/optional message severity and disabled stale actions in the RC browser pass. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-08
 
@@ -244,21 +247,22 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Error scenario | Metadata lacks `biol_site_id`. |
 | Trigger | Parse/upload mapping used by Biology-related work without `biol_site_id`. |
 | Affected workflow/task | Stage 1 site mapping; Biology import, O:E, join. |
-| Blocking classification | Blocking when the selected Task requires Biology; potentially non-blocking for a source-only mapping, so Task-aware classification is not fully explicit. |
+| Blocking classification | Blocking for the core site-mapping artifact; optional WQ/RHS file absence remains non-blocking. |
 | Expected user-facing message | “The metadata file is missing the required column biol_site_id.” |
 | Implemented message | “Mapping CSV is missing required column(s): biol_site_id.” |
 | Recovery action | Add `biol_site_id`, re-upload/revalidate, then resume the earliest blocked Stage. |
 | Expected retained state | Entered mapping and unrelated valid artifacts remain; Biology-dependent outputs are blocked/stale, not silently reused. |
-| Implementation evidence | `validate_supporting_mapping()` at `R/dashboard_backlog_helpers.R:22-86`; upload feedback at `server.R:686-719`; Task resume at `R/workflow_state.R:234-287`. |
+| Implementation evidence | Uploaded and pasted metadata both pass through `prepare_site_metadata_result()` and `validate_supporting_mapping()`. A replacement first clears `current_site_metadata`; invalid data blocks `site_mapping`, while a valid retry installs and completes the new mapping. |
 | Automated test | `tests/testthat/test-dashboard-backlog-helpers.R:4`, “mapping validation reports a missing biol_site_id column”; resume/stale state tests in `tests/testthat/test-workflow-state.R:116-145` are cross-cutting, not the upload trigger. |
 | Manual test | `TC-003`; upload missing `biol_site_id`, confirm error, correct file, resume, and verify prior unrelated artifacts. |
+| Phase 2B automated test | `tests/testthat/test-dashboard-backlog-helpers.R` covers missing `biol_site_id`. `tests/testthat/test-server-local-flow-source.R` covers upload and paste replacement invalidation, equivalent outcomes, retained unrelated artifacts, and same-session retry. |
 | Current execution result | Pass — direct validation test passed; browser recovery was not executed. |
-| Release evidence | Section 5 current test record only. |
+| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | No current end-to-end retry, Task-aware severity, retained-state, or stale-use proof. |
+| Gap | The previous upload/paste inconsistency and stale-current gap are closed in server automation. Browser retained-state evidence remains pending. |
 | Severity | Major |
-| Recommended action | Add Shiny-server invalid-to-valid mapping test plus RC browser evidence of resume and state retention. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Capture RC browser evidence of upload/paste correction, resume, and state retention. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-09
 
@@ -273,16 +277,17 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Implemented message | Mapping: “Mapping CSV is missing required column(s): flow_site_id.” Local Flow: “Local flow CSV is missing required column(s): flow_site_id.” |
 | Recovery action | Add/rename `flow_site_id`, upload again, validate Flow, then recalculate affected downstream outputs. |
 | Expected retained state | Biology and unrelated inputs/results remain; Flow-derived statistics, join, HEV/model/download become blocked/stale until regeneration. |
-| Implementation evidence | `R/dashboard_backlog_helpers.R:22-86,102-158`; source revision reset `server.R:250-275,1254-1280`; stale propagation `R/workflow_state.R:179-204`. |
+| Implementation evidence | Core mapping validation requires non-blank `flow_site_id`; Local Flow applies the same value rule. Mapping replacement clears the active mapping and invalidates Flow-derived revisions. External Flow import additionally requires a current validated `site_mapping`. Missing/blank `flow_input` still defaults to HDE. |
 | Automated test | Near-scenario: `tests/testthat/test-local-flow-contract.R:38-55`, including missing/blank `flow_site_id`; stale replacement tests `tests/testthat/test-server-local-flow-source.R:162-260`. No exact metadata-file RAW trigger test. |
 | Manual test | `TC-003`, `TC-013`; validate mapping and Local Flow variants, recover, then prove old Flow stats/join/download cannot be reused. |
+| Phase 2B automated test | `tests/testthat/test-local-flow-contract.R` covers missing/blank Local Flow `flow_site_id`. `tests/testthat/test-server-local-flow-source.R` covers exact uploaded/pasted mapping replacement, Flow/downstream invalidation, corrected retry, import blocking, and RAW-10 HDE default/provenance. |
 | Current execution result | Pass — Local Flow and stale-state slices passed; exact mapping/browser path was not executed. |
-| Release evidence | Section 5 current test record only. |
+| Release evidence | Previously identified gap - resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. |
 | RC re-test required | Yes |
-| Gap | Exact metadata scenario and UI recovery are not automated; download-currentness remains unproved. |
+| Gap | The exact metadata invalid-replacement gap is closed in server automation. Browser and download-currentness evidence remain pending. |
 | Severity | Major |
-| Recommended action | Add exact mapping trigger plus stale join/HEV/model/download browser assertions. |
-| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes (near-scenario); Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Run stale Flow/join/HEV/model/download browser assertions on the selected RC. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-10
 

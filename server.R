@@ -590,28 +590,12 @@ function(input, output, session){
       ))
     }
 
-    if (is.null(upload$datapath) || !file.exists(upload$datapath)) {
-      return(list(
-        data = NULL,
-        status = "error",
-        messages = paste0("Your ", label, " file could not be found after upload. Please try uploading it again.")
-      ))
+    result <- read_dashboard_csv(upload$datapath, paste0("Your ", label, " file"))
+    if (!identical(result$status, "success")) {
+      return(result)
     }
 
-    data <- tryCatch(
-      data.table::fread(upload$datapath, data.table = FALSE, encoding = "UTF-8"),
-      error = function(e) e
-    )
-
-    if (inherits(data, "error")) {
-      return(list(
-        data = NULL,
-        status = "error",
-        messages = paste0("Your ", label, " file could not be read as CSV. Please check that it is a valid comma-separated file.")
-      ))
-    }
-
-    list(data = data, status = "ok", messages = character(0))
+    list(data = result$data, status = "ok", messages = character(0))
   }
 
   validate_wq_upload <- function(df) {
@@ -632,11 +616,13 @@ function(input, output, session){
 
     site_cols <- c("biol_site_id", "wq_site_id", "site_id", "monitoring_site_id")
     if (!any(site_cols %in% names_lower)) {
-      status <- "warning"
-      messages <- c(
-        messages,
-        "Your WQ file is missing a site identifier column. Please include one of: biol_site_id, wq_site_id, site_id, monitoring_site_id."
-      )
+      return(list(
+        status = "error",
+        messages = paste(
+          "Your WQ file is missing a site identifier column.",
+          "Add one of biol_site_id, wq_site_id, site_id, or monitoring_site_id, then upload the file again."
+        )
+      ))
     }
 
     date_like <- stringr::str_detect(names_lower, "date|time|sample")
@@ -677,11 +663,13 @@ function(input, output, session){
 
     id_cols <- "rhs_survey_id"
     if (!any(id_cols %in% names_lower)) {
-      status <- "warning"
-      messages <- c(
-        messages,
-        "Your RHS file is missing the required rhs_survey_id column."
-      )
+      return(list(
+        status = "error",
+        messages = paste(
+          "Your RHS file is missing the required rhs_survey_id column.",
+          "Add rhs_survey_id, then upload the file again."
+        )
+      ))
     }
 
     rhs_metric_like <- stringr::str_detect(
@@ -947,55 +935,115 @@ function(input, output, session){
   ))
   site_metadata_upload_text <- reactiveVal(NULL)
   site_metadata_upload_flow_provenance <- reactiveVal(NULL)
+  current_site_metadata <- reactiveVal(NULL)
+  metadata_result <- reactiveVal(list(
+    data = NULL,
+    flow_input_provenance = NULL,
+    validation = list(
+      status = "error",
+      messages = "Please add site metadata, then validate the mapping again."
+    )
+  ))
+
+  prepare_site_metadata_result <- function(parsed) {
+    if (!is.null(parsed$error)) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = list(status = "error", messages = parsed$error)
+      ))
+    }
+
+    validation <- validate_supporting_mapping(parsed$data)
+    if (identical(validation$status, "error")) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = validation
+      ))
+    }
+
+    normalised <- tryCatch(
+      normalise_site_metadata_flow_input(parsed$data),
+      error = function(error) NULL
+    )
+    if (is.null(normalised)) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = list(
+          status = "error",
+          messages = "Site metadata could not be validated. Please correct the mapping columns and try again."
+        )
+      ))
+    }
+
+    dashboard_validation <- validate_dashboard_site_metadata(normalised)
+    if (!is.null(dashboard_validation)) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = list(status = "error", messages = dashboard_validation)
+      ))
+    }
+
+    list(
+      data = normalised,
+      flow_input_provenance = site_metadata_flow_input_provenance(normalised),
+      validation = list(
+        status = validation$status,
+        messages = c(validation$messages, parsed$warnings)
+      )
+    )
+  }
+
+  apply_site_metadata_result <- function(result, data_source) {
+    metadata_result(result)
+    if (identical(result$validation$status, "error")) {
+      current_site_metadata(NULL)
+      workflow_set_artifact(
+        "site_mapping",
+        "blocked",
+        blocking_reason = paste(result$validation$messages, collapse = " "),
+        next_action = "Correct the required site metadata and validate the mapping again.",
+        invalidate_downstream = TRUE
+      )
+      return(invisible(FALSE))
+    }
+
+    current_site_metadata(result$data)
+    workflow_set_artifact(
+      "site_mapping",
+      if (identical(result$validation$status, "warning")) "warning" else "complete",
+      data_source = data_source,
+      history_summary = sprintf("Validated %d site-mapping row(s).", nrow(result$data)),
+      invalidate_downstream = TRUE
+    )
+    invisible(TRUE)
+  }
 
   observeEvent(input$site_metadata_csv, {
     site_metadata_upload_text(NULL)
     site_metadata_upload_flow_provenance(NULL)
     parsed <- read_site_metadata_csv(input$site_metadata_csv$datapath)
-    if (!is.null(parsed$error)) {
-      site_metadata_upload_result(list(status = "error", messages = parsed$error))
-      showNotification(parsed$error, type = "error")
+    result <- prepare_site_metadata_result(parsed)
+    if (!isTRUE(apply_site_metadata_result(result, "Uploaded site metadata CSV"))) {
+      site_metadata_upload_result(result$validation)
+      showNotification(paste(result$validation$messages, collapse = " "), type = "error")
       return()
     }
 
-    parsed$data <- tryCatch(
-      normalise_site_metadata_flow_input(parsed$data),
-      error = function(e) e
-    )
-    if (inherits(parsed$data, "error")) {
-      message <- conditionMessage(parsed$data)
-      site_metadata_upload_result(list(status = "error", messages = message))
-      showNotification(message, type = "error")
-      return()
-    }
-    
- 
-    supporting_validation <- validate_supporting_mapping(parsed$data)
-    if (identical(supporting_validation$status, "error")) {
-      site_metadata_upload_result(supporting_validation)
-      showNotification(paste(supporting_validation$messages, collapse = " "), type = "error")
-      return()
-    }
-
-    validation_error <- validate_dashboard_site_metadata(parsed$data)
-    if (!is.null(validation_error)) {
-      site_metadata_upload_result(list(status = "error", messages = validation_error))
-      showNotification(validation_error, type = "error")
-      return()
-    }
-
-    normalised_text <- readr::format_csv(parsed$data)
+    normalised_text <- readr::format_csv(result$data)
     site_metadata_upload_text(normalised_text)
-    site_metadata_upload_flow_provenance(site_metadata_flow_input_provenance(parsed$data))
+    site_metadata_upload_flow_provenance(result$flow_input_provenance)
     updateTextAreaInput(session, "meta_paste", value = normalised_text)
     messages <- c(
-      paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
-      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
+      paste0("Site metadata CSV imported successfully: ", nrow(result$data), " row(s) loaded."),
+      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(result$data)), collapse = ", "), "."),
       "The compatible dataset import buttons below now use these site IDs.",
-      supporting_validation$messages,
-      parsed$warnings
+      result$validation$messages
     )
-    site_metadata_upload_result(list(status = supporting_validation$status, messages = messages[nzchar(messages)]))
+    site_metadata_upload_result(list(status = result$validation$status, messages = messages[nzchar(messages)]))
     showNotification("Site metadata CSV imported successfully.", type = "message")
   })
 
@@ -1034,41 +1082,44 @@ function(input, output, session){
     contentType = "text/csv"
   )
 
-  metadata_result <- reactive({
+  observeEvent(input$meta_paste, {
     parsed <- parse_site_metadata(input$meta_paste)
-    validate(need(is.null(parsed$error), parsed$error))
-    normalised <- tryCatch(
-      normalise_site_metadata_flow_input(parsed$data),
-      error = function(e) e
-    )
-    validate(need(!inherits(normalised, "error"), if (inherits(normalised, "error")) conditionMessage(normalised) else ""))
-    validation_error <- validate_dashboard_site_metadata(normalised)
-    validate(need(is.null(validation_error), validation_error))
-    provenance <- site_metadata_flow_input_provenance(normalised)
-    if (identical(input$meta_paste, site_metadata_upload_text()) &&
-        !is.null(site_metadata_upload_flow_provenance())) {
-      provenance <- site_metadata_upload_flow_provenance()
-      attr(normalised, "flow_input_provenance") <- provenance
+    result <- prepare_site_metadata_result(parsed)
+    from_upload <- identical(input$meta_paste, site_metadata_upload_text()) &&
+      !is.null(site_metadata_upload_flow_provenance())
+    if (from_upload && !identical(result$validation$status, "error")) {
+      result$flow_input_provenance <- site_metadata_upload_flow_provenance()
+      attr(result$data, "flow_input_provenance") <- result$flow_input_provenance
     }
-    list(data = normalised, flow_input_provenance = provenance)
-  })
+
+    apply_site_metadata_result(
+      result,
+      if (from_upload) "Uploaded site metadata CSV" else "Pasted site metadata"
+    )
+    if (!from_upload) {
+      site_metadata_upload_result(result$validation)
+      if (identical(result$validation$status, "error")) {
+        showNotification(paste(result$validation$messages, collapse = " "), type = "error")
+      }
+    }
+  }, ignoreInit = FALSE, priority = 100)
 
   metadata <- reactive({
-    metadata_result()$data
-  })
-
-  observeEvent(metadata(), {
-    site_metadata <- metadata()
-    req(nrow(site_metadata) > 0L)
-    workflow_complete_artifact(
-      "site_mapping",
-      "Validated site metadata",
-      sprintf("Validated %d site-mapping row(s).", nrow(site_metadata))
-    )
+    result <- metadata_result()
+    validate(need(
+      !identical(result$validation$status, "error") && !is.null(current_site_metadata()),
+      paste(result$validation$messages, collapse = " ")
+    ))
+    current_site_metadata()
   })
 
   metadata_flow_input_provenance <- reactive({
-    metadata_result()$flow_input_provenance
+    result <- metadata_result()
+    validate(need(
+      !identical(result$validation$status, "error") && !is.null(result$flow_input_provenance),
+      paste(result$validation$messages, collapse = " ")
+    ))
+    result$flow_input_provenance
   })
 
   wq_site_import_result <- reactiveVal(list(
@@ -1543,14 +1594,49 @@ function(input, output, session){
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
-  observeEvent(input$meta_paste, {
+  observeEvent(input$local_inv_csv, {
+    workflow_reset_artifact(
+      "biology_input",
+      "The Local Biology source changed.",
+      "Validate the current Local Biology file."
+    )
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$site_metadata_csv, {
+    current_site_metadata(NULL)
+    metadata_result(list(
+      data = NULL,
+      flow_input_provenance = NULL,
+      validation = list(
+        status = "error",
+        messages = "The site metadata replacement is being validated."
+      )
+    ))
     workflow_reset_artifact(
       "site_mapping",
-      "Site metadata changed.",
-      "Validate the current site mapping."
+      "The site metadata CSV changed.",
+      "Complete validation of the replacement site metadata CSV."
     )
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$meta_paste, {
+    current_site_metadata(NULL)
+    metadata_result(list(
+      data = NULL,
+      flow_input_provenance = NULL,
+      validation = list(
+        status = "error",
+        messages = "The pasted site metadata replacement is being validated."
+      )
+    ))
+    workflow_reset_artifact(
+      "site_mapping",
+      "The pasted site metadata changed.",
+      "Complete validation of the pasted site metadata."
+    )
+    invalidate_flow_derived_state(reset_external = TRUE)
+  }, ignoreNULL = FALSE, ignoreInit = TRUE, priority = 200)
 
   observeEvent(input$date_range_flow, {
     if (!local_flow_is_operational(local_flow_upload())) {
@@ -1561,6 +1647,15 @@ function(input, output, session){
   observeEvent(input$import_flow, {
     if (!local_flow_is_operational(local_flow_upload())) {
       invalidate_flow_derived_state(reset_external = TRUE)
+      if (!workflow_artifact_is_current("site_mapping")) {
+        external_import_requested_revision(NULL)
+        workflow_block_artifact(
+          "flow_input",
+          "Current site metadata with valid flow_site_id values are required before importing Flow data.",
+          "Correct and validate the site metadata, then import Flow data again."
+        )
+        return()
+      }
       external_import_requested_revision(isolate(flow_source_revision()))
     } else {
       external_import_requested_revision(NULL)

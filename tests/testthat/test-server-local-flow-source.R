@@ -212,14 +212,12 @@ testthat::test_that("invalid pasted flow_input is blocked before the external im
     )
     session$flushReact()
 
-    error_message <- tryCatch(
-      {
-        flow_data()
-        NULL
-      },
-      error = function(e) conditionMessage(e)
-    )
-    testthat::expect_match(error_message, "Invalid flow_input value(s): LOCAL.", fixed = TRUE)
+    error_message <- paste(metadata_result()$validation$messages, collapse = " ")
+    testthat::expect_match(error_message, "invalid flow_input value", fixed = TRUE)
+    testthat::expect_false(grepl("conditionMessage", error_message, fixed = TRUE))
+    testthat::expect_identical(workflow_artifacts()$site_mapping$status, "blocked")
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_error(flow_data(), class = "shiny.silent.error")
     testthat::expect_identical(importer_calls, 0L)
   })
 })
@@ -361,5 +359,280 @@ testthat::test_that("external Flow remains available when no valid Local Flow ex
     testthat::expect_identical(provenance$flow_input_value, c("HDE", "NRFA"))
     testthat::expect_identical(provenance$flow_input_source, c("defaulted", "explicit"))
     testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
+  })
+})
+
+testthat::test_that("RAW-05 to RAW-09 metadata upload and paste replacements invalidate and recover", {
+  valid_upload <- tempfile("valid-mapping-", fileext = ".csv")
+  invalid_upload <- tempfile("invalid-mapping-", fileext = ".csv")
+  corrected_upload <- tempfile("corrected-mapping-", fileext = ".csv")
+  on.exit(unlink(c(valid_upload, invalid_upload, corrected_upload), force = TRUE), add = TRUE)
+  writeLines(
+    c(
+      "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id",
+      "B1,F1,W1,R1"
+    ),
+    valid_upload,
+    useBytes = TRUE
+  )
+  writeLines(
+    c(
+      "biol_site_id,wq_site_id,rhs_survey_id",
+      "B2,W2,R2"
+    ),
+    invalid_upload,
+    useBytes = TRUE
+  )
+  writeLines(
+    c(
+      "biol_site_id,flow_site_id",
+      "B2,F2"
+    ),
+    corrected_upload,
+    useBytes = TRUE
+  )
+
+  shiny::testServer(dashboard_server, {
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      site_metadata_csv = flow_upload_input(valid_upload)
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$site_mapping))
+    testthat::expect_identical(metadata()$biol_site_id, "B1")
+    workflow_complete_artifact("biology_input", "test", "Unrelated Biology fixture.")
+    workflow_complete_artifact("environment_input", "test", "Unrelated Environment fixture.")
+    workflow_complete_artifact("wq_input", "test", "Unrelated optional WQ fixture.")
+    workflow_complete_artifact("flow_input", "test", "Flow fixture.")
+    workflow_complete_artifact("processed_flow", "test", "Processed Flow fixture.")
+    workflow_complete_artifact("flow_statistics", "test", "Flow statistics fixture.")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      site_metadata_csv = flow_upload_input(invalid_upload)
+    )
+    session$flushReact()
+
+    upload_message <- paste(site_metadata_upload_result()$messages, collapse = " ")
+    testthat::expect_identical(workflow_artifacts()$site_mapping$status, "blocked")
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$wq_input))
+    testthat::expect_error(metadata(), class = "shiny.silent.error")
+    testthat::expect_match(upload_message, "flow_site_id", fixed = TRUE)
+    testthat::expect_match(upload_message, "validate again", fixed = TRUE)
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      site_metadata_csv = flow_upload_input(corrected_upload)
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$site_mapping))
+    testthat::expect_identical(metadata()$biol_site_id, "B2")
+    testthat::expect_identical(metadata()$flow_site_id, "F2")
+    testthat::expect_identical(metadata()$flow_input, "HDE")
+    testthat::expect_identical(site_metadata_upload_result()$status, "info")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = paste(
+        "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id",
+        "B3,F3,W3,R3",
+        sep = "\n"
+      )
+    )
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$site_mapping))
+    testthat::expect_identical(metadata()$biol_site_id, "B3")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = paste(
+        "biol_site_id,wq_site_id,rhs_survey_id",
+        "B4,W4,R4",
+        sep = "\n"
+      )
+    )
+    session$flushReact()
+
+    paste_message <- paste(metadata_result()$validation$messages, collapse = " ")
+    testthat::expect_identical(workflow_artifacts()$site_mapping$status, "blocked")
+    testthat::expect_error(metadata(), class = "shiny.silent.error")
+    testthat::expect_identical(paste_message, upload_message)
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = paste(
+        "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id",
+        "B4,F4,W4,R4",
+        sep = "\n"
+      )
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$site_mapping))
+    testthat::expect_identical(metadata()$flow_site_id, "F4")
+  })
+})
+
+testthat::test_that("RAW-05 and RAW-06 malformed Local Flow replacement is controlled and retryable", {
+  malformed_path <- tempfile("malformed-local-flow-", fileext = ".csv")
+  on.exit(unlink(malformed_path, force = TRUE), add = TRUE)
+  writeLines(
+    c("flow_site_id,date,flow", '"F1,2024-01-01,12.4'),
+    malformed_path,
+    useBytes = TRUE
+  )
+
+  shiny::testServer(dashboard_server, {
+    valid_path <- testthat::test_path("..", "fixtures", "local_flow.csv")
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = "biol_site_id,flow_site_id\n291,27090",
+      local_flow_csv = flow_upload_input(valid_path)
+    )
+    session$flushReact()
+    workflow_complete_artifact("biology_input", "test", "Unrelated Biology fixture.")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      local_flow_csv = flow_upload_input(malformed_path)
+    )
+    session$flushReact()
+
+    message <- paste(local_flow_upload()$validation$messages, collapse = " ")
+    testthat::expect_identical(local_flow_upload()$validation$status, "error")
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_match(message, "could not be read or validated", fixed = TRUE)
+    testthat::expect_match(message, "upload it again", fixed = TRUE)
+    testthat::expect_false(grepl(
+      "fread|read.csv|conditionMessage|malformed-local-flow",
+      message,
+      ignore.case = TRUE
+    ))
+    testthat::expect_error(flow_data(), class = "shiny.silent.error")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      local_flow_csv = flow_upload_input(valid_path)
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(local_flow_upload()$validation$status, "success")
+    testthat::expect_identical(flow_data()$flow, c(12.4, 15.2, 9.8))
+  })
+})
+
+testthat::test_that("RAW-05 empty Local Biology replacement invalidates only its current source and retries", {
+  empty_biology <- tempfile("empty-local-biology-", fileext = ".csv")
+  on.exit(unlink(empty_biology, force = TRUE), add = TRUE)
+  writeLines("biol_site_id,date,taxon,abundance", empty_biology, useBytes = TRUE)
+
+  shiny::testServer(dashboard_server, {
+    valid_biology <- testthat::test_path("..", "fixtures", "local_invertebrate.csv")
+    valid_flow <- testthat::test_path("..", "fixtures", "local_flow.csv")
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = "biol_site_id,flow_site_id\n291,27090",
+      local_inv_csv = flow_upload_input(valid_biology),
+      local_flow_csv = flow_upload_input(valid_flow)
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      local_inv_csv = flow_upload_input(empty_biology)
+    )
+    session$flushReact()
+
+    message <- paste(local_inv_upload()$validation$messages, collapse = " ")
+    testthat::expect_identical(local_inv_upload()$validation$status, "error")
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_match(message, "appears to be empty", fixed = TRUE)
+    testthat::expect_match(message, "upload a CSV containing at least one data row", fixed = TRUE)
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      local_inv_csv = flow_upload_input(valid_biology)
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_identical(local_inv_upload()$validation$status, "success")
+  })
+})
+
+testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but supplied invalid files do not remain current", {
+  malformed_wq <- tempfile("malformed-wq-", fileext = ".csv")
+  invalid_rhs <- tempfile("invalid-rhs-", fileext = ".csv")
+  on.exit(unlink(c(malformed_wq, invalid_rhs), force = TRUE), add = TRUE)
+  writeLines(c("wq_site_id,date,value", "W1,2024-01-01,1,extra"), malformed_wq, useBytes = TRUE)
+  writeLines(c("habitat_score,channel_type", "55,natural"), invalid_rhs, useBytes = TRUE)
+
+  shiny::testServer(dashboard_server, {
+    withCallingHandlers(
+      session$flushReact(),
+      warning = function(warning) {
+        if (grepl("restarting interrupted promise evaluation", conditionMessage(warning), fixed = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
+      }
+    )
+    testthat::expect_identical(wq_upload()$validation$status, "info")
+    testthat::expect_identical(rhs_upload()$validation$status, "info")
+    workflow_complete_artifact("joined_core", "test", "Unrelated core join fixture.")
+
+    valid_wq <- testthat::test_path("..", "fixtures", "wq.csv")
+    valid_rhs <- testthat::test_path("..", "fixtures", "rhs.csv")
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      wq_csv = flow_upload_input(valid_wq),
+      rhs_csv = flow_upload_input(valid_rhs)
+    )
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$wq_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
+    workflow_complete_artifact("joined_enriched", "test", "Optional enrichment fixture.")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      wq_csv = flow_upload_input(malformed_wq),
+      rhs_csv = flow_upload_input(invalid_rhs)
+    )
+    session$flushReact()
+
+    wq_message <- paste(wq_upload()$validation$messages, collapse = " ")
+    rhs_message <- paste(rhs_upload()$validation$messages, collapse = " ")
+    testthat::expect_identical(wq_upload()$validation$status, "error")
+    testthat::expect_identical(rhs_upload()$validation$status, "error")
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$wq_input))
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$rhs_input))
+    testthat::expect_identical(workflow_artifacts()$joined_enriched$status, "stale")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_match(wq_message, "could not be read or validated", fixed = TRUE)
+    testthat::expect_match(rhs_message, "rhs_survey_id", fixed = TRUE)
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      wq_csv = flow_upload_input(valid_wq),
+      rhs_csv = flow_upload_input(valid_rhs)
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$wq_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
+    testthat::expect_identical(wq_upload()$validation$status, "success")
+    testthat::expect_identical(rhs_upload()$validation$status, "success")
   })
 })

@@ -15,7 +15,8 @@ missing_mapping <- data.frame(
   stringsAsFactors = FALSE
 )
 missing_validation <- validate_supporting_mapping(missing_mapping)
-stopifnot(identical(missing_validation$status, "error"))
+stopifnot(identical(missing_validation$status, "info"))
+stopifnot(any(grepl("Optional WQ mapping", missing_validation$messages, fixed = TRUE)))
 
 duplicated_mapping <- data.frame(
   biol_site_id = c("291", "291"),

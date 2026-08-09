@@ -34,7 +34,7 @@ testthat::test_that("header-only site metadata CSV is reported as empty", {
   testthat::expect_null(result$data)
   testthat::expect_identical(
     result$error,
-    "Site metadata could not be read. Please paste a CSV header and at least one data row."
+    "Site metadata is empty. Please provide a CSV header and at least one data row."
   )
 })
 
@@ -42,7 +42,10 @@ testthat::test_that("missing site metadata file is reported as an error", {
   result <- read_site_metadata_csv(metadata_fixture("does_not_exist.csv"))
 
   testthat::expect_null(result$data)
-  testthat::expect_identical(result$error, "The selected site metadata CSV could not be found.")
+  testthat::expect_identical(
+    result$error,
+    "The selected site metadata CSV could not be found. Please select the file and upload it again."
+  )
 })
 
 testthat::test_that("existing non-CSV input is reported as unreadable", {
@@ -53,5 +56,28 @@ testthat::test_that("existing non-CSV input is reported as unreadable", {
   result <- read_site_metadata_csv(existing_directory)
 
   testthat::expect_null(result$data)
-  testthat::expect_identical(result$error, "The selected file could not be read as CSV.")
+  testthat::expect_identical(
+    result$error,
+    "Site metadata could not be read or validated. Please correct the CSV structure and try again."
+  )
+})
+
+testthat::test_that("malformed uploaded and pasted metadata use the same safe parser outcome", {
+  malformed_lines <- c("biol_site_id,flow_site_id", '"B1,F1')
+  malformed_path <- tempfile("malformed-site-metadata-", fileext = ".csv")
+  on.exit(unlink(malformed_path, force = TRUE), add = TRUE)
+  writeLines(malformed_lines, malformed_path, useBytes = TRUE)
+
+  uploaded <- read_site_metadata_csv(malformed_path)
+  pasted <- parse_site_metadata(paste(malformed_lines, collapse = "\n"))
+
+  testthat::expect_null(uploaded$data)
+  testthat::expect_null(pasted$data)
+  testthat::expect_identical(uploaded$error, pasted$error)
+  testthat::expect_match(uploaded$error, "correct the CSV structure", fixed = TRUE)
+  testthat::expect_false(grepl(
+    "fread|read.csv|conditionMessage|malformed-site-metadata",
+    uploaded$error,
+    ignore.case = TRUE
+  ))
 })

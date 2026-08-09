@@ -29,6 +29,7 @@ testthat::test_that("complete mapping rejects a non-empty invalid flow_input", {
 
   testthat::expect_null(parsed$error)
   testthat::expect_identical(supporting_validation$status, "error")
-  testthat::expect_match(supporting_validation$messages, "Invalid flow_input value(s): INVALID.", fixed = TRUE)
+  testthat::expect_match(supporting_validation$messages, "invalid flow_input value", fixed = TRUE)
+  testthat::expect_false(grepl("INVALID", supporting_validation$messages, fixed = TRUE))
   testthat::expect_match(dashboard_validation, "flow_input values must be NRFA or HDE", fixed = TRUE)
 })

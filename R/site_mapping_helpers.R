@@ -1,15 +1,56 @@
-parse_site_metadata <- function(text) {
-  if (is.null(text) || !nzchar(trimws(text))) {
-    return(list(data = NULL, error = "Please add site metadata.", warnings = character(0)))
-  }
-
+read_character_csv <- function(path = NULL, text = NULL) {
+  parser_warnings <- character(0)
   data <- tryCatch(
-    data.table::fread(text = text, colClasses = "character", data.table = FALSE),
-    error = function(e) NULL
+    withCallingHandlers(
+      if (is.null(text)) {
+        data.table::fread(
+          path,
+          colClasses = "character",
+          data.table = FALSE,
+          encoding = "UTF-8"
+        )
+      } else {
+        data.table::fread(
+          text = text,
+          colClasses = "character",
+          data.table = FALSE
+        )
+      },
+      warning = function(warning) {
+        parser_warnings <<- c(parser_warnings, conditionMessage(warning))
+        invokeRestart("muffleWarning")
+      }
+    ),
+    error = function(error) NULL
   )
 
-  if (is.null(data) || nrow(data) == 0 || ncol(data) == 0) {
-    return(list(data = NULL, error = "Site metadata could not be read. Please paste a CSV header and at least one data row.", warnings = character(0)))
+  if (is.null(data) || length(parser_warnings) > 0L) {
+    return(NULL)
+  }
+  data
+}
+
+normalise_parsed_site_metadata <- function(data) {
+  if (is.null(data)) {
+    return(list(
+      data = NULL,
+      error = paste(
+        "Site metadata could not be read or validated.",
+        "Please correct the CSV structure and try again."
+      ),
+      warnings = character(0)
+    ))
+  }
+
+  if (nrow(data) == 0 || ncol(data) == 0) {
+    return(list(
+      data = NULL,
+      error = paste(
+        "Site metadata is empty.",
+        "Please provide a CSV header and at least one data row."
+      ),
+      warnings = character(0)
+    ))
   }
 
   names(data) <- tolower(trimws(names(data)))
@@ -51,21 +92,28 @@ parse_site_metadata <- function(text) {
   list(data = data, error = NULL, warnings = warnings)
 }
 
+parse_site_metadata <- function(text) {
+  if (is.null(text) || !nzchar(trimws(text))) {
+    return(list(
+      data = NULL,
+      error = "Please add site metadata, then validate the mapping again.",
+      warnings = character(0)
+    ))
+  }
+
+  normalise_parsed_site_metadata(read_character_csv(text = text))
+}
+
 read_site_metadata_csv <- function(path) {
   if (is.null(path) || !file.exists(path)) {
-    return(list(data = NULL, error = "The selected site metadata CSV could not be found.", warnings = character(0)))
+    return(list(
+      data = NULL,
+      error = "The selected site metadata CSV could not be found. Please select the file and upload it again.",
+      warnings = character(0)
+    ))
   }
 
-  data <- tryCatch(
-    data.table::fread(path, colClasses = "character", data.table = FALSE, encoding = "UTF-8"),
-    error = function(e) NULL
-  )
-
-  if (is.null(data)) {
-    return(list(data = NULL, error = "The selected file could not be read as CSV.", warnings = character(0)))
-  }
-
-  parse_site_metadata(readr::format_csv(data))
+  normalise_parsed_site_metadata(read_character_csv(path = path))
 }
 
 normalise_site_metadata_flow_input <- function(metadata) {
@@ -146,7 +194,10 @@ validate_dashboard_site_metadata <- function(metadata) {
     if (grepl("Invalid flow_input value", conditionMessage(flow_validation), fixed = TRUE)) {
       return("flow_input values must be NRFA or HDE for this dashboard workflow.")
     }
-    return(conditionMessage(flow_validation))
+    if (grepl("without flow_site_id", conditionMessage(flow_validation), fixed = TRUE)) {
+      return("flow_input cannot be validated without flow_site_id. Add flow_site_id or remove flow_input.")
+    }
+    return("Site metadata could not be validated. Please correct the mapping columns and try again.")
   }
 
   NULL
