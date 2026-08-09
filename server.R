@@ -292,6 +292,20 @@ function(input, output, session){
     invisible(NULL)
   }
 
+  safe_server_plot <- function(context, operation) {
+    result <- safe_plot_result(operation)
+    if (!identical(result$status, "success")) {
+      message(sprintf(
+        "RAW-18 plot diagnostic [%s/%s]: %s",
+        context,
+        result$failure,
+        result$diagnostic
+      ))
+      validate(need(FALSE, result$message))
+    }
+    result$value
+  }
+
   workflow_checkpoint_card <- function(artifact_id, complete_message, blocked_message) {
     artifact <- workflow_artifacts()[[artifact_id]]
     if (artifact_is_current(artifact)) {
@@ -481,10 +495,10 @@ function(input, output, session){
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
   }, ignoreInit = TRUE, priority = 110)
   observeEvent(input$renderHEV, {
-    hev_request(NULL)
     dependency <- hev_dependency_check()
     hev_plot_dependency_status(dependency)
     if (identical(dependency$status, "error")) {
+      hev_request(NULL)
       workflow_set_artifact(
         "hev_result",
         "blocked",
@@ -495,6 +509,7 @@ function(input, output, session){
       return()
     }
     if (!workflow_artifact_is_current("joined_core")) {
+      hev_request(NULL)
       workflow_block_artifact(
         "hev_result",
         "The Joined HE Dataset is missing or out of date.",
@@ -1494,7 +1509,7 @@ function(input, output, session){
   output$wq_contract_summary_plot <- renderPlot({
     plot_result <- build_wq_contract_summary_plot(wq_contract_summary_result()$data)
     validate(need(!is.null(plot_result$plot), plot_result$message))
-    plot_result$plot
+    safe_server_plot("WQ summary", function() plot_result$plot)
   })
 
   output$wq_contract_summary_provenance <- renderUI({
@@ -1621,7 +1636,7 @@ function(input, output, session){
       group_col = input$wq_group_col
     )
     validate(need(!is.null(result$plot), result$message))
-    result$plot
+    safe_server_plot("WQ", function() result$plot)
   })
 
   current_rhs_plot <- reactive({
@@ -1632,7 +1647,7 @@ function(input, output, session){
       group_col = input$rhs_group_col
     )
     validate(need(!is.null(result$plot), result$message))
-    result$plot
+    safe_server_plot("RHS", function() result$plot)
   })
 
   output$wq_mapped_plot <- renderPlot({
@@ -1979,9 +1994,11 @@ function(input, output, session){
   
   #### render PCA ----
   output$env_fig <- renderPlot({
-    plot_sitepca_dash(env_data(), vars = c("ALTITUDE", "SLOPE", "WIDTH", "DEPTH", 
-                                           "BOULDERS_COBBLES", "PEBBLES_GRAVEL", "SILT_CLAY"), 
-                      eigenvectors = TRUE, label_by = "biol_site_id")
+    safe_server_plot("Environmental PCA", function() {
+      plot_sitepca_dash(env_data(), vars = c("ALTITUDE", "SLOPE", "WIDTH", "DEPTH",
+                                             "BOULDERS_COBBLES", "PEBBLES_GRAVEL", "SILT_CLAY"),
+                        eigenvectors = TRUE, label_by = "biol_site_id")
+    })
   })
   
   
@@ -2087,8 +2104,10 @@ function(input, output, session){
   
   #### render heatmap ----
   output$flow_fig <- renderPlot({
-    plot_heatmap_dash(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
-      pluck(1) %>% grid.arrange() %>% print()
+    safe_server_plot("Flow heatmap", function() {
+      plot_heatmap_dash(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
+        pluck(1) %>% grid.arrange() %>% print()
+    })
   })
   
   
@@ -2546,8 +2565,10 @@ function(input, output, session){
   
   ##### render heatmap ----
   output$flow_fig_imp <- renderPlot({
-    plot_heatmap_dash(data = flow_data_imputed(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
-      pluck(1) %>% grid.arrange() %>% print()
+    safe_server_plot("Imputed Flow heatmap", function() {
+      plot_heatmap_dash(data = flow_data_imputed(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
+        pluck(1) %>% grid.arrange() %>% print()
+    })
   })
   
   
@@ -3278,22 +3299,24 @@ function(input, output, session){
   ### plots ----
   #### correlations ----
   output$corr_plots <- renderPlot({
-    GGally::ggpairs(current_analysis_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"),
-                    upper = list(continuous = GGally::wrap("cor")),
-                    diag = list(continuous = "densityDiag"),
-                    lower = list(continuous = GGally::wrap("points")))+
-      theme(text = element_text(size = 14))
+    safe_server_plot("Analysis correlation", function() {
+      GGally::ggpairs(current_analysis_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"),
+                      upper = list(continuous = GGally::wrap("cor")),
+                      diag = list(continuous = "densityDiag"),
+                      lower = list(continuous = GGally::wrap("points")))+
+        theme(text = element_text(size = 14))
+    })
     
   })
   
   #### coverage hull ----
   
   output$flow_hull <- renderPlot({
-    
-    plot_rngflows(data = join_data_addbiol(), flow_stats = c("Q95z_lag0", "Q10z_lag0"), 
-                  biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
-      theme(text = element_text(size = 16))
-    
+    safe_server_plot("Analysis Flow coverage", function() {
+      plot_rngflows(data = join_data_addbiol(), flow_stats = c("Q95z_lag0", "Q10z_lag0"),
+                    biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
+        theme(text = element_text(size = 16))
+    })
   })
 
   output$basic_model_controls <- renderUI({
@@ -3397,7 +3420,7 @@ function(input, output, session){
 
   output$basic_model_plot <- renderPlot({
     req(basic_model_result()$plot)
-    basic_model_result()$plot
+    safe_server_plot("Basic model", function() basic_model_result()$plot)
   })
   
   # HEV ----
@@ -3479,11 +3502,11 @@ function(input, output, session){
   })
   
   ### activate initial plot upon site selection
-  HEV_go <- eventReactive(hev_request(), {
+  HEV_go <- reactive({
     request_id <- hev_request()
     req(!is.null(request_id))
-    req(workflow_artifact_is_current("joined_core"))
-    plot_data <- HEV_plot_data()
+    req(isolate(workflow_artifact_is_current("joined_core")))
+    plot_data <- isolate(HEV_plot_data())
     list(
       data = plot_data,
       analysis_context = isolate(current_analysis_context()),
@@ -3495,7 +3518,7 @@ function(input, output, session){
       show_high_low = isTRUE(isolate(input$HEV_show_high_low)),
       show_status = isTRUE(isolate(input$HEV_show_status))
     )
-  }, ignoreInit = TRUE)
+  })
   
   ### current Joined HE Dataset prerequisite state ----
   
@@ -3528,6 +3551,8 @@ function(input, output, session){
       "warning"
     } else if (identical(result$status, "not_ready")) {
       "info"
+    } else if (identical(result$status, "failed")) {
+      "error"
     } else {
       result$status
     }
@@ -3546,69 +3571,100 @@ function(input, output, session){
   })
 
   HEV_result <- reactive({
-    req(!identical(hev_plot_dependency_status()$status, "error"))
-    request <- HEV_go()
-    hev_data <- request$data %>%
-      filter(Year >= request$date_range[1] & Year <= request$date_range[2])
-    biol_metrics <- resolve_hev_biology_metrics(
-      hev_data,
-      request$biol_metric_selector,
-      request$show_all_metrics
-    )
-    flow_metrics <- resolve_hev_flow_metrics(
-      hev_data,
-      request$flow_metric_selector,
-      request$show_high_low
-    )
-    validate(
-      need(nrow(hev_data) > 0, "No HEV records are available for the selected site and date range."),
-      need(length(biol_metrics) > 0, "No selected biology metric is available in the current HEV data."),
-      need(length(flow_metrics) > 0, "No selected flow metric is available in the current HEV data.")
-    )
+    req(!is.null(hev_request()))
+    safe_plot_result(
+      operation = function() {
+        req(!identical(hev_plot_dependency_status()$status, "error"))
+        request <- HEV_go()
+        hev_data <- request$data %>%
+          filter(Year >= request$date_range[1] & Year <= request$date_range[2])
+        biol_metrics <- resolve_hev_biology_metrics(
+          hev_data,
+          request$biol_metric_selector,
+          request$show_all_metrics
+        )
+        flow_metrics <- resolve_hev_flow_metrics(
+          hev_data,
+          request$flow_metric_selector,
+          request$show_high_low
+        )
+        if (nrow(hev_data) == 0L || length(biol_metrics) == 0L || length(flow_metrics) == 0L) {
+          return(list(plot = NULL, data = NULL, provenance = NULL))
+        }
 
-    plot <- plot_hev_dash(data = hev_data,
-                          date_col = "date",
-                          flow_stat = flow_metrics,
-                          biol_metric = biol_metrics,
-                          multiplot = request$show_all_metrics,
-                          clr_by = "Season")
-    provenance <- build_hev_output_provenance(
-      analysis_context = request$analysis_context,
-      plot_data = hev_data,
-      site_id = request$site_id,
-      date_range = request$date_range,
-      biology_metrics = biol_metrics,
-      flow_metrics = flow_metrics,
-      show_all_metrics = request$show_all_metrics,
-      show_high_low = request$show_high_low,
-      show_status = request$show_status
+        plot <- plot_hev_dash(data = hev_data,
+                              date_col = "date",
+                              flow_stat = flow_metrics,
+                              biol_metric = biol_metrics,
+                              multiplot = request$show_all_metrics,
+                              clr_by = "Season")
+        provenance <- build_hev_output_provenance(
+          analysis_context = request$analysis_context,
+          plot_data = hev_data,
+          site_id = request$site_id,
+          date_range = request$date_range,
+          biology_metrics = biol_metrics,
+          flow_metrics = flow_metrics,
+          show_all_metrics = request$show_all_metrics,
+          show_high_low = request$show_high_low,
+          show_status = request$show_status
+        )
+        list(plot = plot, data = hev_data, provenance = provenance)
+      },
+      plot_value = function(value) value$plot
     )
-    list(plot = plot, data = hev_data, provenance = provenance)
   })
 
   HEV_plot <- reactive({
-    req(identical(hev_request(), input$renderHEV))
-    req(isolate(workflow_artifact_is_current("joined_core")))
-    req(!identical(hev_plot_dependency_status()$status, "error"))
-    HEV_result()$plot
+    req(identical(hev_current_result()$status, "success"))
+    req(workflow_artifact_is_current("hev_result"))
+    hev_current_result()$plot
   })
 
   observeEvent(HEV_result(), {
     result <- HEV_result()
-    req(!is.null(result$plot))
-    hev_current_result(list(
-      status = "success",
-      plot = result$plot,
-      data = result$data,
-      provenance = result$provenance,
-      messages = "Generated the current HEV plot from the current analysis dataset."
-    ))
-    workflow_complete_artifact(
+    if (identical(result$status, "success")) {
+      value <- result$value
+      hev_current_result(list(
+        status = "success",
+        plot = value$plot,
+        data = value$data,
+        provenance = value$provenance,
+        messages = "Generated the current HEV plot from the current analysis dataset."
+      ))
+      workflow_complete_artifact(
+        "hev_result",
+        "HEV plot generation",
+        summarise_hev_provenance(value$provenance)
+      )
+      return()
+    }
+
+    previous <- isolate(hev_current_result())
+    retained_message <- if (!is.null(previous$plot)) {
+      "The previous valid HEV plot is retained as history but is not current."
+    } else {
+      NULL
+    }
+    hev_current_result(modifyList(previous, list(
+      status = "failed",
+      messages = c(result$message, retained_message)
+    )))
+    workflow_set_artifact(
       "hev_result",
-      "HEV plot generation",
-      summarise_hev_provenance(result$provenance)
+      "failed",
+      data_source = if (is.null(previous$provenance)) NULL else "Previous HEV plot generation",
+      history_summary = if (is.null(previous$provenance)) NULL else summarise_hev_provenance(previous$provenance),
+      blocking_reason = result$message,
+      next_action = "Check the HEV site, date range and metric selections, then create the plot again."
     )
-  })
+    message(sprintf(
+      "RAW-18 plot diagnostic [HEV/%s]: %s",
+      result$failure,
+      result$diagnostic
+    ))
+    showNotification(result$message, type = "error", duration = 10)
+  }, priority = -100)
 
   output$HEV_plot <- renderPlot({
     HEV_plot()

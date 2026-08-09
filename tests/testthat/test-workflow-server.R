@@ -388,7 +388,7 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
   })
 })
 
-testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover in session", {
+testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in session", {
   biology_fixture <- data.frame(
     biol_site_id = "B1",
     SAMPLE_ID = paste0("S", 1:3),
@@ -422,6 +422,8 @@ testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover
   )
 
   join_calls <- 0L
+  hev_plot_mode <- new.env(parent = emptyenv())
+  hev_plot_mode$value <- "success"
   rlang::local_bindings(
     import_inv = function(...) biology_fixture,
     import_env = function(...) environment_fixture,
@@ -470,7 +472,15 @@ testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover
     plot_sitepca_dash = function(...) {
       ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y))
     },
-    plot_hev_dash = function(...) ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y)),
+    plot_hev_dash = function(...) {
+      if (identical(hev_plot_mode$value, "error")) {
+        stop("ggplot internal failure at C:/private/hev-source.csv", call. = FALSE)
+      }
+      if (identical(hev_plot_mode$value, "null")) {
+        return(NULL)
+      }
+      ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y))
+    },
     hev_dependency_check = function(...) list(
       status = "success",
       message = "HEV plotting dependencies are available."
@@ -796,6 +806,51 @@ testthat::test_that("RAW-12 to RAW-17 prerequisites block before run and recover
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
     testthat::expect_identical(hev_current_result()$status, "success")
+
+    # RAW-18: a plotting exception or unusable result fails only the new HEV
+    # request, retains prior HEV history/upstream data and can be retried.
+    retained_plot <- hev_current_result()$plot
+    retained_data <- hev_current_result()$data
+    retained_provenance <- hev_current_result()$provenance
+    retained_history <- hev_download_history()
+    retained_upstream <- workflow_artifacts()[c(
+      "biology_input", "environment_input", "flow_input", "flow_statistics",
+      "oe_result", "joined_core", "analysis_dataset", "model_result"
+    )]
+
+    hev_plot_mode$value <- "error"
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 5))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "failed")
+    testthat::expect_identical(hev_current_result()$status, "failed")
+    testthat::expect_identical(hev_current_result()$plot, retained_plot)
+    testthat::expect_identical(hev_current_result()$data, retained_data)
+    testthat::expect_identical(hev_current_result()$provenance, retained_provenance)
+    testthat::expect_identical(hev_download_history(), retained_history)
+    testthat::expect_false(workflow_artifacts()$hev_result$status %in% c("running", "complete", "warning"))
+    testthat::expect_match(output$hev_status_message$html, "The plot could not be created", fixed = TRUE)
+    testthat::expect_false(grepl("ggplot|C:/private|hev-source", output$hev_status_message$html))
+    testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
+    testthat::expect_identical(
+      vapply(workflow_artifacts()[names(retained_upstream)], `[[`, character(1), "status"),
+      vapply(retained_upstream, `[[`, character(1), "status")
+    )
+
+    hev_plot_mode$value <- "null"
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 6))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "failed")
+    testthat::expect_identical(hev_current_result()$plot, retained_plot)
+    testthat::expect_identical(hev_download_history(), retained_history)
+
+    hev_plot_mode$value <- "success"
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 7))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$status, "success")
+    testthat::expect_identical(hev_download_history(), retained_history)
 
     joined_before_filter <- join_data()
     record_ids <- as.character(joined_before_filter$sample_id)

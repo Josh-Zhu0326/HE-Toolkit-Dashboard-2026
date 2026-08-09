@@ -491,19 +491,19 @@ The testthat runner passed. All eight standalone scripts exited 0. The standalon
 | Affected workflow/task | WQ/RHS plots, WQ summary, PCA/heatmap, analysis plots, HEV. |
 | Blocking classification | Blocking for that plot only; normally non-blocking for other workflows. |
 | Expected user-facing message | “The plot could not be created because the required data is missing or invalid.” |
-| Implemented message | WQ/RHS helpers return specific friendly messages such as “A WQ time series needs a date-like column”; model plotting is guarded. Legacy/HEV plotting has no general safe wrapper. |
+| Implemented message | WQ/RHS helpers retain their specific friendly validation; the shared plot-specific boundary and HEV status now use “The plot could not be created because the required data is missing or invalid. Check the plot inputs and current results, then try again.” |
 | Recovery action | Keep valid data and selections, choose valid variables/date range or regenerate prerequisites, then retry the plot. |
 | Expected retained state | Upstream data/results and prior valid artifacts remain; failed new plot is not marked complete; other pages stay usable. |
-| Implementation evidence | Partial: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. |
-| Automated test | `tests/test_wq_rhs_plots.R:36-91` includes missing date/numeric friendly-message assertions; model plot/error tests in `tests/test_model_interface_helpers.R`; no legacy/HEV exception test. |
+| Implementation evidence | Historical partial evidence retained: `R/wq_rhs_plot_helpers.R:122-190,193-267`; `server.R:1030-1033,1151-1171`; formerly unguarded HEV at `server.R:2456-2477`; raw HEV helper at `global.R:337-869`. Completion evidence: `R/plot_recovery_helpers.R` provides the plot-only result boundary; `server.R` applies it to WQ/RHS summary/mapped plots, PCA, both Flow heatmaps, analysis correlation/coverage, basic-model rendering and HEV. HEV failure finalises `hev_result` as failed while retaining previous plot/data/provenance and download history. |
+| Automated test | Historical helper evidence retained: `tests/test_wq_rhs_plots.R:36-91` and `tests/test_model_interface_helpers.R`. `tests/testthat/test-plot-recovery.R` covers thrown, NULL, unsupported and delayed-render failures plus a corrected retry; `tests/testthat/test-workflow-server.R` covers HEV exception/unusable result, safe UI text, failed-not-running/current state, retained upstream/HEV history and same-session retry success. |
 | Manual test | `TC-007`, `TC-009`, `TC-016–TC-021`; execute missing/invalid data and forced plotting error on every plot family. |
-| Current execution result | Pass — WQ/RHS/model helper slices passed; HEV/legacy/browser recovery was not executed. |
-| Release evidence | Section 5 current helper results; existing plot images are output examples, not recovery evidence. |
+| Current execution result | Pass — targeted deterministic plot-boundary and workflow-server automation; browser recovery was not executed. |
+| Release evidence | Previously identified gap — resolved on `qa/raw-user-facing-recovery`. Implementation complete; browser verification pending. Historical plot images remain output examples, not recovery evidence. |
 | RC re-test required | Yes |
-| Gap | Partial coverage only; no application-wide plot wrapper, exact HEV test, loading/state retention, or browser evidence. |
+| Gap | Automated implementation and exact HEV failure/finalisation/retention/retry coverage are complete; browser evidence remains pending. |
 | Severity | Major |
-| Recommended action | Standardise a safe plot result contract and add tests for every plot family before RC rerun. |
-| Coverage states | Documented: Yes; Implemented: Partial; Automated test exists: Yes (partial); Executed current main: Yes; Final RC evidence: No. |
+| Recommended action | Verify the controlled messages and retry path for each listed plot family in the Pilot/RC browser run. |
+| Coverage states | Documented: Yes; Implemented: Yes; Automated test exists: Yes; Executed current branch: Yes; Final RC evidence: No. |
 
 ### RAW-19
 
