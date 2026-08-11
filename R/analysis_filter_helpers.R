@@ -42,6 +42,38 @@ analysis_record_ids <- function(data, preferred = NULL) {
   as.character(data[[id_col]])
 }
 
+analysis_record_selector_spec <- function(data) {
+  if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+    return(list(
+      id_column = NA_character_,
+      label = "Record identifier",
+      choices = character(),
+      placeholder = "Build or load a Joined HE dataset first"
+    ))
+  }
+
+  id_column <- analysis_record_id_column(data, allow_row_number = FALSE)
+  if (is.na(id_column)) {
+    return(list(
+      id_column = NA_character_,
+      label = "Record identifier",
+      choices = character(),
+      placeholder = "No record identifier is available"
+    ))
+  }
+
+  choices <- trimws(as.character(data[[id_column]]))
+  choices <- unique(choices[!is.na(choices) & nzchar(choices)])
+  label <- if (identical(id_column, "sample_id")) "Sample ID" else "Record ID"
+
+  list(
+    id_column = id_column,
+    label = label,
+    choices = choices,
+    placeholder = sprintf("Choose a %s", tolower(label))
+  )
+}
+
 # start an empty filter selection. `events` just keeps a list of every
 # exclude/restore the user did, in order.
 new_filter_selection <- function() {

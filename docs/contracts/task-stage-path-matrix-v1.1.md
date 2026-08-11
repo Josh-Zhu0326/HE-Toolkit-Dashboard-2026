@@ -42,7 +42,7 @@ A validated processed-dataset upload may satisfy eligible Stage 2–3 prerequisi
 |---|---|:---:|:---:|:---:|:---:|:---:|---|
 | Assess ecological condition | `ecological_condition` | R | R | - | O | O | Expected values and O:E ratios |
 | Summarise the flow regime | `flow_regime` | R | R | - | O | O | Flow statistics and coverage summary |
-| Join biomonitoring indices with flow statistics and other environmental data | `build_he_dataset` | R | R | R | O | O | Joined HE dataset |
+| Combine biology, flow and environmental data | `build_he_dataset` | R | R | R | O | O | Joined HE dataset |
 | Generate HEV plots | `generate_hev` | R | R | R | R | O | HEV plots, data and data history |
 | Undertake HE modelling | `he_modelling` | R | R | R | R | R | Current model, diagnostics and data history |
 

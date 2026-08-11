@@ -430,9 +430,11 @@ function(input, output, session){
     if (exists("basic_model_result", envir = server_context, inherits = FALSE)) {
       get("basic_model_result", envir = server_context)(list(
         status = "info",
-        messages = "Pair biology and flow data, choose variables, then run the optional basic model.",
+        messages = "Prepare a current single-site analysis dataset, choose variables, then fit the model.",
         plot = NULL,
-        summary = NULL
+        summary = NULL,
+        diagnostics = NULL,
+        diagnostic_plot = NULL
       ))
     }
   }
@@ -699,6 +701,7 @@ function(input, output, session){
         dom = "Bfrtip",
         buttons = list("copy"),
         order = list(),
+        scrollX = TRUE,
         autoWidth = FALSE,
         orderClasses = FALSE,
         lengthMenu = list(c(5, 10, 25, 50, 100), c(5, 10, 25, 50, 100))
@@ -2291,9 +2294,8 @@ function(input, output, session){
     datatable(
       predict_data(),
       options = list(
-        scrollY = "600px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -2386,9 +2388,8 @@ function(input, output, session){
     datatable(
       biol_all(),
       options = list(
-        scrollY = "400px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -2789,9 +2790,8 @@ function(input, output, session){
     datatable(
       flow_stats_data(),
       options = list(
-        scrollY = "400px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -3124,6 +3124,38 @@ function(input, output, session){
     build_analysis_exclusion_log(analysis_filter_selection())
   })
 
+  output$analysis_record_selector <- renderUI({
+    analysis_data <- tryCatch(
+      current_joined_source()$analysis_dataset,
+      error = function(error) {
+        if (inherits(error, "shiny.silent.error")) {
+          return(NULL)
+        }
+        stop(error)
+      }
+    )
+    spec <- analysis_record_selector_spec(analysis_data)
+    choices <- c(
+      stats::setNames("", ""),
+      stats::setNames(spec$choices, spec$choices)
+    )
+
+    div(
+      class = "analysis-record-selector",
+      `data-id-column` = if (is.na(spec$id_column)) "" else spec$id_column,
+      selectizeInput(
+        "analysis_record_id",
+        spec$label,
+        choices = choices,
+        selected = "",
+        options = list(
+          placeholder = spec$placeholder,
+          allowEmptyOption = TRUE
+        )
+      )
+    )
+  })
+
   output$analysis_exclusion_log_table <- DT::renderDataTable({
     analysis_exclusion_log()
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
@@ -3376,9 +3408,8 @@ function(input, output, session){
     datatable(
       join_data(),
       options = list(
-        scrollY = "400px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -3432,16 +3463,18 @@ function(input, output, session){
     }
 
     tagList(
-      selectInput("basic_model_flow_var", "Flow variable", choices = flow_cols, selected = if (length(flow_cols) > 0) flow_cols[[1]] else character(0)),
-      selectInput("basic_model_ecology_var", "Ecology response variable", choices = ecology_cols, selected = if (length(ecology_cols) > 0) ecology_cols[[1]] else character(0))
+      selectInput("basic_model_flow_var", "Flow predictor", choices = flow_cols, selected = if (length(flow_cols) > 0) flow_cols[[1]] else character(0)),
+      selectInput("basic_model_ecology_var", "Ecology response", choices = ecology_cols, selected = if (length(ecology_cols) > 0) ecology_cols[[1]] else character(0))
     )
   })
 
   basic_model_result <- reactiveVal(list(
     status = "info",
-    messages = "Pair biology and flow data, choose variables, then run the optional basic model.",
+    messages = "Prepare a current single-site analysis dataset, choose a Flow predictor and Ecology response, then fit the model.",
     plot = NULL,
-    summary = NULL
+    summary = NULL,
+    diagnostics = NULL,
+    diagnostic_plot = NULL
   ))
 
   observeEvent(input$run_basic_model, {
@@ -3476,15 +3509,15 @@ function(input, output, session){
       )
       workflow_complete_artifact(
         "model_result",
-        "Basic Flow–ecology model",
-        "Fitted the current model and generated diagnostics."
+        "Flow–ecology model",
+        "Fitted the current model and generated result and residual-diagnostic outputs."
       )
     } else {
       workflow_status <- if (identical(result$status, "not_ready")) "blocked" else "failed"
       next_action <- if (identical(result$status, "not_ready")) {
-        "Select a single-site analysis dataset, then run the model again."
+        "Select a single-site analysis dataset, then fit the model again."
       } else {
-        "Correct the model inputs and run the model again."
+        "Correct the model inputs and fit the model again."
       }
       workflow_set_artifact(
         "model_result",
@@ -3502,7 +3535,7 @@ function(input, output, session){
         workflow_set_artifact(
           "model_spec",
           "ready",
-          next_action = "Run the model with the current variable selection.",
+          next_action = "Fit the model with the current variable selection.",
           invalidate_downstream = TRUE
         )
       }
@@ -3516,6 +3549,37 @@ function(input, output, session){
     format_validation_message(list(status = display_status, messages = result$messages))
   })
 
+  output$basic_model_result_review <- renderUI({
+    if (!workflow_artifact_is_current("model_result") ||
+        !identical(basic_model_result()$status, "success")) {
+      return(tags$p(
+        class = "hint-text",
+        "Model results appear here after the current model has been fitted."
+      ))
+    }
+    tagList(
+      DT::dataTableOutput("basic_model_summary"),
+      plotOutput("basic_model_plot", height = 420)
+    )
+  })
+
+  output$basic_model_diagnostic_review <- renderUI({
+    if (!workflow_artifact_is_current("model_result") ||
+        !identical(basic_model_result()$status, "success")) {
+      return(tags$p(
+        class = "hint-text",
+        "Residual diagnostics appear here after the current model has been fitted."
+      ))
+    }
+    tagList(
+      tags$p(
+        class = "hint-text",
+        "Check the residual pattern before interpreting or exporting the fitted relationship."
+      ),
+      plotOutput("basic_model_diagnostic_plot", height = 360)
+    )
+  })
+
   output$basic_model_summary <- DT::renderDataTable({
     req(basic_model_result()$summary)
     basic_model_result()$summary
@@ -3523,8 +3587,75 @@ function(input, output, session){
 
   output$basic_model_plot <- renderPlot({
     req(basic_model_result()$plot)
-    safe_server_plot("Basic model", function() basic_model_result()$plot)
+    safe_server_plot("Flow–ecology model", function() basic_model_result()$plot)
   })
+
+  output$basic_model_diagnostic_plot <- renderPlot({
+    req(basic_model_result()$diagnostic_plot)
+    safe_server_plot(
+      "Model residual diagnostics",
+      function() basic_model_result()$diagnostic_plot
+    )
+  })
+
+  output$basic_model_download_controls <- renderUI({
+    if (!workflow_artifact_is_current("model_result") ||
+        !identical(basic_model_result()$status, "success")) {
+      return(tags$p(
+        class = "hint-text",
+        "Exports become available after the current model and diagnostics are complete."
+      ))
+    }
+    div(
+      class = "download-row",
+      downloadButton(
+        "download_basic_model_summary",
+        "Download model summary",
+        class = "client-action-button"
+      ),
+      downloadButton(
+        "download_basic_model_diagnostics",
+        "Download diagnostics",
+        class = "client-action-button"
+      )
+    )
+  })
+
+  output$download_basic_model_summary <- downloadHandler(
+    filename = function() {
+      sprintf("he-model-summary-%s.csv", format(Sys.Date(), "%Y%m%d"))
+    },
+    content = function(file) {
+      validate(need(
+        workflow_artifact_is_current("model_result") &&
+          identical(isolate(basic_model_result())$status, "success"),
+        "The current model is unavailable or out of date. Fit the model again before exporting."
+      ))
+      result <- isolate(basic_model_result())
+      safe_server_file_operation(
+        "model summary CSV",
+        function() utils::write.csv(result$summary, file, row.names = FALSE)
+      )
+    }
+  )
+
+  output$download_basic_model_diagnostics <- downloadHandler(
+    filename = function() {
+      sprintf("he-model-diagnostics-%s.csv", format(Sys.Date(), "%Y%m%d"))
+    },
+    content = function(file) {
+      validate(need(
+        workflow_artifact_is_current("model_result") &&
+          identical(isolate(basic_model_result())$status, "success"),
+        "The current diagnostics are unavailable or out of date. Fit the model again before exporting."
+      ))
+      result <- isolate(basic_model_result())
+      safe_server_file_operation(
+        "model diagnostics CSV",
+        function() utils::write.csv(result$diagnostics, file, row.names = FALSE)
+      )
+    }
+  )
   
   # HEV ----
   ## Create HEV dataset ----

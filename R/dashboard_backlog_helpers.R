@@ -235,11 +235,11 @@ validate_local_flow <- function(data) {
 
 build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
   if (is.null(data) || nrow(data) == 0) {
-    return(list(status = "error", messages = "Joined HE data are not available yet. Pair biology and flow data first.", plot = NULL, summary = NULL))
+    return(list(status = "error", messages = "Joined HE data are not available yet. Pair biology and flow data first.", plot = NULL, summary = NULL, diagnostics = NULL, diagnostic_plot = NULL))
   }
 
   if (!all(c(flow_var, ecology_var) %in% names(data))) {
-    return(list(status = "error", messages = "Select valid flow and ecology variables.", plot = NULL, summary = NULL))
+    return(list(status = "error", messages = "Select valid flow and ecology variables.", plot = NULL, summary = NULL, diagnostics = NULL, diagnostic_plot = NULL))
   }
 
   model_data <- data.frame(
@@ -249,7 +249,7 @@ build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
   model_data <- model_data[stats::complete.cases(model_data), , drop = FALSE]
 
   if (nrow(model_data) < 3) {
-    return(list(status = "error", messages = "At least 3 complete numeric observations are needed for a basic model.", plot = NULL, summary = NULL))
+    return(list(status = "error", messages = "At least 3 complete numeric observations are needed for a basic model.", plot = NULL, summary = NULL, diagnostics = NULL, diagnostic_plot = NULL))
   }
 
   fit <- stats::lm(ecology ~ flow, data = model_data)
@@ -277,5 +277,30 @@ build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
     ggplot2::labs(x = flow_var, y = ecology_var, title = "Basic flow-ecology relationship") +
     ggplot2::theme_minimal()
 
-  list(status = "success", messages = "Basic model completed.", plot = plot, summary = summary_table)
+  diagnostics <- data.frame(
+    fitted = as.numeric(stats::fitted(fit)),
+    residual = as.numeric(stats::resid(fit)),
+    stringsAsFactors = FALSE
+  )
+  diagnostic_plot <- ggplot2::ggplot(
+    diagnostics,
+    ggplot2::aes(x = fitted, y = residual)
+  ) +
+    ggplot2::geom_hline(yintercept = 0, colour = "#637069", linetype = "dashed") +
+    ggplot2::geom_point(alpha = 0.75, colour = "#008938") +
+    ggplot2::labs(
+      x = "Fitted value",
+      y = "Residual",
+      title = "Residuals versus fitted values"
+    ) +
+    ggplot2::theme_minimal()
+
+  list(
+    status = "success",
+    messages = "Model fitted and diagnostic outputs generated.",
+    plot = plot,
+    summary = summary_table,
+    diagnostics = diagnostics,
+    diagnostic_plot = diagnostic_plot
+  )
 }

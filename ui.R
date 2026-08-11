@@ -14,9 +14,13 @@ tagList(
         margin-bottom: 0.75rem;
       }
       .dashboard-page {
+        width: 100%;
         max-width: 1240px;
         margin: 0 auto;
         padding: 1.25rem 1rem 2.5rem 1rem;
+      }
+      .dashboard-page-wide {
+        max-width: none;
       }
       .dashboard-card {
         width: 100%;
@@ -34,7 +38,21 @@ tagList(
         padding-bottom: 0.5rem;
       }
       .wide-plot-scroll .shiny-plot-output {
+        width: 100% !important;
         min-width: 920px;
+      }
+      .plot-frame .shiny-plot-output,
+      .dashboard-page-wide .shiny-plot-output {
+        width: 100% !important;
+        max-width: 100%;
+      }
+      .dataTables_wrapper,
+      .dataTables_scroll {
+        width: 100% !important;
+        max-width: 100%;
+      }
+      .dataTables_scrollBody {
+        overflow-x: auto !important;
       }
       .section-title {
         margin-bottom: 0.2rem;
@@ -164,6 +182,15 @@ tagList(
       .cp-card.pass .cp-icon { color:#008938; }
       .cp-card.warn .cp-icon { color:#b87000; }
       .cp-card.fail .cp-icon { color:#d9534f; }
+      @media (max-width: 959px) {
+        .dashboard-page {
+          padding-right: 0.75rem;
+          padding-left: 0.75rem;
+        }
+        .wide-plot-scroll .shiny-plot-output {
+          min-width: 100%;
+        }
+      }
             "))
         ),
   add_busy_spinner(spin = "fading-circle", color="#00a33b", position="bottom-left"),
@@ -202,14 +229,16 @@ page_navbar(
     ),
   
   # SECOND PAGE ----
-    nav_panel(title = "Data Import", 
+    nav_panel(title = "Data Import",
+      div(
+        class = "workflow-stage-workspace",
             navset_card_tab(
               
   ## Sidebar ----
             sidebar = sidebar("", width = 330, position = "right",
               div(class = "sidebar-section action-stack",
                 h5("Session"),
-                actionButton("clear_all", "Clear all", class = "client-action-button", icon = shiny::icon("eraser", verify_fa = FALSE))
+                actionButton("clear_all", "Clear all", class = "client-action-button workflow-secondary-action", icon = shiny::icon("eraser", verify_fa = FALSE))
               ),
               div(class = "sidebar-section control-stack",
                 h5("Mapping"),
@@ -258,7 +287,7 @@ page_navbar(
             
   ## Main body ----
             nav_panel("Biology Data",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card",
                           card_header("Imported biology data"),
                           p(class = "hint-text", "Review the biology records imported for the mapped biology site IDs."),
@@ -266,7 +295,7 @@ page_navbar(
                         )
                       )),
             nav_panel("Environmental Data",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card",
                           card_header("Environmental base data"),
                           radioButtons(inputId = "env_data_display", "Display:", choices = c("Data", "PCA")),
@@ -275,7 +304,7 @@ page_navbar(
                       )
             ),
             nav_panel("Flow Data",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imported flow data"),
                           radioButtons(inputId = "flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
@@ -284,7 +313,7 @@ page_navbar(
                       )
             ),
             nav_panel("WQ Data",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         h3(class = "section-title", "Water Quality supporting data"),
                         p(class = "page-lead", "Mapped WQ data can be reviewed, plotted, and downloaded here. These data remain separate from O:E calculations."),
                         layout_columns(
@@ -329,7 +358,7 @@ page_navbar(
                       )
             ),
             nav_panel("RHS Data",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         h3(class = "section-title", "River Habitat Survey supporting data"),
                         p(class = "page-lead", "Mapped RHS data can be reviewed, plotted, and downloaded here. Missing or TBC RHS IDs are handled safely."),
                         layout_columns(
@@ -360,7 +389,7 @@ page_navbar(
                       )
             ),
             nav_panel("Local File Import",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         h3(class = "section-title", "Local CSV file import"),
                         p(class = "page-lead", "Upload local files for validation. A valid Local Flow upload is used as the Flow data source; local invertebrate data remain separate from O:E."),
                         layout_columns(
@@ -389,17 +418,20 @@ page_navbar(
                       )
             ),
             nav_panel("Site Map",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card",
                           card_header("Mapped monitoring sites"),
                           leafletOutput("map0", height = 600)
                         )
                       ))
             )
+      )
   ),
   
   # THIRD PAGE ----
     nav_panel("Process Biology",
+      div(
+        class = "workflow-stage-workspace",
             navset_card_tab(
               
   ## Sidebar ----  
@@ -417,7 +449,7 @@ page_navbar(
    
   ## Main body ----  
    nav_panel("RICT Predictions",
-             div(class = "dashboard-page",
+             div(class = "dashboard-page dashboard-page-wide",
                card(class = "dashboard-card",
                  card_header("RICT predictions"),
                  p(class = "hint-text", "Predicted biological index values used by the existing O:E workflow."),
@@ -425,7 +457,7 @@ page_navbar(
                )
              )),
    nav_panel("O:E Ratios",
-             div(class = "dashboard-page",
+             div(class = "dashboard-page dashboard-page-wide",
                card(class = "dashboard-card",
                  card_header("O:E ratios"),
                  p(class = "hint-text", "Existing O:E calculation output. WQ and RHS supporting data are not used here."),
@@ -433,10 +465,13 @@ page_navbar(
                )
              ))
             )
+      )
    ),
   
   # FOURTH PAGE ----
     nav_panel("Process Flow",
+      div(
+        class = "workflow-stage-workspace",
             navset_card_tab(
             
               
@@ -475,7 +510,7 @@ page_navbar(
   ## Main body ----  
             
             nav_panel("Imputed Flow Data",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imputed flow data"),
                           radioButtons(inputId = "imp_flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
@@ -484,7 +519,7 @@ page_navbar(
                       )
             ),
             nav_panel("Flow Statistics",
-                      div(class = "dashboard-page",
+                      div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card",
                           card_header("Calculated flow statistics"),
                           radioButtons(inputId = "flow_stats_display", "Display:", choices = c("Time-varying", "Long-term")),
@@ -493,12 +528,15 @@ page_navbar(
                       )
                       )
   )
+  )
 ),
 
   # STAGE 3 ----
   nav_panel(
     "Build HE Dataset",
-    navset_card_tab(
+    div(
+      class = "workflow-stage-workspace",
+      navset_card_tab(
       sidebar = sidebar(
         "",
         width = 300,
@@ -564,7 +602,7 @@ page_navbar(
       nav_panel(
         "Joined Data",
         div(
-          class = "dashboard-page",
+          class = "dashboard-page dashboard-page-wide",
           card(
             class = "dashboard-card",
             card_header("Paired biology-flow data"),
@@ -577,21 +615,28 @@ page_navbar(
           )
         )
       )
+      )
     )
   ),
 
   # STAGE 4 ----
   nav_panel(
     "Explore Relationships",
-    navset_card_tab(
+    div(
+      class = "workflow-stage-workspace",
+      navset_card_tab(
       nav_panel(
         "Analysis Selection",
         div(
-          class = "dashboard-page",
+          class = "dashboard-page dashboard-page-wide",
           card(
             class = "dashboard-card",
             card_header("Exclude or restore a record"),
-            textInput("analysis_record_id", "Record ID"),
+            uiOutput("analysis_record_selector"),
+            p(
+              class = "hint-text",
+              "Choose the identifier shown in the current Joined HE dataset."
+            ),
             div(
               class = "action-stack",
               actionButton(
@@ -616,7 +661,7 @@ page_navbar(
       nav_panel(
         "Pairwise Correlations",
         div(
-          class = "dashboard-page",
+          class = "dashboard-page dashboard-page-wide",
           card(
             class = "dashboard-card",
             card_header("Pairwise correlation plots"),
@@ -627,13 +672,14 @@ page_navbar(
       nav_panel(
         "Historical Coverage",
         div(
-          class = "dashboard-page",
+          class = "dashboard-page dashboard-page-wide",
           card(
             class = "dashboard-card",
             card_header("Historical flow and biology coverage"),
             plotOutput("flow_hull")
           )
         )
+      )
       )
     )
   ),
@@ -642,35 +688,50 @@ page_navbar(
   nav_panel(
     "Model and Export",
     div(
-      class = "dashboard-page",
-      h3(class = "section-title", "Basic flow-ecology model"),
+      class = "dashboard-page dashboard-page-wide workflow-stage-workspace",
+      h3(class = "section-title", "Build and diagnose an HE model"),
       p(
         class = "page-lead",
-        "Fit and inspect the current model without altering O:E calculations."
+        "Select variables, fit the current single-site model, review its diagnostics and export the current results."
       ),
       card(
         class = "dashboard-card",
-        card_header("Model setup and result"),
+        card_header("1. Select variables and fit the model"),
         uiOutput("basic_model_controls"),
         div(
           class = "action-stack",
           actionButton(
             "run_basic_model",
-            "Run basic model",
+            "Fit model",
             class = "client-action-button",
             icon = shiny::icon("chart-line", verify_fa = FALSE)
           )
         ),
-        uiOutput("basic_model_status"),
-        DT::dataTableOutput("basic_model_summary"),
-        plotOutput("basic_model_plot", height = 420)
+        uiOutput("basic_model_status")
+      ),
+      card(
+        class = "dashboard-card",
+        card_header("2. Review model results"),
+        uiOutput("basic_model_result_review")
+      ),
+      card(
+        class = "dashboard-card",
+        card_header("3. Review residual diagnostics"),
+        uiOutput("basic_model_diagnostic_review")
+      ),
+      card(
+        class = "dashboard-card",
+        card_header("4. Export the current model"),
+        uiOutput("basic_model_download_controls")
       )
     )
   ),
 
   # SIXTH PAGE ----
     nav_panel("HEV Plots",
-      layout_sidebar(
+      div(
+        class = "workflow-stage-workspace",
+        layout_sidebar(
             
   ## Sidebar ----
         
@@ -701,14 +762,14 @@ page_navbar(
                 uiOutput("cp_hev")
             ),
             div(class = "sidebar-section action-stack",
-              actionButton("renderHEV", "Create HEV plot", class = "client-action-button", icon = shiny::icon("chart-simple", verify_fa = FALSE))
+              actionButton("renderHEV", "Generate HEV plot", class = "client-action-button", icon = shiny::icon("chart-simple", verify_fa = FALSE))
             )
           ),
-          div(class = "dashboard-page",
-            h3(class = "section-title", "Hydro-ecological variation plot"),
-            p(class = "page-lead", "Review HEV plots for selected biological and flow metrics from the current analysis dataset."),
+          div(class = "dashboard-page dashboard-page-wide",
+            h3(class = "section-title", "Generate and interpret HEV plots"),
+            p(class = "page-lead", "Generate HEV plots for selected biological and flow metrics, review the patterns and export the current result."),
             card(class = "dashboard-card",
-              card_header("HEV output"),
+              card_header("Current HEV plot"),
               uiOutput("hev_status_message"),
               uiOutput("hev_provenance_summary"),
               plotOutput("HEV_plot"),
@@ -717,8 +778,17 @@ page_navbar(
                 downloadButtonUI("HEVPlot")
               ),
               DT::dataTableOutput("hev_download_history_table")
+            ),
+            card(class = "dashboard-card",
+              card_header("Interpretation checklist"),
+              tags$ul(
+                tags$li("Check the direction, timing and consistency of the biological and flow patterns."),
+                tags$li("Compare high-flow, low-flow or status overlays only when those options are available and selected."),
+                tags$li("Review data coverage and provenance before drawing or reporting conclusions.")
+              )
             )
           )
+)
 )
 ),
 
