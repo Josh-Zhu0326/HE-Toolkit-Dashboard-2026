@@ -11,7 +11,11 @@ artifact_pattern <- "^(WQ_DATA_METRICS\\.rds|RHS_survey_summary_.*\\.rds|River_H
 artifacts_before <- list.files(pattern = artifact_pattern)
 
 shiny::testServer(dashboard_server, {
-  upload_path <- normalizePath("demo_site_metadata.csv", winslash = "/", mustWork = TRUE)
+  upload_path <- normalizePath(
+    file.path("data", "examples", "demo_site_metadata.csv"),
+    winslash = "/",
+    mustWork = TRUE
+  )
   session$setInputs(site_metadata_csv = list(
     name = "demo_site_metadata.csv",
     size = file.info(upload_path)$size,

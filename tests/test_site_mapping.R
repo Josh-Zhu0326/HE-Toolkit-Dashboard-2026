@@ -14,7 +14,9 @@ stopifnot(!"rhs_site_id" %in% names(parsed$data))
 stopifnot(identical(usable_mapping_ids(parsed$data, "wq_site_id"), "SW-A4070115"))
 stopifnot(length(usable_mapping_ids(parsed$data, "rhs_survey_id")) == 0)
 
-uploaded <- read_site_metadata_csv("demo_site_metadata.csv")
+uploaded <- read_site_metadata_csv(
+  file.path("data", "examples", "demo_site_metadata.csv")
+)
 stopifnot(is.null(uploaded$error))
 stopifnot(is.null(validate_dashboard_site_metadata(uploaded$data)))
 stopifnot(identical(uploaded$data$rhs_survey_id, "6145"))

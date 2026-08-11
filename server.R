@@ -1218,7 +1218,11 @@ function(input, output, session){
     filename = function() "demo_site_metadata.csv",
     content = function(file) {
       safe_server_file_operation("demo site metadata", function() {
-        copied <- file.copy("demo_site_metadata.csv", file, overwrite = TRUE)
+        copied <- file.copy(
+          file.path("data", "examples", "demo_site_metadata.csv"),
+          file,
+          overwrite = TRUE
+        )
         if (!isTRUE(copied)) {
           stop("The demo metadata copy did not complete.", call. = FALSE)
         }
