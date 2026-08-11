@@ -55,11 +55,11 @@ file_manifest <- function(paths) {
 }
 
 material_paths <- file.path(repo_root, c(
-  "docs/client-decision-log-v1.md",
-  "docs/week08/pilot-execution.md",
-  "docs/week09/formal-session-manifest-and-qa-draft.md",
-  "docs/week09/formal-study-protocol-v1-draft.md",
-  "docs/week09/RAW-01-25-recovery-matrix.md"
+  "docs/decisions/client-decision-log-v1.md",
+  "docs/research/study-materials/pilot-execution.md",
+  "docs/research/study-materials/formal-session-manifest-and-qa-draft.md",
+  "docs/research/study-materials/formal-study-protocol-v1-draft.md",
+  "docs/testing/reports/browser-2026-08-09/RAW-01-25-recovery-matrix.md"
 ))
 fixture_paths <- list.files(
   file.path(repo_root, "tests", "fixtures"),

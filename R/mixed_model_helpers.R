@@ -1,6 +1,6 @@
 # mixed_model_helpers.R
 # The multi-site mixed-effects model, following the FROZEN rules in
-# docs/week07/modelling-contract-v1.md (MC-O01 to MC-O11).
+# docs/contracts/modelling-contract-v1.md (MC-O01 to MC-O11).
 #
 # In plain terms: when the analysis data has enough sites and rows, we fit a
 # mixed model with a random effect for site. We check the data is big enough,
