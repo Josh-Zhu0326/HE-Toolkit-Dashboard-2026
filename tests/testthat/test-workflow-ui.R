@@ -112,6 +112,11 @@ testthat::test_that("Stage workspaces share the workflow visual system", {
   )
   testthat::expect_match(ui_code, 'uiOutput("analysis_record_selector")', fixed = TRUE)
   testthat::expect_false(grepl('textInput("analysis_record_id"', ui_code, fixed = TRUE))
+  testthat::expect_match(
+    style_html,
+    ".analysis-record-selector .selectize-input { padding-right:34px!important; }",
+    fixed = TRUE
+  )
 })
 
 testthat::test_that("workflow shell separates Task goals from Stage steps", {
@@ -125,6 +130,11 @@ testthat::test_that("workflow shell separates Task goals from Stage steps", {
   testthat::expect_match(selector_html, "workflow-contextbar", fixed = TRUE)
   testthat::expect_false(grepl("workflow-stagebar-shell", selector_html, fixed = TRUE))
   testthat::expect_match(selector_html, "Choose a Task", fixed = TRUE)
+  testthat::expect_match(
+    selector_html,
+    "Explore, combine and analyse hydrological and ecological data in one guided workflow.",
+    fixed = TRUE
+  )
   testthat::expect_match(workspace_html, "Steps to complete this Task", fixed = TRUE)
   testthat::expect_match(workspace_html, "workflow-stage-overview", fixed = TRUE)
   testthat::expect_match(workspace_html, "workflow-grid", fixed = TRUE)
@@ -540,7 +550,11 @@ testthat::test_that("Rendered workflow excludes superseded user-facing terminolo
   )
 
   testthat::expect_false(grepl("Goal", html, fixed = TRUE))
-  testthat::expect_match(html, "Stages show the steps", fixed = TRUE)
+  testthat::expect_match(
+    html,
+    "Explore, combine and analyse hydrological and ecological data in one guided workflow.",
+    fixed = TRUE
+  )
   testthat::expect_false(grepl("analysis_dataset", html, fixed = TRUE))
   testthat::expect_false(grepl("NRFA fallback", html, fixed = TRUE))
 })

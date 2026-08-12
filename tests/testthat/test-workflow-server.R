@@ -19,6 +19,11 @@ testthat::test_that("analysis record selector follows the dataset identifier col
   empty_spec <- analysis_record_selector_spec(NULL)
   testthat::expect_true(is.na(empty_spec$id_column))
   testthat::expect_length(empty_spec$choices, 0L)
+  testthat::expect_identical(empty_spec$placeholder, "Joined HE dataset required")
+  testthat::expect_identical(
+    empty_spec$hint,
+    "Build or load a Joined HE dataset before selecting a record."
+  )
 })
 
 testthat::test_that("RAW-23 workbook preview observer accepts missing and empty sheet input", {
@@ -859,6 +864,12 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     testthat::expect_match(selector_html, 'data-id-column="sample_id"', fixed = TRUE)
     testthat::expect_match(selector_html, "Sample ID", fixed = TRUE)
     testthat::expect_match(selector_html, record_id, fixed = TRUE)
+    testthat::expect_match(selector_html, 'width:100%', fixed = TRUE)
+    testthat::expect_match(
+      selector_html,
+      "Choose the identifier shown in the current Joined HE dataset.",
+      fixed = TRUE
+    )
 
     muffle_interrupted_workflow_promise(session$setInputs(
       analysis_record_id = record_id,

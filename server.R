@@ -3148,11 +3148,13 @@ function(input, output, session){
         spec$label,
         choices = choices,
         selected = "",
+        width = "100%",
         options = list(
           placeholder = spec$placeholder,
           allowEmptyOption = TRUE
         )
-      )
+      ),
+      p(class = "hint-text analysis-record-hint", spec$hint)
     )
   })
 
