@@ -1,3 +1,26 @@
+testthat::test_that("analysis record selector follows the dataset identifier column", {
+  sample_spec <- analysis_record_selector_spec(data.frame(
+    sample_id = c("S002", "S001", "S002"),
+    stringsAsFactors = FALSE
+  ))
+  testthat::expect_identical(sample_spec$id_column, "sample_id")
+  testthat::expect_identical(sample_spec$label, "Sample ID")
+  testthat::expect_identical(sample_spec$choices, c("S002", "S001"))
+
+  record_spec <- analysis_record_selector_spec(data.frame(
+    record_id = c("R1", "R2"),
+    sample_id = c("S1", "S2"),
+    stringsAsFactors = FALSE
+  ))
+  testthat::expect_identical(record_spec$id_column, "record_id")
+  testthat::expect_identical(record_spec$label, "Record ID")
+  testthat::expect_identical(record_spec$choices, c("R1", "R2"))
+
+  empty_spec <- analysis_record_selector_spec(NULL)
+  testthat::expect_true(is.na(empty_spec$id_column))
+  testthat::expect_length(empty_spec$choices, 0L)
+})
+
 testthat::test_that("RAW-23 workbook preview observer accepts missing and empty sheet input", {
   shiny::testServer(workflow_dashboard_server, {
     testthat::expect_warning(
@@ -831,6 +854,11 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     record_ids <- as.character(joined_before_filter$sample_id)
     record_id <- record_ids[[1L]]
     excluded_row_count <- sum(record_ids == record_id)
+    selector_html <- output$analysis_record_selector$html
+
+    testthat::expect_match(selector_html, 'data-id-column="sample_id"', fixed = TRUE)
+    testthat::expect_match(selector_html, "Sample ID", fixed = TRUE)
+    testthat::expect_match(selector_html, record_id, fixed = TRUE)
 
     muffle_interrupted_workflow_promise(session$setInputs(
       analysis_record_id = record_id,
@@ -1139,6 +1167,21 @@ testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state a
 
     testthat::expect_identical(basic_model_result()$status, "success")
     testthat::expect_null(basic_model_result()$diagnostic)
+    testthat::expect_s3_class(basic_model_result()$diagnostic_plot, "ggplot")
+    testthat::expect_identical(
+      names(basic_model_result()$diagnostics),
+      c("fitted", "residual")
+    )
+    testthat::expect_match(
+      output$basic_model_download_controls$html,
+      'id="download_basic_model_summary"',
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      output$basic_model_download_controls$html,
+      'id="download_basic_model_diagnostics"',
+      fixed = TRUE
+    )
     testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
     testthat::expect_identical(current_analysis_data(), checkpoint_data)
   })

@@ -128,6 +128,9 @@ workflow_style_tags <- function() {
     .workspace-save-button.btn:hover,.workspace-save-button.btn:focus { color:#fff; border-color:var(--wf-green-dark); background:var(--wf-green-dark); }
 
     .workflow-stagebar-shell { overflow-x:auto; border-bottom:1px solid var(--wf-line); background:var(--wf-surface); }
+    .workflow-stagebar-heading { max-width:1180px; min-width:750px; margin:0 auto; padding:9px clamp(16px,4vw,44px) 6px; display:flex; align-items:baseline; gap:9px; }
+    .workflow-stagebar-heading strong { color:var(--wf-green-dark); font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; }
+    .workflow-stagebar-heading span { color:var(--wf-muted); font-size:.75rem; }
     .workflow-stagebar { max-width:1180px; min-width:750px; margin:0 auto; padding:0 clamp(16px,4vw,44px); display:grid; grid-template-columns:repeat(5,minmax(142px,1fr)); }
     .workflow-stagebar .btn { min-height:70px; margin:0; padding:10px 12px; border:0; border-right:1px solid var(--wf-line); border-bottom:4px solid transparent; border-radius:0; color:var(--wf-muted); background:transparent; box-shadow:none; text-align:left; white-space:normal; }
     .workflow-stagebar .btn:first-child { border-left:1px solid var(--wf-line); }
@@ -144,19 +147,17 @@ workflow_style_tags <- function() {
     .workflow-stage-subnav .btn { min-height:34px; padding:5px 12px; border:1px solid var(--wf-line); border-radius:6px; color:var(--wf-green-dark); background:#fff; box-shadow:none; }
     .workflow-stage-subnav .btn.is-current { border-color:var(--wf-green); background:var(--wf-green-soft); font-weight:700; }
 
-    .workflow-task-grid { margin-top:24px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; align-items:stretch; }
-    .workflow-task-card { min-height:338px; padding:20px; display:flex!important; flex-direction:column; align-items:stretch; border:1px solid var(--wf-line); border-radius:10px; color:var(--wf-ink)!important; background:var(--wf-surface); box-shadow:0 1px 3px rgba(25,42,32,.08); text-align:left; text-decoration:none!important; transition:border-color .18s ease-out,transform .18s ease-out,background-color .18s ease-out; }
+    .workflow-task-grid { margin-top:26px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; align-items:stretch; }
+    .workflow-task-card { min-height:225px; padding:22px; display:flex!important; flex-direction:column; align-items:stretch; border:1px solid var(--wf-line); border-radius:10px; color:var(--wf-ink)!important; background:var(--wf-surface); box-shadow:0 1px 3px rgba(25,42,32,.08); text-align:left; text-decoration:none!important; transition:border-color .18s ease-out,transform .18s ease-out,background-color .18s ease-out; }
+    .workflow-task-card > .action-label { min-width:0; display:flex; flex:1 1 auto; flex-direction:column; align-items:stretch; }
     .workflow-task-card:hover { border-color:var(--wf-green); color:var(--wf-ink)!important; background:#fff; transform:translateY(-1px); }
     .workflow-task-card:focus-visible { outline:3px solid var(--wf-surface); outline-offset:2px; box-shadow:0 0 0 5px var(--wf-blue); }
-    .workflow-task-card h2 { min-height:6.4rem; margin:10px 0 7px; font-size:1rem; line-height:1.25; }
-    .workflow-task-card p { margin:0 0 14px; color:var(--wf-muted); font-size:.84rem; line-height:1.45; }
-    .workflow-task-meta { margin-top:auto; padding:11px 0; border-top:1px solid var(--wf-line); color:var(--wf-muted); font-size:.71rem; line-height:1.4; }
-    .workflow-task-meta-row { margin-bottom:8px; }
-    .workflow-task-meta-row:last-child { margin-bottom:0; }
-    .workflow-task-meta strong { display:block; color:var(--wf-green-dark); font-size:.7rem; }
-    .workflow-task-output { padding-top:11px; border-top:1px solid var(--wf-line); font-size:.72rem; }
-    .workflow-task-output strong { color:var(--wf-green-dark); }
-    .workflow-action-label { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .workflow-task-card h2 { margin:10px 0 20px; font-size:1.08rem; line-height:1.3; }
+    .workflow-task-output { margin:0 0 17px; padding-top:14px; border-top:1px solid var(--wf-line); }
+    .workflow-task-output span { display:block; color:var(--wf-muted); font-size:.7rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+    .workflow-task-output strong { display:block; margin-top:4px; color:var(--wf-green-dark); font-size:.82rem; line-height:1.4; }
+    .workflow-action-label { align-self:flex-start; margin-top:auto; padding:8px 13px; display:inline-flex; align-items:center; border-radius:6px; color:#fff; background:var(--wf-green); font-size:.78rem; font-weight:750; line-height:1.2; }
+    .workflow-task-card:hover .workflow-action-label { background:var(--wf-green-dark); }
 
     .workflow-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.85fr); gap:18px; align-items:start; }
     .workflow-panel { overflow:hidden; border:1px solid var(--wf-line); border-radius:10px; background:var(--wf-surface); box-shadow:0 1px 3px rgba(25,42,32,.08); }
@@ -206,10 +207,67 @@ workflow_style_tags <- function() {
     .workflow-stage-overview .workflow-grid { margin-top:2px; }
     .workflow-stage-overview .workflow-panel { box-shadow:none; }
 
+    .workflow-stage-workspace { width:100%; max-width:1180px; margin:0 auto; padding:18px clamp(16px,4vw,44px) 48px; box-sizing:border-box; color:var(--wf-ink); background:var(--wf-canvas); }
+    .workflow-stage-workspace > .card,
+    .workflow-stage-workspace > .bslib-sidebar-layout { margin-bottom:0!important; overflow:hidden; border:1px solid var(--wf-line); border-radius:10px; background:var(--wf-surface); box-shadow:0 1px 3px rgba(25,42,32,.08); }
+    .workflow-stage-workspace > .card > .card-header { padding:0 14px; border-bottom:1px solid var(--wf-line); background:var(--wf-surface); }
+    .workflow-stage-workspace > .card > .card-body { padding:0; }
+    .workflow-stage-workspace .nav-tabs.card-header-tabs { margin:0; display:flex; flex-wrap:nowrap; gap:4px; overflow-x:auto; border:0; scrollbar-width:thin; }
+    .workflow-stage-workspace .nav-tabs .nav-link { min-height:46px; padding:12px 10px 9px; border:0; border-bottom:3px solid transparent; border-radius:0; color:var(--wf-muted); background:transparent; font-size:.82rem; font-weight:650; white-space:nowrap; }
+    .workflow-stage-workspace .nav-tabs .nav-link:hover,
+    .workflow-stage-workspace .nav-tabs .nav-link:focus { color:var(--wf-green-dark); background:var(--wf-green-soft); }
+    .workflow-stage-workspace .nav-tabs .nav-link.active { color:var(--wf-green-dark); border-bottom-color:var(--wf-green); background:transparent; }
+    .workflow-stage-workspace .bslib-sidebar-layout > .main { background:var(--wf-surface); }
+    .workflow-stage-workspace .bslib-sidebar-layout > .sidebar { color:var(--wf-ink); border-color:var(--wf-line); background:#f8faf8; }
+    .workflow-stage-workspace .sidebar-content { padding:18px; }
+    .workflow-stage-workspace .dashboard-page { max-width:none; padding:18px; }
+    .workflow-stage-workspace .dashboard-card { border:1px solid var(--wf-line); border-radius:10px; background:var(--wf-surface); box-shadow:0 1px 3px rgba(25,42,32,.08); }
+    .workflow-stage-workspace .dashboard-card > .card-header { padding:15px 17px 12px; border-bottom:1px solid var(--wf-line); color:var(--wf-ink); background:var(--wf-surface); font-size:.94rem; font-weight:700; }
+    .workflow-stage-workspace .section-title { color:var(--wf-ink); font-size:1.25rem; }
+    .workflow-stage-workspace .page-lead,
+    .workflow-stage-workspace .hint-text { color:var(--wf-muted); }
+    .workflow-stage-workspace .sidebar-section { border-bottom-color:var(--wf-line); }
+    .workflow-stage-workspace .sidebar-section h5 { color:var(--wf-ink); font-size:.82rem; font-weight:700; letter-spacing:.02em; }
+    .workflow-stage-workspace .form-control,
+    .workflow-stage-workspace .form-select,
+    .workflow-stage-workspace .selectize-input,
+    .workflow-stage-workspace .bootstrap-select > .dropdown-toggle { border-color:var(--wf-line)!important; border-radius:6px!important; background:#fff!important; box-shadow:none!important; }
+    .workflow-stage-workspace .form-control:focus,
+    .workflow-stage-workspace .form-select:focus,
+    .workflow-stage-workspace .selectize-input.focus { border-color:var(--wf-green)!important; box-shadow:0 0 0 3px rgba(36,95,59,.14)!important; }
+    .workflow-stage-workspace .form-check-input:checked { border-color:var(--wf-green); background-color:var(--wf-green); }
+    .workflow-stage-workspace .client-action-button.btn { color:#fff!important; border:1px solid var(--wf-green)!important; border-radius:6px!important; background:var(--wf-green)!important; box-shadow:none!important; font-weight:650; }
+    .workflow-stage-workspace .client-action-button.btn:hover,
+    .workflow-stage-workspace .client-action-button.btn:focus { color:#fff!important; border-color:var(--wf-green-dark)!important; background:var(--wf-green-dark)!important; }
+    .workflow-stage-workspace .workflow-secondary-action.btn,
+    .workflow-stage-workspace .wq-rhs-action-button.btn,
+    .workflow-stage-workspace .site-metadata-upload .btn { color:var(--wf-green-dark)!important; border:1px solid var(--wf-green)!important; border-radius:6px!important; background:#fff!important; box-shadow:none!important; font-weight:650; }
+    .workflow-stage-workspace .workflow-secondary-action.btn:hover,
+    .workflow-stage-workspace .workflow-secondary-action.btn:focus,
+    .workflow-stage-workspace .wq-rhs-action-button.btn:hover,
+    .workflow-stage-workspace .wq-rhs-action-button.btn:focus,
+    .workflow-stage-workspace .site-metadata-upload .btn:hover,
+    .workflow-stage-workspace .site-metadata-upload .btn:focus { color:var(--wf-green-dark)!important; border-color:var(--wf-green-dark)!important; background:var(--wf-green-soft)!important; }
+    .workflow-stage-workspace .upload-status { border-radius:8px; }
+
     @media (pointer:coarse) {
       .workflow-top-button.btn { min-height:44px; }
     }
-    @media (max-width:720px) {
+    @media (max-width:959px) {
+      .workflow-task-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .workflow-task-card { min-height:0; }
+      .workflow-stage-workspace { padding:12px 12px 32px; }
+      .workflow-stage-workspace .dashboard-page { padding:14px 12px 24px; }
+      .workflow-stage-workspace .sidebar-content { padding:14px; }
+      .workflow-stage-workspace .bslib-sidebar-layout { grid-template-columns:minmax(0,1fr)!important; grid-template-areas:'sidebar' 'main'!important; }
+      .workflow-stage-workspace .bslib-sidebar-layout > .sidebar { width:auto!important; display:block!important; grid-area:sidebar!important; }
+      .workflow-stage-workspace .bslib-sidebar-layout > .main { width:auto!important; grid-area:main!important; }
+      .workflow-stage-workspace .bslib-sidebar-layout > .collapse-toggle { display:none!important; }
+    }
+    @media (max-width:599px) {
+      .workflow-task-grid { grid-template-columns:minmax(0,1fr); }
+    }
+    @media (max-width:959px) {
       .workflow-contextbar-inner { min-height:0; padding:8px 12px; display:flex; flex-wrap:wrap; gap:7px 8px; }
       .workflow-brand { margin-right:auto; }
       .workflow-brand strong { font-size:.86rem; }
@@ -343,8 +401,8 @@ workflow_header_ui <- function(
       if (is.null(task)) FALSE else workflow_task_is_complete(task, registry),
       show_workspace_save = show_workspace_save
     ),
-    workflow_stage_nav_ui(task, if (is.null(task)) NULL else current_stage),
-    workflow_stage_subnav_ui(task, current_stage, current_panel)
+    if (!is.null(task)) workflow_stage_nav_ui(task, current_stage),
+    if (!is.null(task)) workflow_stage_subnav_ui(task, current_stage, current_panel)
   )
 }
 
@@ -355,11 +413,11 @@ workflow_task_selector_ui <- function(
     class = "workflow-surface",
     shiny::div(
       class = "workflow-shell",
-      shiny::p(class = "workflow-eyebrow", "Choose an outcome"),
+      shiny::p(class = "workflow-eyebrow", "Choose a Task"),
       shiny::h1("What do you want to achieve?"),
       shiny::p(
         class = "workflow-lead",
-        "Choose one Task to see its route through the shared five-stage workflow. Completed outputs can be downloaded and used again in a later session."
+        "Choose the outcome you want. After you start a Task, Stages show the steps for completing it."
       ),
       shiny::div(
         class = "workflow-task-grid",
@@ -367,68 +425,19 @@ workflow_task_selector_ui <- function(
           task <- tasks[[index]]
           task_is_complete <- workflow_task_is_complete(task, registry)
           resume_stage <- workflow_resume_stage(task, registry)
-          required_stage_numbers <- which(task$stage_path == "R")
-          required_stage_labels <- vapply(
-            he_workflow_stages[required_stage_numbers],
-            `[[`,
-            character(1),
-            "stage_label"
-          )
-          reusable_ids <- task$reusable_artifacts[vapply(
-            registry[task$reusable_artifacts],
-            artifact_is_current,
-            logical(1)
-          )]
-          reusable_labels <- if (length(reusable_ids) == 0L) {
-            "None available yet"
-          } else {
-            paste(vapply(reusable_ids, workflow_artifact_label, character(1)), collapse = ", ")
-          }
-          next_step <- if (task_is_complete) {
-            sprintf(
-              "Review Stage %d — %s",
-              resume_stage,
-              he_workflow_stages[[resume_stage]]$stage_label
-            )
-          } else {
-            sprintf(
-              "Stage %d — %s",
-              resume_stage,
-              he_workflow_stages[[resume_stage]]$stage_label
-            )
-          }
           shiny::actionLink(
             paste0("select_task__", task$task_id),
             shiny::tagList(
               shiny::span(class = "workflow-eyebrow", sprintf("Task %02d", index)),
               shiny::h2(task$task_label),
-              shiny::p(task$description),
-              shiny::div(
-                class = "workflow-task-meta",
-                shiny::div(
-                  class = "workflow-task-meta-row",
-                  shiny::strong("Required stages"),
-                  paste(required_stage_labels, collapse = " → ")
-                ),
-                shiny::div(
-                  class = "workflow-task-meta-row",
-                  shiny::strong("Reusable outputs"),
-                  reusable_labels
-                ),
-                shiny::div(
-                  class = "workflow-task-meta-row",
-                  shiny::strong("Next step"),
-                  next_step
-                )
-              ),
               shiny::div(
                 class = "workflow-task-output",
-                shiny::strong("Primary output: "),
-                task$primary_output
+                shiny::span("Primary output"),
+                shiny::strong(task$primary_output)
               ),
               shiny::span(
                 class = "workflow-action-label",
-                if (task_is_complete) "Review completed Task" else "Start or resume Task"
+                if (task_is_complete) "Review Task" else "Start Task"
               )
             ),
             class = "workflow-task-card",
@@ -443,20 +452,25 @@ workflow_task_selector_ui <- function(
 }
 
 workflow_stage_nav_ui <- function(task = NULL, current_stage = NULL) {
+  if (is.null(task)) {
+    return(NULL)
+  }
+
   shiny::div(
     class = "workflow-stagebar-shell",
     shiny::div(
+      class = "workflow-stagebar-heading",
+      shiny::strong("Stages"),
+      shiny::span("Steps to complete this Task")
+    ),
+    shiny::div(
       class = "workflow-stagebar",
       role = "navigation",
-      `aria-label` = "Five-stage workflow",
+      `aria-label` = "Stages: steps to complete the selected Task",
       lapply(seq_along(he_workflow_stages), function(index) {
         stage <- he_workflow_stages[[index]]
-        mark <- if (is.null(task)) "-" else task$stage_path[[index]]
-        mark_text <- if (is.null(task)) {
-          "Select a Task"
-        } else {
-          switch(mark, R = "Required", O = "Optional", `-` = "Not used")
-        }
+        mark <- task$stage_path[[index]]
+        mark_text <- switch(mark, R = "Required", O = "Optional", `-` = "Not used")
         class_name <- paste(
           if (identical(index, current_stage)) "is-current" else "",
           if (identical(mark, "R")) "is-required" else "",
@@ -471,7 +485,7 @@ workflow_stage_nav_ui <- function(task = NULL, current_stage = NULL) {
           ),
           class = class_name
         )
-        if (is.null(task) || identical(mark, "-")) {
+        if (identical(mark, "-")) {
           button <- htmltools::tagAppendAttributes(button, disabled = "disabled")
         }
         if (identical(index, current_stage)) {
