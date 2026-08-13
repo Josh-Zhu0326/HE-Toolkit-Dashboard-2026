@@ -248,6 +248,118 @@ function(input, output, session){
     artifact_is_current(workflow_artifacts()[[artifact_id]])
   }
 
+  workflow_block_artifact <- function(
+      artifact_id,
+      blocking_reason,
+      next_action,
+      notification = paste(blocking_reason, next_action)) {
+    workflow_set_artifact(
+      artifact_id,
+      "blocked",
+      blocking_reason = blocking_reason,
+      next_action = next_action,
+      invalidate_downstream = TRUE
+    )
+    showNotification(notification, type = "error", duration = 10)
+    invisible(FALSE)
+  }
+
+  workflow_fail_external_import <- function(artifact_id, message, next_action) {
+    workflow_set_artifact(
+      artifact_id,
+      "failed",
+      blocking_reason = message,
+      next_action = next_action,
+      invalidate_downstream = TRUE
+    )
+    showNotification(message, type = "error", duration = 10)
+    invisible(FALSE)
+  }
+
+  record_external_import_diagnostic <- function(context, result) {
+    detail <- result$diagnostic
+    if (is.null(detail) || !nzchar(detail)) {
+      detail <- result$failure
+    }
+    current <- isolate(external_import_diagnostics())
+    external_import_diagnostics(rbind(
+      current,
+      data.frame(
+        recorded_at = Sys.time(),
+        context = context,
+        failure = result$failure,
+        detail = detail,
+        stringsAsFactors = FALSE
+      )
+    ))
+    invisible(NULL)
+  }
+
+  record_file_operation_diagnostic <- function(context, result) {
+    detail <- result$diagnostic
+    if (is.null(detail) || !nzchar(detail)) {
+      detail <- result$failure
+    }
+    message(sprintf(
+      "RAW-19/21 file-operation diagnostic [%s/%s]: %s",
+      context,
+      result$failure,
+      detail
+    ))
+    invisible(NULL)
+  }
+
+  record_raw24_condition_diagnostic <- function(context, error) {
+    message(sprintf(
+      "RAW-24 user-facing error diagnostic [%s]: %s",
+      context,
+      conditionMessage(error)
+    ))
+    invisible(NULL)
+  }
+
+  safe_server_file_operation <- function(context, operation) {
+    result <- safe_file_operation(operation)
+    if (!identical(result$status, "success")) {
+      record_file_operation_diagnostic(context, result)
+      showNotification(result$message, type = "error", duration = 10)
+      validate(need(FALSE, result$message))
+    }
+    result$value
+  }
+
+  stop_for_plot_failure <- function(context, result) {
+    if (identical(result$status, "success")) {
+      return(invisible(FALSE))
+    }
+
+    message(sprintf(
+      "RAW-18 %s diagnostic [%s/%s]: %s",
+      if (identical(result$phase, "final_render")) "final-render" else "plot",
+      context,
+      result$failure,
+      result$diagnostic
+    ))
+    validate(need(FALSE, result$message))
+  }
+
+  safe_server_plot_value <- function(context, operation) {
+    result <- safe_server_plot_result(operation)
+    stop_for_plot_failure(context, result)
+    result$value
+  }
+
+  safe_server_plot_render <- function(context, plot) {
+    result <- safe_server_plot_render_result(plot)
+    stop_for_plot_failure(context, result)
+    invisible(NULL)
+  }
+
+  safe_server_plot <- function(context, operation) {
+    plot <- safe_server_plot_value(context, operation)
+    safe_server_plot_render(context, plot)
+  }
+
   workflow_checkpoint_card <- function(artifact_id, complete_message, blocked_message) {
     artifact <- workflow_artifacts()[[artifact_id]]
     if (artifact_is_current(artifact)) {
@@ -265,6 +377,18 @@ function(input, output, session){
   flow_stats_revision <- reactiveVal(NULL)
   join_revision <- reactiveVal(NULL)
   hev_revision <- reactiveVal(NULL)
+  rict_request <- reactiveVal(NULL)
+  oe_request <- reactiveVal(NULL)
+  biology_import_request <- reactiveVal(NULL)
+  environment_import_request <- reactiveVal(NULL)
+  external_import_diagnostics <- reactiveVal(data.frame(
+    recorded_at = as.POSIXct(character()),
+    context = character(),
+    failure = character(),
+    detail = character(),
+    stringsAsFactors = FALSE
+  ))
+  hev_request <- reactiveVal(NULL)
   join_request <- reactiveVal(NULL)
   join_settings_used <- reactiveVal(NULL)
 
@@ -280,10 +404,12 @@ function(input, output, session){
   }
 
   invalidate_flow_derived_state <- function(reset_external = FALSE) {
+    mark_hev_result_stale("The Flow source changed after the current HEV plot was generated.")
     flow_source_revision(isolate(flow_source_revision()) + 1L)
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
+    hev_request(NULL)
     join_request(NULL)
     join_settings_used(NULL)
     workflow_reset_artifact(
@@ -307,23 +433,73 @@ function(input, output, session){
     if (exists("basic_model_result", envir = server_context, inherits = FALSE)) {
       get("basic_model_result", envir = server_context)(list(
         status = "info",
-        messages = "Pair biology and flow data, choose variables, then run the optional basic model.",
+        messages = "Prepare a current single-site analysis dataset, choose variables, then fit the model.",
         plot = NULL,
-        summary = NULL
+        summary = NULL,
+        diagnostics = NULL,
+        diagnostic_plot = NULL
       ))
     }
   }
 
   observeEvent(input$import_inv, {
+    biology_import_request(NULL)
+    if (!workflow_artifact_is_current("site_mapping")) {
+      workflow_block_artifact(
+        "biology_input",
+        "Current site metadata with valid biol_site_id values are required before importing Biology data.",
+        "Correct and validate the site metadata, then import Biology data again."
+      )
+      return()
+    }
+    biology_import_request(input$import_inv)
     workflow_begin_artifact("biology_input", "Complete the Biology import.")
-  }, ignoreInit = TRUE, priority = 100)
+  }, ignoreInit = FALSE, priority = 50)
   observeEvent(input$import_env, {
+    environment_import_request(NULL)
+    if (!workflow_artifact_is_current("site_mapping")) {
+      workflow_block_artifact(
+        "environment_input",
+        "Current site metadata with valid biol_site_id values are required before importing Environmental data.",
+        "Correct and validate the site metadata, then import Environmental data again."
+      )
+      return()
+    }
+    environment_import_request(input$import_env)
     workflow_begin_artifact("environment_input", "Complete the environmental-data import.")
-  }, ignoreInit = TRUE, priority = 100)
+  }, ignoreInit = FALSE, priority = 50)
   observeEvent(input$run_rict, {
+    rict_request(NULL)
+    if (!workflow_artifact_is_current("environment_input")) {
+      workflow_block_artifact(
+        "processed_environment",
+        "Current Environmental data are required before running RICT predictions.",
+        "Import or regenerate Environmental data, then run RICT predictions again."
+      )
+      return()
+    }
+    rict_request(input$run_rict)
     workflow_begin_artifact("processed_environment", "Complete RICT prediction processing.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$calc_OE, {
+    oe_request(NULL)
+    if (!workflow_artifact_is_current("biology_input")) {
+      workflow_block_artifact(
+        "oe_result",
+        "Biology data are required before calculating O:E ratios.",
+        "Import or restore Biology data, then calculate O:E ratios again."
+      )
+      return()
+    }
+    if (!workflow_artifact_is_current("processed_environment")) {
+      workflow_block_artifact(
+        "oe_result",
+        "Current RICT predictions are required before calculating O:E ratios.",
+        "Run RICT predictions before calculating O:E ratios."
+      )
+      return()
+    }
+    oe_request(input$calc_OE)
     workflow_begin_artifact("oe_result", "Complete the O:E calculation.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$calc_flow_stats, {
@@ -342,6 +518,27 @@ function(input, output, session){
   # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
     req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
+    mark_hev_result_stale("The Joined HE Dataset is being rebuilt.")
+    join_request(NULL)
+    join_revision(NULL)
+    hev_revision(NULL)
+    hev_request(NULL)
+    if (!workflow_artifact_is_current("oe_result")) {
+      workflow_block_artifact(
+        "joined_core",
+        "Current O:E ratios are required before building the Joined HE Dataset.",
+        "Calculate or regenerate O:E ratios, then build the Joined HE Dataset again."
+      )
+      return()
+    }
+    if (!workflow_artifact_is_current("flow_statistics")) {
+      workflow_block_artifact(
+        "joined_core",
+        "Flow Statistics are missing or out of date.",
+        "Calculate or regenerate Flow Statistics, then build the Joined HE Dataset again."
+      )
+      return()
+    }
     active_join_source("generated")
     join_request(list(
       flow_revision = isolate(flow_source_revision()),
@@ -351,15 +548,13 @@ function(input, output, session){
       ),
       request_id = input$join_he
     ))
-  }, ignoreInit = TRUE, priority = 110)
-  observeEvent(input$join_he, {
-    req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
-  }, ignoreInit = TRUE, priority = 100)
+  }, ignoreInit = TRUE, priority = 110)
   observeEvent(input$renderHEV, {
     dependency <- hev_dependency_check()
     hev_plot_dependency_status(dependency)
     if (identical(dependency$status, "error")) {
+      hev_request(NULL)
       workflow_set_artifact(
         "hev_result",
         "blocked",
@@ -369,6 +564,16 @@ function(input, output, session){
       showNotification(dependency$message, type = "error", duration = 10)
       return()
     }
+    if (!workflow_artifact_is_current("joined_core")) {
+      hev_request(NULL)
+      workflow_block_artifact(
+        "hev_result",
+        "The Joined HE Dataset is missing or out of date.",
+        "Rebuild or regenerate the Joined HE Dataset, then create the HEV plot again."
+      )
+      return()
+    }
+    hev_request(input$renderHEV)
     workflow_begin_artifact("hev_result", "Complete HEV plot generation.")
   }, ignoreInit = TRUE, priority = 100)
 
@@ -394,8 +599,10 @@ function(input, output, session){
       if (artifact_is_current(joined_core)) {
         # Retain the cached output and its metadata, but stop treating it as
         # current until the user explicitly submits another Join request.
+        mark_hev_result_stale("Join settings changed after the current HEV plot was generated.")
         join_revision(NULL)
         hev_revision(NULL)
+        hev_request(NULL)
         workflow_set_artifact(
           "joined_core",
           "stale",
@@ -497,6 +704,7 @@ function(input, output, session){
         dom = "Bfrtip",
         buttons = list("copy"),
         order = list(),
+        scrollX = TRUE,
         autoWidth = FALSE,
         orderClasses = FALSE,
         lengthMenu = list(c(5, 10, 25, 50, 100), c(5, 10, 25, 50, 100))
@@ -514,28 +722,12 @@ function(input, output, session){
       ))
     }
 
-    if (is.null(upload$datapath) || !file.exists(upload$datapath)) {
-      return(list(
-        data = NULL,
-        status = "error",
-        messages = paste0("Your ", label, " file could not be found after upload. Please try uploading it again.")
-      ))
+    result <- read_dashboard_csv(upload$datapath, paste0("Your ", label, " file"))
+    if (!identical(result$status, "success")) {
+      return(result)
     }
 
-    data <- tryCatch(
-      data.table::fread(upload$datapath, data.table = FALSE, encoding = "UTF-8"),
-      error = function(e) e
-    )
-
-    if (inherits(data, "error")) {
-      return(list(
-        data = NULL,
-        status = "error",
-        messages = paste0("Your ", label, " file could not be read as CSV. Please check that it is a valid comma-separated file.")
-      ))
-    }
-
-    list(data = data, status = "ok", messages = character(0))
+    list(data = result$data, status = "ok", messages = character(0))
   }
 
   validate_wq_upload <- function(df) {
@@ -556,11 +748,13 @@ function(input, output, session){
 
     site_cols <- c("biol_site_id", "wq_site_id", "site_id", "monitoring_site_id")
     if (!any(site_cols %in% names_lower)) {
-      status <- "warning"
-      messages <- c(
-        messages,
-        "Your WQ file is missing a site identifier column. Please include one of: biol_site_id, wq_site_id, site_id, monitoring_site_id."
-      )
+      return(list(
+        status = "error",
+        messages = paste(
+          "Your WQ file is missing a site identifier column.",
+          "Add one of biol_site_id, wq_site_id, site_id, or monitoring_site_id, then upload the file again."
+        )
+      ))
     }
 
     date_like <- stringr::str_detect(names_lower, "date|time|sample")
@@ -601,11 +795,13 @@ function(input, output, session){
 
     id_cols <- "rhs_survey_id"
     if (!any(id_cols %in% names_lower)) {
-      status <- "warning"
-      messages <- c(
-        messages,
-        "Your RHS file is missing the required rhs_survey_id column."
-      )
+      return(list(
+        status = "error",
+        messages = paste(
+          "Your RHS file is missing the required rhs_survey_id column.",
+          "Add rhs_survey_id, then upload the file again."
+        )
+      ))
     }
 
     rhs_metric_like <- stringr::str_detect(
@@ -798,12 +994,22 @@ function(input, output, session){
 
   observeEvent(dc11_workbook_upload(), {
     sheets <- names(dc11_workbook_upload()$sheets)
-    if (length(sheets) == 0) {
+    if (is.null(sheets) || length(sheets) == 0L) {
       sheets <- names(dc11_sheet_schemas())
     }
+    sheets <- sheets[!is.na(sheets) & nzchar(sheets)]
+    if (length(sheets) == 0L) {
+      return(invisible(NULL))
+    }
+
     preview_sheet <- input$dc11_workbook_preview_sheet
-    selected <- if (length(preview_sheet) == 1L && preview_sheet %in% sheets) {
-      input$dc11_workbook_preview_sheet
+    has_valid_preview_sheet <- !is.null(preview_sheet) &&
+      length(preview_sheet) == 1L &&
+      !is.na(preview_sheet) &&
+      nzchar(preview_sheet) &&
+      preview_sheet %in% sheets
+    selected <- if (isTRUE(has_valid_preview_sheet)) {
+      preview_sheet
     } else {
       sheets[[1L]]
     }
@@ -861,55 +1067,129 @@ function(input, output, session){
   ))
   site_metadata_upload_text <- reactiveVal(NULL)
   site_metadata_upload_flow_provenance <- reactiveVal(NULL)
+  current_site_metadata <- reactiveVal(NULL)
+  metadata_result <- reactiveVal(list(
+    data = NULL,
+    flow_input_provenance = NULL,
+    validation = list(
+      status = "error",
+      messages = "Please add site metadata, then validate the mapping again."
+    )
+  ))
+
+  prepare_site_metadata_result <- function(parsed) {
+    if (!is.null(parsed$error)) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = list(status = "error", messages = parsed$error)
+      ))
+    }
+
+    validation <- validate_supporting_mapping(parsed$data)
+    if (identical(validation$status, "error")) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = validation
+      ))
+    }
+
+    normalised <- tryCatch(
+      normalise_site_metadata_flow_input(parsed$data),
+      error = function(error) NULL
+    )
+    if (is.null(normalised)) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = list(
+          status = "error",
+          messages = "Site metadata could not be validated. Please correct the mapping columns and try again."
+        )
+      ))
+    }
+
+    dashboard_validation <- validate_dashboard_site_metadata(normalised)
+    if (!is.null(dashboard_validation)) {
+      return(list(
+        data = NULL,
+        flow_input_provenance = NULL,
+        validation = list(status = "error", messages = dashboard_validation)
+      ))
+    }
+
+    list(
+      data = normalised,
+      flow_input_provenance = site_metadata_flow_input_provenance(normalised),
+      validation = list(
+        status = validation$status,
+        messages = c(validation$messages, parsed$warnings)
+      )
+    )
+  }
+
+  apply_site_metadata_result <- function(result, data_source) {
+    metadata_result(result)
+    if (identical(result$validation$status, "error")) {
+      current_site_metadata(NULL)
+      workflow_set_artifact(
+        "site_mapping",
+        "blocked",
+        blocking_reason = paste(result$validation$messages, collapse = " "),
+        next_action = "Correct the required site metadata and validate the mapping again.",
+        invalidate_downstream = TRUE
+      )
+      return(invisible(FALSE))
+    }
+
+    current_site_metadata(result$data)
+    workflow_set_artifact(
+      "site_mapping",
+      if (identical(result$validation$status, "warning")) "warning" else "complete",
+      data_source = data_source,
+      history_summary = sprintf("Validated %d site-mapping row(s).", nrow(result$data)),
+      invalidate_downstream = TRUE
+    )
+    invisible(TRUE)
+  }
+
+  begin_site_metadata_replacement <- function(validation_message, blocking_reason, next_action) {
+    current_site_metadata(NULL)
+    metadata_result(list(
+      data = NULL,
+      flow_input_provenance = NULL,
+      validation = list(
+        status = "error",
+        messages = validation_message
+      )
+    ))
+    workflow_reset_artifact("site_mapping", blocking_reason, next_action)
+    invalidate_flow_derived_state(reset_external = TRUE)
+  }
 
   observeEvent(input$site_metadata_csv, {
     site_metadata_upload_text(NULL)
     site_metadata_upload_flow_provenance(NULL)
     parsed <- read_site_metadata_csv(input$site_metadata_csv$datapath)
-    if (!is.null(parsed$error)) {
-      site_metadata_upload_result(list(status = "error", messages = parsed$error))
-      showNotification(parsed$error, type = "error")
+    result <- prepare_site_metadata_result(parsed)
+    if (!isTRUE(apply_site_metadata_result(result, "Uploaded site metadata CSV"))) {
+      site_metadata_upload_result(result$validation)
+      showNotification(paste(result$validation$messages, collapse = " "), type = "error")
       return()
     }
 
-    parsed$data <- tryCatch(
-      normalise_site_metadata_flow_input(parsed$data),
-      error = function(e) e
-    )
-    if (inherits(parsed$data, "error")) {
-      message <- conditionMessage(parsed$data)
-      site_metadata_upload_result(list(status = "error", messages = message))
-      showNotification(message, type = "error")
-      return()
-    }
-    
- 
-    supporting_validation <- validate_supporting_mapping(parsed$data)
-    if (identical(supporting_validation$status, "error")) {
-      site_metadata_upload_result(supporting_validation)
-      showNotification(paste(supporting_validation$messages, collapse = " "), type = "error")
-      return()
-    }
-
-    validation_error <- validate_dashboard_site_metadata(parsed$data)
-    if (!is.null(validation_error)) {
-      site_metadata_upload_result(list(status = "error", messages = validation_error))
-      showNotification(validation_error, type = "error")
-      return()
-    }
-
-    normalised_text <- readr::format_csv(parsed$data)
+    normalised_text <- readr::format_csv(result$data)
     site_metadata_upload_text(normalised_text)
-    site_metadata_upload_flow_provenance(site_metadata_flow_input_provenance(parsed$data))
+    site_metadata_upload_flow_provenance(result$flow_input_provenance)
     updateTextAreaInput(session, "meta_paste", value = normalised_text)
     messages <- c(
-      paste0("Site metadata CSV imported successfully: ", nrow(parsed$data), " row(s) loaded."),
-      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(parsed$data)), collapse = ", "), "."),
+      paste0("Site metadata CSV imported successfully: ", nrow(result$data), " row(s) loaded."),
+      paste0("Parsed ID columns: ", paste(intersect(c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id"), names(result$data)), collapse = ", "), "."),
       "The compatible dataset import buttons below now use these site IDs.",
-      supporting_validation$messages,
-      parsed$warnings
+      result$validation$messages
     )
-    site_metadata_upload_result(list(status = supporting_validation$status, messages = messages[nzchar(messages)]))
+    site_metadata_upload_result(list(status = result$validation$status, messages = messages[nzchar(messages)]))
     showNotification("Site metadata CSV imported successfully.", type = "message")
   })
 
@@ -917,49 +1197,85 @@ function(input, output, session){
     format_validation_message(site_metadata_upload_result())
   })
 
+  output$flow_source_default_status <- renderUI({
+    provenance <- tryCatch(
+      metadata_flow_input_provenance(),
+      error = function(error) NULL,
+      shiny.silent.error = function(error) NULL
+    )
+    if (is.null(provenance)) {
+      provenance <- site_metadata_upload_flow_provenance()
+    }
+    req(!is.null(provenance))
+    default_count <- sum(provenance$flow_input_source == "defaulted")
+    req(default_count > 0L)
+    format_validation_message(list(
+      status = "info",
+      messages = paste(
+        "Flow source was not specified for",
+        default_count,
+        if (default_count == 1L) "site." else "sites.",
+        "HDE has been selected as the default source."
+      )
+    ))
+  })
+
   output$download_demo_site_metadata <- downloadHandler(
     filename = function() "demo_site_metadata.csv",
     content = function(file) {
-      file.copy("demo_site_metadata.csv", file, overwrite = TRUE)
+      safe_server_file_operation("demo site metadata", function() {
+        copied <- file.copy(
+          file.path("data", "examples", "demo_site_metadata.csv"),
+          file,
+          overwrite = TRUE
+        )
+        if (!isTRUE(copied)) {
+          stop("The demo metadata copy did not complete.", call. = FALSE)
+        }
+        invisible(copied)
+      })
     },
     contentType = "text/csv"
   )
 
-  metadata_result <- reactive({
+  observeEvent(input$meta_paste, {
     parsed <- parse_site_metadata(input$meta_paste)
-    validate(need(is.null(parsed$error), parsed$error))
-    normalised <- tryCatch(
-      normalise_site_metadata_flow_input(parsed$data),
-      error = function(e) e
-    )
-    validate(need(!inherits(normalised, "error"), if (inherits(normalised, "error")) conditionMessage(normalised) else ""))
-    validation_error <- validate_dashboard_site_metadata(normalised)
-    validate(need(is.null(validation_error), validation_error))
-    provenance <- site_metadata_flow_input_provenance(normalised)
-    if (identical(input$meta_paste, site_metadata_upload_text()) &&
-        !is.null(site_metadata_upload_flow_provenance())) {
-      provenance <- site_metadata_upload_flow_provenance()
-      attr(normalised, "flow_input_provenance") <- provenance
+    result <- prepare_site_metadata_result(parsed)
+    from_upload <- identical(input$meta_paste, site_metadata_upload_text()) &&
+      !is.null(site_metadata_upload_flow_provenance())
+    if (from_upload && !identical(result$validation$status, "error")) {
+      result$flow_input_provenance <- site_metadata_upload_flow_provenance()
+      attr(result$data, "flow_input_provenance") <- result$flow_input_provenance
     }
-    list(data = normalised, flow_input_provenance = provenance)
-  })
+
+    apply_site_metadata_result(
+      result,
+      if (from_upload) "Uploaded site metadata CSV" else "Pasted site metadata"
+    )
+    if (!from_upload) {
+      site_metadata_upload_result(result$validation)
+      if (identical(result$validation$status, "error")) {
+        showNotification(paste(result$validation$messages, collapse = " "), type = "error")
+      }
+    }
+  }, ignoreInit = FALSE, priority = 100)
 
   metadata <- reactive({
-    metadata_result()$data
-  })
-
-  observeEvent(metadata(), {
-    site_metadata <- metadata()
-    req(nrow(site_metadata) > 0L)
-    workflow_complete_artifact(
-      "site_mapping",
-      "Validated site metadata",
-      sprintf("Validated %d site-mapping row(s).", nrow(site_metadata))
-    )
+    result <- metadata_result()
+    validate(need(
+      !identical(result$validation$status, "error") && !is.null(current_site_metadata()),
+      paste(result$validation$messages, collapse = " ")
+    ))
+    current_site_metadata()
   })
 
   metadata_flow_input_provenance <- reactive({
-    metadata_result()$flow_input_provenance
+    result <- metadata_result()
+    validate(need(
+      !identical(result$validation$status, "error") && !is.null(result$flow_input_provenance),
+      paste(result$validation$messages, collapse = " ")
+    ))
+    result$flow_input_provenance
   })
 
   wq_site_import_result <- reactiveVal(list(
@@ -1000,6 +1316,13 @@ function(input, output, session){
     if (!is.null(parsed$error)) {
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = parsed$error))
+      workflow_set_artifact(
+        "wq_input",
+        "blocked",
+        blocking_reason = parsed$error,
+        next_action = "Correct the WQ site mapping and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(parsed$error, type = "error")
       return()
     }
@@ -1010,6 +1333,13 @@ function(input, output, session){
       message <- "No confirmed WQ site IDs are available yet. Please provide WQ site IDs before importing WQ data."
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "warning", messages = message))
+      workflow_set_artifact(
+        "wq_input",
+        "blocked",
+        blocking_reason = message,
+        next_action = "Add valid wq_site_id values and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(message, type = "warning")
       return()
     }
@@ -1020,31 +1350,52 @@ function(input, output, session){
       message <- "The WQ end date must be later than the start date. Water Quality Explorer data are available from 2000 onwards."
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = message))
+      workflow_set_artifact(
+        "wq_input",
+        "blocked",
+        blocking_reason = message,
+        next_action = "Correct the WQ date range and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(message, type = "error")
       return()
     }
 
-    imported <- tryCatch(
-      hetoolkit::import_wq(
-        sites = usable_wq_ids,
-        dets = "default",
-        start_date = format(start_date, "%Y-%m-%d"),
-        end_date = format(end_date, "%Y-%m-%d"),
-        save = FALSE
-      ),
-      error = function(e) NULL
+    workflow_begin_artifact("wq_input", "Complete the WQ import.")
+    has_biology_mapping <- all(c("biol_site_id", "wq_site_id") %in% names(site_metadata))
+    import_result <- safe_external_import(
+      function() {
+        imported <- import_dashboard_wq(
+          sites = usable_wq_ids,
+          start_date = format(start_date, "%Y-%m-%d"),
+          end_date = format(end_date, "%Y-%m-%d")
+        )
+        if (has_biology_mapping) {
+          map_wq_records_to_biology(imported, site_metadata)
+        } else {
+          imported
+        }
+      },
+      required_columns = "wq_site_id"
     )
 
-    if (is.null(imported) || nrow(imported) == 0) {
-      message <- "WQ data could not be imported for the supplied site IDs and date range. Check the IDs, dates, and network connection."
+    if (!identical(import_result$status, "success")) {
+      record_external_import_diagnostic("wq", import_result)
+      message <- paste(
+        "WQ data could not be retrieved or processed.",
+        "Check the supplied site IDs and dates, then try again."
+      )
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = message))
-      showNotification(message, type = "error")
+      workflow_fail_external_import(
+        "wq_input",
+        message,
+        "Check the WQ site IDs and date range, then try the import again."
+      )
       return()
     }
 
-    has_biology_mapping <- all(c("biol_site_id", "wq_site_id") %in% names(site_metadata))
-    output_data <- if (has_biology_mapping) map_wq_records_to_biology(imported, site_metadata) else imported
+    output_data <- import_result$data
     mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
       length(unique(stats::na.omit(output_data$biol_site_id)))
     } else {
@@ -1073,6 +1424,13 @@ function(input, output, session){
     if (!is.null(parsed$error)) {
       rhs_site_import_data(NULL)
       rhs_site_import_result(list(status = "error", messages = parsed$error))
+      workflow_set_artifact(
+        "rhs_input",
+        "blocked",
+        blocking_reason = parsed$error,
+        next_action = "Correct the RHS site mapping and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(parsed$error, type = "error")
       return()
     }
@@ -1083,25 +1441,65 @@ function(input, output, session){
       message <- "No confirmed RHS survey IDs are available yet. Please provide rhs_survey_id values before importing RHS data."
       rhs_site_import_data(NULL)
       rhs_site_import_result(list(status = "warning", messages = message))
+      workflow_set_artifact(
+        "rhs_input",
+        "blocked",
+        blocking_reason = message,
+        next_action = "Add valid rhs_survey_id values and try the import again.",
+        invalidate_downstream = TRUE
+      )
       showNotification(message, type = "warning")
       return()
     }
 
-    imported <- tryCatch(
-      import_rhs_in_temp_directory(usable_rhs_ids),
-      error = function(e) NULL
+    retained_registry <- isolate(workflow_artifacts())
+    workflow_begin_artifact("rhs_input", "Complete the RHS import.")
+    has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
+    rhs_file_failure <- NULL
+    import_result <- safe_external_import(
+      function() {
+        imported <- tryCatch(
+          import_rhs_in_temp_directory(usable_rhs_ids),
+          dashboard_file_operation_error = function(error) {
+            rhs_file_failure <<- error
+            stop(error)
+          }
+        )
+        if (has_biology_mapping) {
+          map_rhs_records_to_biology(imported, site_metadata)
+        } else {
+          imported
+        }
+      },
+      required_columns = "rhs_survey_id"
     )
 
-    if (is.null(imported) || nrow(imported) == 0) {
-      message <- "RHS data could not be imported for the supplied survey IDs. Check the IDs and network connection."
-      rhs_site_import_data(NULL)
-      rhs_site_import_result(list(status = "error", messages = message))
-      showNotification(message, type = "error")
+    if (!is.null(rhs_file_failure)) {
+      file_result <- file_operation_condition_result(rhs_file_failure)
+      record_file_operation_diagnostic("RHS temporary import", file_result)
+      workflow_artifacts(retained_registry)
+      rhs_site_import_result(list(status = "error", messages = file_result$message))
+      showNotification(file_result$message, type = "error", duration = 10)
       return()
     }
 
-    has_biology_mapping <- all(c("biol_site_id", "rhs_survey_id") %in% names(site_metadata))
-    output_data <- if (has_biology_mapping) map_rhs_records_to_biology(imported, site_metadata) else imported
+    if (!identical(import_result$status, "success")) {
+      record_external_import_diagnostic("rhs", import_result)
+      message <- paste(
+        "RHS data could not be retrieved or processed.",
+        "Check the supplied survey IDs, then try again."
+      )
+      rhs_site_import_data(NULL)
+      rhs_site_import_result(list(status = "error", messages = message))
+      workflow_fail_external_import(
+        "rhs_input",
+        message,
+        "Check the RHS survey IDs, then try the import again."
+      )
+      return()
+    }
+
+    output_data <- import_result$data
     mapped_biology_count <- if ("biol_site_id" %in% names(output_data)) {
       length(unique(stats::na.omit(output_data$biol_site_id)))
     } else {
@@ -1148,7 +1546,10 @@ function(input, output, session){
     content = function(file) {
       data <- mapped_wq_plot_data()
       validate(need(!is.null(data) && nrow(data) > 0, "No mapped WQ data are available to download."))
-      readr::write_csv(data, file)
+      safe_server_file_operation(
+        "mapped WQ CSV",
+        function() readr::write_csv(data, file)
+      )
     },
     contentType = "text/csv"
   )
@@ -1158,7 +1559,10 @@ function(input, output, session){
     content = function(file) {
       data <- mapped_rhs_plot_data()
       validate(need(!is.null(data) && nrow(data) > 0, "No mapped RHS data are available to download."))
-      readr::write_csv(data, file)
+      safe_server_file_operation(
+        "mapped RHS CSV",
+        function() readr::write_csv(data, file)
+      )
     },
     contentType = "text/csv"
   )
@@ -1209,7 +1613,7 @@ function(input, output, session){
   output$wq_contract_summary_plot <- renderPlot({
     plot_result <- build_wq_contract_summary_plot(wq_contract_summary_result()$data)
     validate(need(!is.null(plot_result$plot), plot_result$message))
-    plot_result$plot
+    safe_server_plot("WQ summary", function() plot_result$plot)
   })
 
   output$wq_contract_summary_provenance <- renderUI({
@@ -1229,7 +1633,10 @@ function(input, output, session){
     content = function(file) {
       data <- wq_contract_summary_result()$data
       validate(need(!is.null(data) && nrow(data) > 0, "No WQ contract summary is available to download."))
-      readr::write_csv(data, file)
+      safe_server_file_operation(
+        "WQ contract summary CSV",
+        function() readr::write_csv(data, file)
+      )
     },
     contentType = "text/csv"
   )
@@ -1336,7 +1743,7 @@ function(input, output, session){
       group_col = input$wq_group_col
     )
     validate(need(!is.null(result$plot), result$message))
-    result$plot
+    safe_server_plot_value("WQ", function() result$plot)
   })
 
   current_rhs_plot <- reactive({
@@ -1347,21 +1754,25 @@ function(input, output, session){
       group_col = input$rhs_group_col
     )
     validate(need(!is.null(result$plot), result$message))
-    result$plot
+    safe_server_plot_value("RHS", function() result$plot)
   })
 
   output$wq_mapped_plot <- renderPlot({
-    current_wq_plot()
+    safe_server_plot_render("WQ", current_wq_plot())
   })
 
   output$rhs_mapped_plot <- renderPlot({
-    current_rhs_plot()
+    safe_server_plot_render("RHS", current_rhs_plot())
   })
 
   output$download_wq_plot <- downloadHandler(
     filename = function() "mapped_wq_plot.png",
     content = function(file) {
-      ggplot2::ggsave(file, plot = current_wq_plot(), width = 10, height = 5, dpi = 150)
+      plot <- current_wq_plot()
+      safe_server_file_operation(
+        "mapped WQ plot",
+        function() ggplot2::ggsave(file, plot = plot, width = 10, height = 5, dpi = 150)
+      )
     },
     contentType = "image/png"
   )
@@ -1369,7 +1780,11 @@ function(input, output, session){
   output$download_rhs_plot <- downloadHandler(
     filename = function() "mapped_rhs_plot.png",
     content = function(file) {
-      ggplot2::ggsave(file, plot = current_rhs_plot(), width = 10, height = 5, dpi = 150)
+      plot <- current_rhs_plot()
+      safe_server_file_operation(
+        "mapped RHS plot",
+        function() ggplot2::ggsave(file, plot = plot, width = 10, height = 5, dpi = 150)
+      )
     },
     contentType = "image/png"
   )
@@ -1434,14 +1849,29 @@ function(input, output, session){
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
-  observeEvent(input$meta_paste, {
+  observeEvent(input$local_inv_csv, {
     workflow_reset_artifact(
-      "site_mapping",
-      "Site metadata changed.",
-      "Validate the current site mapping."
+      "biology_input",
+      "The Local Biology source changed.",
+      "Validate the current Local Biology file."
     )
-    invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$site_metadata_csv, {
+    begin_site_metadata_replacement(
+      "The site metadata replacement is being validated.",
+      "The site metadata CSV changed.",
+      "Complete validation of the replacement site metadata CSV."
+    )
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$meta_paste, {
+    begin_site_metadata_replacement(
+      "The pasted site metadata replacement is being validated.",
+      "The pasted site metadata changed.",
+      "Complete validation of the pasted site metadata."
+    )
+  }, ignoreNULL = FALSE, ignoreInit = TRUE, priority = 200)
 
   observeEvent(input$date_range_flow, {
     if (!local_flow_is_operational(local_flow_upload())) {
@@ -1452,7 +1882,17 @@ function(input, output, session){
   observeEvent(input$import_flow, {
     if (!local_flow_is_operational(local_flow_upload())) {
       invalidate_flow_derived_state(reset_external = TRUE)
+      if (!workflow_artifact_is_current("site_mapping")) {
+        external_import_requested_revision(NULL)
+        workflow_block_artifact(
+          "flow_input",
+          "Current site metadata with valid flow_site_id values are required before importing Flow data.",
+          "Correct and validate the site metadata, then import Flow data again."
+        )
+        return()
+      }
       external_import_requested_revision(isolate(flow_source_revision()))
+      workflow_begin_artifact("flow_input", "Complete the external Flow import.")
     } else {
       external_import_requested_revision(NULL)
     }
@@ -1491,7 +1931,13 @@ function(input, output, session){
 
   output$download_exclusion_log <- downloadHandler(
     filename = function() paste0("exclusion_log_", format(Sys.Date(), "%Y%m%d"), ".csv"),
-    content  = function(file) utils::write.csv(exclusion_log_data(), file, row.names = FALSE)
+    content = function(file) {
+      data <- exclusion_log_data()
+      safe_server_file_operation(
+        "exclusion log CSV",
+        function() utils::write.csv(data, file, row.names = FALSE)
+      )
+    }
   )
 
   output$local_flow_preview <- DT::renderDataTable({
@@ -1511,11 +1957,34 @@ function(input, output, session){
   
   ## Biology data ----
   ### importing ----
-  biol_data <- eventReactive(input$import_inv, {
+  biol_data <- eventReactive(biology_import_request(), {
+    req(!is.null(biology_import_request()))
     biol_sites <- as.character(metadata()$biol_site_id)
-    
-    import_inv(source = "parquet", sites = biol_sites, start_date = input$date_range_biol[1],
-               end_date = input$date_range_biol[2])
+    result <- safe_external_import(
+      function() {
+        import_inv(
+          source = "parquet",
+          sites = biol_sites,
+          start_date = input$date_range_biol[1],
+          end_date = input$date_range_biol[2]
+        )
+      },
+      required_columns = "biol_site_id"
+    )
+    if (!identical(result$status, "success")) {
+      record_external_import_diagnostic("biology", result)
+      message <- paste(
+        "Biology data could not be retrieved or processed.",
+        "Check the selected sites and date range, then try again."
+      )
+      workflow_fail_external_import(
+        "biology_input",
+        message,
+        "Check the Biology site IDs and date range, then try the import again."
+      )
+      validate(need(FALSE, message))
+    }
+    result$data
   })
 
   observeEvent(biol_data(), {
@@ -1551,10 +2020,30 @@ function(input, output, session){
   
   ## Environmental data ----
   ### importing ----
-  env_data <- eventReactive(input$import_env, {
+  env_data <- eventReactive(environment_import_request(), {
+    req(!is.null(environment_import_request()))
     biol_sites <- as.character(metadata()$biol_site_id)
-    
-    import_env(sites = biol_sites) %>% mutate(across(BOULDERS_COBBLES: SILT_CLAY, ~tidyr::replace_na(.,0)))
+    result <- safe_external_import(
+      function() {
+        import_env(sites = biol_sites) %>%
+          mutate(across(BOULDERS_COBBLES:SILT_CLAY, ~tidyr::replace_na(., 0)))
+      },
+      required_columns = "biol_site_id"
+    )
+    if (!identical(result$status, "success")) {
+      record_external_import_diagnostic("environment", result)
+      message <- paste(
+        "Environmental data could not be retrieved or processed.",
+        "Check the selected sites, then try again."
+      )
+      workflow_fail_external_import(
+        "environment_input",
+        message,
+        "Check the Biology site IDs, then try the Environmental import again."
+      )
+      validate(need(FALSE, message))
+    }
+    result$data
   })
 
   observeEvent(env_data(), {
@@ -1606,9 +2095,11 @@ function(input, output, session){
   
   #### render PCA ----
   output$env_fig <- renderPlot({
-    plot_sitepca_dash(env_data(), vars = c("ALTITUDE", "SLOPE", "WIDTH", "DEPTH", 
-                                           "BOULDERS_COBBLES", "PEBBLES_GRAVEL", "SILT_CLAY"), 
-                      eigenvectors = TRUE, label_by = "biol_site_id")
+    safe_server_plot("Environmental PCA", function() {
+      plot_sitepca_dash(env_data(), vars = c("ALTITUDE", "SLOPE", "WIDTH", "DEPTH",
+                                             "BOULDERS_COBBLES", "PEBBLES_GRAVEL", "SILT_CLAY"),
+                        eigenvectors = TRUE, label_by = "biol_site_id")
+    })
   })
   
   
@@ -1619,11 +2110,35 @@ function(input, output, session){
     flow_sites <- as.character(metadata()$flow_site_id)
     flow_inputs <- as.character(metadata()$flow_input)
 
-    imported <- import_dashboard_flow(sites = flow_sites, inputs = flow_inputs, start_date = input$date_range_flow[1],
-                                      end_date = input$date_range_flow[2])
+    result <- safe_external_import(
+      function() {
+        import_dashboard_flow(
+          sites = flow_sites,
+          inputs = flow_inputs,
+          start_date = input$date_range_flow[1],
+          end_date = input$date_range_flow[2]
+        )
+      },
+      required_columns = c("flow_site_id", "date", "flow")
+    )
+    if (!identical(result$status, "success")) {
+      record_external_import_diagnostic("flow", result)
+      external_flow_loaded(FALSE)
+      external_flow_revision(NULL)
+      message <- paste(
+        "Flow data could not be retrieved or processed.",
+        "Check the selected sites, source and date range, then try again."
+      )
+      workflow_fail_external_import(
+        "flow_input",
+        message,
+        "Check the Flow site IDs, source and date range, then try the import again."
+      )
+      validate(need(FALSE, message))
+    }
     external_flow_loaded(TRUE)
     external_flow_revision(isolate(flow_source_revision()))
-    imported
+    result$data
   })
 
   observeEvent(external_flow_data(), {
@@ -1690,8 +2205,10 @@ function(input, output, session){
   
   #### render heatmap ----
   output$flow_fig <- renderPlot({
-    plot_heatmap_dash(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
-      pluck(1) %>% grid.arrange() %>% print()
+    safe_server_plot("Flow heatmap", function() {
+      plot_heatmap_dash(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
+        pluck(1) %>% grid.arrange() %>% print()
+    })
   })
   
   
@@ -1720,7 +2237,9 @@ function(input, output, session){
   
   ## RICT predictions ----
   ### calculating ----
-  predict_data <- eventReactive(input$run_rict, {
+  predict_data <- eventReactive(rict_request(), {
+    req(!is.null(rict_request()))
+    req(workflow_artifact_is_current("environment_input"))
     env_data <- env_data()
     
     keeps <- c("biol_site_id", "SEASON", "TL2_WHPT_ASPT_AbW_DistFam", "TL2_WHPT_NTAXA_AbW_DistFam",
@@ -1743,7 +2262,7 @@ function(input, output, session){
     )
   })
   
-  #### error message for absent env data ----
+  #### current Environmental prerequisite state ----
   env_data_exist <- reactiveVal(FALSE)
   
   observe({
@@ -1751,18 +2270,8 @@ function(input, output, session){
     env_data_exist(TRUE)
   })
   
-  observeEvent(input$run_rict, {
-    
-    if(!env_data_exist()) {
-      
-      shinyalert(title = "Please import environmental base data",
-                 type = "error")
-    } 
-    
-  })
-  
   #### warning message for incomplete env data ----
-  observeEvent(input$run_rict, {
+  observeEvent(predict_data(), {
     
     if(sum(is.na(env_data()$ALTITUDE),	
            is.na(env_data()$SLOPE),	
@@ -1788,9 +2297,8 @@ function(input, output, session){
     datatable(
       predict_data(),
       options = list(
-        scrollY = "600px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -1808,8 +2316,10 @@ function(input, output, session){
   
   ## O:E ratios ----
   ### calculating ----
-  biol_all <- reactive({
-    req(input$calc_OE)
+  biol_all <- eventReactive(oe_request(), {
+    req(!is.null(oe_request()))
+    req(workflow_artifact_is_current("biology_input"))
+    req(workflow_artifact_is_current("processed_environment"))
     
     predict_data <- predict_data()
     env_data <- env_data()
@@ -1826,7 +2336,7 @@ function(input, output, session){
              WFD_WATERBODY_ID:CALCIUM, WHPT_ASPT_O:PSI_OE)
     
 
-  })
+  }, ignoreInit = TRUE)
 
   observeEvent(biol_all(), {
     result <- biol_all()
@@ -1843,7 +2353,7 @@ function(input, output, session){
     )
   })
   
-  #### error message for absent biol data ----
+  #### current Biology prerequisite state ----
   
   biol_data_exist <- reactiveVal(FALSE)
   
@@ -1852,18 +2362,8 @@ function(input, output, session){
     biol_data_exist(TRUE)
   })
   
-  observeEvent(input$calc_OE, {
-    
-    if(!biol_data_exist()) {
-      
-      shinyalert(title = "Please import biology data",
-                 type = "error")
-    } 
-    
-  })
-  
   #### warning message for incomplete biol data ----
-  observeEvent(input$calc_OE, {
+  observeEvent(biol_all(), {
     
     if(sum(is.na(biol_all()$WHPT_ASPT_O),	
            is.na(biol_all()$LIFE_F_O),	
@@ -1876,7 +2376,7 @@ function(input, output, session){
     
   })
   
-  #### error message for absent predict data ----
+  #### current RICT prerequisite state ----
   
   predict_data_exist <- reactiveVal(FALSE)
   
@@ -1885,25 +2385,14 @@ function(input, output, session){
     predict_data_exist(TRUE)
   })
   
-  observeEvent(input$calc_OE, {
-    
-    if(!predict_data_exist()) {
-      
-      shinyalert(title = "Please run RICT predictions",
-                 type = "error")
-    } 
-    
-  })
-  
   ### displaying ----
   output$OE_table <- DT::renderDataTable(
     server=FALSE,
     datatable(
       biol_all(),
       options = list(
-        scrollY = "400px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -1922,17 +2411,15 @@ function(input, output, session){
   ## Flow imputation----
   ### donor mapping ----
   #### upload ----
-  donor_mapping <- reactive({ 
-    
-  ##### error message for absent donor mapping ----
-    validate(
-      need(input$donor_mapping_paste != "", "If imputing flows please add donor mapping")
-    )
-    
-    if (input$donor_mapping_paste != '') {
-      donor_mapping <- fread(paste(input$donor_mapping_paste, collapse = "\n"), colClasses = "character")
-      donor_mapping <-as.data.frame(donor_mapping)
-    }
+  donor_mapping_result <- reactive({
+    donor_text <- paste(input$donor_mapping_paste, collapse = "\n")
+    parse_donor_mapping(donor_text)
+  })
+
+  donor_mapping <- reactive({
+    result <- donor_mapping_result()
+    validate(need(is.null(result$error), result$error))
+    result$data
   })
   
   #### display ----
@@ -1954,23 +2441,15 @@ function(input, output, session){
   
   ### donor site list ----
   #### upload ----
-  donor_list <- reactive({ 
-    
-  ##### error message for absent extra flow site list ----
-    validate(
-      need(input$donor_list_paste != "", "If imputing flows please add additional donor sites as required")
-    )
-    
-    if (input$donor_list_paste != '') {
-      donor_list <- fread(paste(input$donor_list_paste, collapse = "\n"), colClasses = "character")
-      donor_list <-as.data.frame(donor_list)
-      donor_list <- tryCatch(
-        normalise_site_metadata_flow_input(donor_list),
-        error = function(e) e
-      )
-      validate(need(!inherits(donor_list, "error"), if (inherits(donor_list, "error")) conditionMessage(donor_list) else ""))
-      donor_list
-    }
+  donor_list_result <- reactive({
+    donor_text <- paste(input$donor_list_paste, collapse = "\n")
+    parse_donor_site_list(donor_text)
+  })
+
+  donor_list <- reactive({
+    result <- donor_list_result()
+    validate(need(is.null(result$error), result$error))
+    result$data
   })
   
   #### display ----
@@ -1996,41 +2475,73 @@ function(input, output, session){
   
   ### impute flow data ----
   #### get extra flow data if needed ----
-  flow_data_extra <- reactive({
-    req(input$import_donor_flow)
-    
-    donor_sites <- as.character(donor_list()$flow_site_id)
-    donor_inputs <- as.character(donor_list()$flow_input)
-    
-    donor_data <- import_dashboard_flow(sites = donor_sites, inputs = donor_inputs, start_date = input$date_range_flow[1],
-                                        end_date = input$date_range_flow[2])
-    
-    bind_rows(flow_data(), donor_data)
-    
-  })
-  
-  #### alert message for successful import ----
-  
+  donor_flow_import_data <- reactiveVal(NULL)
+  donor_flow_import_result <- reactiveVal(list(
+    status = "info",
+    messages = "Add donor sites, then import the additional Flow data if required."
+  ))
   import_donor_flow_success <- reactiveVal(FALSE)
-  
-  observe({
-    req(flow_data_extra())
-    import_donor_flow_success(TRUE)
+
+  flow_data_extra <- reactive({
+    req(donor_flow_import_data())
+    donor_flow_import_data()
   })
-  
+
   observeEvent(input$import_donor_flow, {
-    
-    if(import_donor_flow_success()) {
-      
-      shinyalert(title = "Additional flow data successfully imported",
-                 type = "success")
-    } 
-    
+    import_donor_flow_success(FALSE)
+    donor_flow_import_data(NULL)
+    parsed <- donor_list_result()
+    if (!is.null(parsed$error)) {
+      donor_flow_import_result(list(status = "error", messages = parsed$error))
+      showNotification(parsed$error, type = "error", duration = 10)
+      return()
+    }
+    if (!workflow_artifact_is_current("flow_input")) {
+      message <- paste(
+        "Current Flow data are required before importing additional donor Flow data.",
+        "Import or validate Flow data, then try again."
+      )
+      donor_flow_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    donor_sites <- as.character(parsed$data$flow_site_id)
+    donor_inputs <- as.character(parsed$data$flow_input)
+    import_result <- safe_external_import(
+      function() {
+        import_dashboard_flow(
+          sites = donor_sites,
+          inputs = donor_inputs,
+          start_date = input$date_range_flow[1],
+          end_date = input$date_range_flow[2]
+        )
+      },
+      required_columns = c("flow_site_id", "date", "flow")
+    )
+    if (!identical(import_result$status, "success")) {
+      record_external_import_diagnostic("additional_donor_flow", import_result)
+      message <- paste(
+        "Additional donor Flow data could not be retrieved or processed.",
+        "Check the donor site list, source and date range, then try again."
+      )
+      donor_flow_import_result(list(status = "error", messages = message))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    combined <- bind_rows(flow_data(), import_result$data)
+    donor_flow_import_data(combined)
+    import_donor_flow_success(TRUE)
+    donor_flow_import_result(list(
+      status = "success",
+      messages = sprintf("Imported additional Flow data for %d donor site(s).", length(unique(import_result$data$flow_site_id)))
+    ))
+    shinyalert(title = "Additional flow data successfully imported", type = "success")
   })
   
   #### warning message for unID'd donor sites ----
-  observeEvent(input$import_donor_flow, {
-    
+  observeEvent(flow_data_extra(), {
     missed_donor_sites <- donor_list() %>% filter(!flow_site_id %in% flow_data_extra()$flow_site_id) %>% select(flow_site_id)
     missed_donor_sites_text <- gsub("c\\(|\\)",'', missed_donor_sites)
     
@@ -2044,33 +2555,80 @@ function(input, output, session){
   
   #### run imputation ----
   
-  extra_check <- reactiveVal(TRUE)
-  
-  observeEvent(flow_data_extra(), {
-    extra_check(!extra_check())
-  })
-  
   flow_data_forimp <- reactive({
-    
-    if (extra_check()){
-      flow_data_forimp <- flow_data()
-      
+    if (isTRUE(import_donor_flow_success())) {
+      flow_data_extra()
+    } else {
+      flow_data()
     }
-    else{
-      flow_data_forimp <- flow_data_extra()
-      
-    }
-    
   })
-  
+
+  flow_imputation_result <- reactiveVal(list(
+    status = "info",
+    messages = "Add a donor mapping, then run Flow imputation.",
+    data = NULL
+  ))
+
+  observeEvent(input$impute_flow, {
+    parsed <- donor_mapping_result()
+    if (!is.null(parsed$error)) {
+      flow_imputation_result(list(status = "error", messages = parsed$error, data = NULL))
+      showNotification(parsed$error, type = "error", duration = 10)
+      return()
+    }
+    if (!workflow_artifact_is_current("flow_input")) {
+      message <- "Current Flow data are required before imputation. Import or validate Flow data, then try again."
+      flow_imputation_result(list(status = "error", messages = message, data = NULL))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    mapping <- parsed$data
+    available_sites <- unique(c(metadata()$flow_site_id, flow_data_forimp()$flow_site_id))
+    if (!all(mapping[[1L]] %in% metadata()$flow_site_id) || !all(mapping[[2L]] %in% available_sites)) {
+      message <- paste(
+        "The donor mapping contains receiving or donor Flow sites that are not available.",
+        "Correct the donor mapping or import the required donor sites, then try again."
+      )
+      flow_imputation_result(list(status = "error", messages = message, data = NULL))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+
+    imputation <- safe_external_import(
+      function() {
+        impute_flow(
+          flow_data_forimp(),
+          site_col = "flow_site_id",
+          date_col = "date",
+          flow_col = "flow",
+          method = "equipercentile",
+          donor = as.data.frame(mapping)
+        )
+      },
+      required_columns = c("flow_site_id", "date", "flow")
+    )
+    if (!identical(imputation$status, "success")) {
+      record_external_import_diagnostic("flow_imputation", imputation)
+      message <- paste(
+        "Flow imputation could not be completed from the donor mapping.",
+        "Check the mapping and available donor Flow data, then try again."
+      )
+      flow_imputation_result(list(status = "error", messages = message, data = NULL))
+      showNotification(message, type = "error", duration = 10)
+      return()
+    }
+    flow_imputation_result(list(
+      status = "success",
+      messages = "Flow imputation completed successfully.",
+      data = imputation$data
+    ))
+  })
+
   flow_data_imputed <- reactive({
-    req(input$impute_flow)
-    
-    donor_mapping <- as.data.frame(donor_mapping())
-    
-    impute_flow(flow_data_forimp(), site_col = "flow_site_id", date_col = "date", flow_col = "flow", 
-                method = "equipercentile", donor = donor_mapping)
-    
+    result <- flow_imputation_result()
+    validate(need(identical(result$status, "success"), result$messages))
+    result$data
   })
   
   #### displaying ----
@@ -2100,8 +2658,10 @@ function(input, output, session){
   
   ##### render heatmap ----
   output$flow_fig_imp <- renderPlot({
-    plot_heatmap_dash(data = flow_data_imputed(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
-      pluck(1) %>% grid.arrange() %>% print()
+    safe_server_plot("Imputed Flow heatmap", function() {
+      plot_heatmap_dash(data = flow_data_imputed(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
+        pluck(1) %>% grid.arrange() %>% print()
+    })
   })
   
   
@@ -2109,23 +2669,13 @@ function(input, output, session){
   
   ### run calculation ----
   
-  imp_check <- reactiveVal(TRUE)
-  
-  observeEvent(flow_data_imputed(), {
-    imp_check(!imp_check())
-  })
-  
   flow_data_final <- reactive({
-    
-    if (imp_check()){
-      flow_data_final <- flow_data()
-      
+    result <- flow_imputation_result()
+    if (identical(result$status, "success")) {
+      result$data
+    } else {
+      flow_data()
     }
-    else{
-      flow_data_final <- flow_data_imputed()
-      
-    }
-    
   })
   
   flow_stats_result <- eventReactive(input$calc_flow_stats, {
@@ -2243,9 +2793,8 @@ function(input, output, session){
     datatable(
       flow_stats_data(),
       options = list(
-        scrollY = "400px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -2265,9 +2814,12 @@ function(input, output, session){
   ## Run join calculations ----
   ### default join type for modelling ----
   
-  join_data_result <- eventReactive(input$join_he, {
-    request <- isolate(join_request())
+  join_data_result <- eventReactive(join_request(), {
+    request <- join_request()
     req(request)
+    req(identical(request$request_id, input$join_he))
+    req(workflow_artifact_is_current("oe_result"))
+    req(workflow_artifact_is_current("flow_statistics"))
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
     mapping$biol_site_id <- as.character(mapping$biol_site_id)
     mapping$flow_site_id <- as.character(mapping$flow_site_id)
@@ -2490,20 +3042,27 @@ function(input, output, session){
           source_manifest$dataset_checksum
         }
       )
-      write_processed_dataset_checkpoint(
-        dataset = isolate(join_data()),
-        path = file,
-        provenance = provenance
+      dataset <- isolate(join_data())
+      safe_server_file_operation(
+        "processed dataset checkpoint",
+        function() write_processed_dataset_checkpoint(
+          dataset = dataset,
+          path = file,
+          provenance = provenance
+        )
       )
     }
   )
 
   processed_checkpoint_user_error_message <- function(error) {
-    message <- conditionMessage(error)
-    if (startsWith(message, "Processed dataset checkpoint")) {
-      return(message)
-    }
-    "Processed dataset checkpoint could not be loaded. Use a checkpoint downloaded from this dashboard."
+    raw24_safe_condition_message(
+      error,
+      safe_prefixes = "Processed dataset checkpoint",
+      fallback = paste(
+        "Processed dataset checkpoint could not be loaded.",
+        "Use a checkpoint downloaded from this dashboard."
+      )
+    )
   }
 
   observeEvent(input$load_processed_dataset_checkpoint, {
@@ -2533,6 +3092,7 @@ function(input, output, session){
       processed_checkpoint_load_status(list(status = "success", message = message))
       showNotification(message, type = "message", duration = 6)
     }, error = function(error) {
+      record_raw24_condition_diagnostic("processed dataset checkpoint load", error)
       message <- processed_checkpoint_user_error_message(error)
       processed_checkpoint_load_status(list(status = "error", message = message))
       showNotification(message, type = "error", duration = 8)
@@ -2570,6 +3130,40 @@ function(input, output, session){
 
   analysis_exclusion_log <- reactive({
     build_analysis_exclusion_log(analysis_filter_selection())
+  })
+
+  output$analysis_record_selector <- renderUI({
+    analysis_data <- tryCatch(
+      current_joined_source()$analysis_dataset,
+      error = function(error) {
+        if (inherits(error, "shiny.silent.error")) {
+          return(NULL)
+        }
+        stop(error)
+      }
+    )
+    spec <- analysis_record_selector_spec(analysis_data)
+    choices <- c(
+      stats::setNames("", ""),
+      stats::setNames(spec$choices, spec$choices)
+    )
+
+    div(
+      class = "analysis-record-selector",
+      `data-id-column` = if (is.na(spec$id_column)) "" else spec$id_column,
+      selectizeInput(
+        "analysis_record_id",
+        spec$label,
+        choices = choices,
+        selected = "",
+        width = "100%",
+        options = list(
+          placeholder = spec$placeholder,
+          allowEmptyOption = TRUE
+        )
+      ),
+      p(class = "hint-text analysis-record-hint", spec$hint)
+    )
   })
 
   output$analysis_exclusion_log_table <- DT::renderDataTable({
@@ -2830,9 +3424,12 @@ function(input, output, session){
   
   ### join type for plotting ----
   
-  join_data_addbiol_result <- eventReactive(input$join_he, {
-    request <- isolate(join_request())
+  join_data_addbiol_result <- eventReactive(join_request(), {
+    request <- join_request()
     req(request)
+    req(identical(request$request_id, input$join_he))
+    req(workflow_artifact_is_current("oe_result"))
+    req(workflow_artifact_is_current("flow_statistics"))
     all.combinations <- expand.grid(biol_site_id = unique(biol_data()$biol_site_id), 
                                     Year = min(biol_data()$Year):max(biol_data()$Year), 
                                     Season = c("Spring", "Autumn"), stringsAsFactors = FALSE)
@@ -2862,7 +3459,7 @@ function(input, output, session){
     result
   })
   
-  ### error message for absent biology data ----
+  ### current join prerequisite states ----
   
   biol_all_data_exist <- reactiveVal(FALSE)
   
@@ -2871,33 +3468,11 @@ function(input, output, session){
     biol_all_data_exist(TRUE)
   })
   
-  observeEvent(input$join_he, {
-    
-    if(!biol_all_data_exist()) {
-      
-      shinyalert(title = "Processed biology data are missing",
-                 type = "error")
-    } 
-    
-  })
-  
-  ### error message for absent flow stats ----
-  
   flow_stats_exist <- reactiveVal(FALSE)
   
   observe({
     req(flow_stats())
     flow_stats_exist(TRUE)
-  })
-  
-  observeEvent(input$join_he, {
-    
-    if(!flow_stats_exist()) {
-      
-      shinyalert(title = "Flow statistics are missing",
-                 type = "error")
-    } 
-    
   })
   
   ### error message for unselected lag(s) ----
@@ -2915,6 +3490,8 @@ function(input, output, session){
   ### warning message for biol data predating flow records ----
   
   observeEvent(input$join_he, {
+    req(!is.null(isolate(join_request())))
+    req(identical(isolate(join_request())$request_id, input$join_he))
     
     biol_starts <- biol_data() %>% group_by(biol_site_id) %>% summarise(biol_start = min(SAMPLE_DATE))
     flow_starts <- flow_stats() %>% pluck(1) %>% group_by(flow_site_id) %>% summarise(flow_start = min(start_date))
@@ -2945,9 +3522,8 @@ function(input, output, session){
     datatable(
       join_data(),
       options = list(
-        scrollY = "400px",
         scrollX = TRUE,
-        scrollCollapse = TRUE,
+        pageLength = 10,
         dom = 'Blrtip',
         buttons =
           list('copy', list(
@@ -2965,22 +3541,24 @@ function(input, output, session){
   ### plots ----
   #### correlations ----
   output$corr_plots <- renderPlot({
-    GGally::ggpairs(current_analysis_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"),
-                    upper = list(continuous = GGally::wrap("cor")),
-                    diag = list(continuous = "densityDiag"),
-                    lower = list(continuous = GGally::wrap("points")))+
-      theme(text = element_text(size = 14))
+    safe_server_plot("Analysis correlation", function() {
+      GGally::ggpairs(current_analysis_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"),
+                      upper = list(continuous = GGally::wrap("cor")),
+                      diag = list(continuous = "densityDiag"),
+                      lower = list(continuous = GGally::wrap("points")))+
+        theme(text = element_text(size = 14))
+    })
     
   })
   
   #### coverage hull ----
   
   output$flow_hull <- renderPlot({
-    
-    plot_rngflows(data = join_data_addbiol(), flow_stats = c("Q95z_lag0", "Q10z_lag0"), 
-                  biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
-      theme(text = element_text(size = 16))
-    
+    safe_server_plot("Analysis Flow coverage", function() {
+      plot_rngflows(data = join_data_addbiol(), flow_stats = c("Q95z_lag0", "Q10z_lag0"),
+                    biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
+        theme(text = element_text(size = 16))
+    })
   })
 
   output$basic_model_controls <- renderUI({
@@ -2999,16 +3577,18 @@ function(input, output, session){
     }
 
     tagList(
-      selectInput("basic_model_flow_var", "Flow variable", choices = flow_cols, selected = if (length(flow_cols) > 0) flow_cols[[1]] else character(0)),
-      selectInput("basic_model_ecology_var", "Ecology response variable", choices = ecology_cols, selected = if (length(ecology_cols) > 0) ecology_cols[[1]] else character(0))
+      selectInput("basic_model_flow_var", "Flow predictor", choices = flow_cols, selected = if (length(flow_cols) > 0) flow_cols[[1]] else character(0)),
+      selectInput("basic_model_ecology_var", "Ecology response", choices = ecology_cols, selected = if (length(ecology_cols) > 0) ecology_cols[[1]] else character(0))
     )
   })
 
   basic_model_result <- reactiveVal(list(
     status = "info",
-    messages = "Pair biology and flow data, choose variables, then run the optional basic model.",
+    messages = "Prepare a current single-site analysis dataset, choose a Flow predictor and Ecology response, then fit the model.",
     plot = NULL,
-    summary = NULL
+    summary = NULL,
+    diagnostics = NULL,
+    diagnostic_plot = NULL
   ))
 
   observeEvent(input$run_basic_model, {
@@ -3028,6 +3608,12 @@ function(input, output, session){
         model_type  = "linear"
       )
     )
+    if (is.character(result$diagnostic) &&
+        length(result$diagnostic) == 1L &&
+        !is.na(result$diagnostic) &&
+        nzchar(result$diagnostic)) {
+      message(sprintf("RAW-24 model diagnostic: %s", result$diagnostic))
+    }
     basic_model_result(result)
     if (identical(result$status, "success")) {
       workflow_complete_artifact(
@@ -3037,15 +3623,15 @@ function(input, output, session){
       )
       workflow_complete_artifact(
         "model_result",
-        "Basic Flow–ecology model",
-        "Fitted the current model and generated diagnostics."
+        "Flow–ecology model",
+        "Fitted the current model and generated result and residual-diagnostic outputs."
       )
     } else {
       workflow_status <- if (identical(result$status, "not_ready")) "blocked" else "failed"
       next_action <- if (identical(result$status, "not_ready")) {
-        "Select a single-site analysis dataset, then run the model again."
+        "Select a single-site analysis dataset, then fit the model again."
       } else {
-        "Correct the model inputs and run the model again."
+        "Correct the model inputs and fit the model again."
       }
       workflow_set_artifact(
         "model_result",
@@ -3063,7 +3649,7 @@ function(input, output, session){
         workflow_set_artifact(
           "model_spec",
           "ready",
-          next_action = "Run the model with the current variable selection.",
+          next_action = "Fit the model with the current variable selection.",
           invalidate_downstream = TRUE
         )
       }
@@ -3077,6 +3663,37 @@ function(input, output, session){
     format_validation_message(list(status = display_status, messages = result$messages))
   })
 
+  output$basic_model_result_review <- renderUI({
+    if (!workflow_artifact_is_current("model_result") ||
+        !identical(basic_model_result()$status, "success")) {
+      return(tags$p(
+        class = "hint-text",
+        "Model results appear here after the current model has been fitted."
+      ))
+    }
+    tagList(
+      DT::dataTableOutput("basic_model_summary"),
+      plotOutput("basic_model_plot", height = 420)
+    )
+  })
+
+  output$basic_model_diagnostic_review <- renderUI({
+    if (!workflow_artifact_is_current("model_result") ||
+        !identical(basic_model_result()$status, "success")) {
+      return(tags$p(
+        class = "hint-text",
+        "Residual diagnostics appear here after the current model has been fitted."
+      ))
+    }
+    tagList(
+      tags$p(
+        class = "hint-text",
+        "Check the residual pattern before interpreting or exporting the fitted relationship."
+      ),
+      plotOutput("basic_model_diagnostic_plot", height = 360)
+    )
+  })
+
   output$basic_model_summary <- DT::renderDataTable({
     req(basic_model_result()$summary)
     basic_model_result()$summary
@@ -3084,14 +3701,81 @@ function(input, output, session){
 
   output$basic_model_plot <- renderPlot({
     req(basic_model_result()$plot)
-    basic_model_result()$plot
+    safe_server_plot("Flow–ecology model", function() basic_model_result()$plot)
   })
+
+  output$basic_model_diagnostic_plot <- renderPlot({
+    req(basic_model_result()$diagnostic_plot)
+    safe_server_plot(
+      "Model residual diagnostics",
+      function() basic_model_result()$diagnostic_plot
+    )
+  })
+
+  output$basic_model_download_controls <- renderUI({
+    if (!workflow_artifact_is_current("model_result") ||
+        !identical(basic_model_result()$status, "success")) {
+      return(tags$p(
+        class = "hint-text",
+        "Exports become available after the current model and diagnostics are complete."
+      ))
+    }
+    div(
+      class = "download-row",
+      downloadButton(
+        "download_basic_model_summary",
+        "Download model summary",
+        class = "client-action-button"
+      ),
+      downloadButton(
+        "download_basic_model_diagnostics",
+        "Download diagnostics",
+        class = "client-action-button"
+      )
+    )
+  })
+
+  output$download_basic_model_summary <- downloadHandler(
+    filename = function() {
+      sprintf("he-model-summary-%s.csv", format(Sys.Date(), "%Y%m%d"))
+    },
+    content = function(file) {
+      validate(need(
+        workflow_artifact_is_current("model_result") &&
+          identical(isolate(basic_model_result())$status, "success"),
+        "The current model is unavailable or out of date. Fit the model again before exporting."
+      ))
+      result <- isolate(basic_model_result())
+      safe_server_file_operation(
+        "model summary CSV",
+        function() utils::write.csv(result$summary, file, row.names = FALSE)
+      )
+    }
+  )
+
+  output$download_basic_model_diagnostics <- downloadHandler(
+    filename = function() {
+      sprintf("he-model-diagnostics-%s.csv", format(Sys.Date(), "%Y%m%d"))
+    },
+    content = function(file) {
+      validate(need(
+        workflow_artifact_is_current("model_result") &&
+          identical(isolate(basic_model_result())$status, "success"),
+        "The current diagnostics are unavailable or out of date. Fit the model again before exporting."
+      ))
+      result <- isolate(basic_model_result())
+      safe_server_file_operation(
+        "model diagnostics CSV",
+        function() utils::write.csv(result$diagnostics, file, row.names = FALSE)
+      )
+    }
+  )
   
   # HEV ----
   ## Create HEV dataset ----
   
-  HEV_data_result <- eventReactive(input$join_he, {
-    request <- isolate(join_request())
+  HEV_data_result <- eventReactive(join_request(), {
+    request <- join_request()
     req(request)
     flowstats_1 <- flow_stats() %>% pluck(1)
     
@@ -3166,9 +3850,13 @@ function(input, output, session){
   })
   
   ### activate initial plot upon site selection
-  HEV_go <- eventReactive(input$renderHEV, {
+  HEV_go <- reactive({
+    request_id <- hev_request()
+    req(!is.null(request_id))
+    req(isolate(workflow_artifact_is_current("joined_core")))
+    plot_data <- isolate(HEV_plot_data())
     list(
-      data = HEV_plot_data(),
+      data = plot_data,
       analysis_context = isolate(current_analysis_context()),
       site_id = isolate(input$site_selector),
       date_range = isolate(input$HEV_date_range),
@@ -3178,25 +3866,15 @@ function(input, output, session){
       show_high_low = isTRUE(isolate(input$HEV_show_high_low)),
       show_status = isTRUE(isolate(input$HEV_show_status))
     )
-  }, ignoreInit = TRUE)
+  })
   
-  ### error message for absent joined data ----
+  ### current Joined HE Dataset prerequisite state ----
   
   HEV_data_exist <- reactiveVal(FALSE)
   
   observe({
     req(HEV_data())
     HEV_data_exist(TRUE)
-  })
-  
-  observeEvent(input$renderHEV, {
-    
-    if(!HEV_data_exist()) {
-      
-      shinyalert(title = "Paired biology-flow data are missing",
-                 type = "error")
-    } 
-    
   })
   
   ### render HEV plot with download option ----
@@ -3221,6 +3899,8 @@ function(input, output, session){
       "warning"
     } else if (identical(result$status, "not_ready")) {
       "info"
+    } else if (identical(result$status, "failed")) {
+      "error"
     } else {
       result$status
     }
@@ -3239,69 +3919,112 @@ function(input, output, session){
   })
 
   HEV_result <- reactive({
-    req(!identical(hev_plot_dependency_status()$status, "error"))
-    request <- HEV_go()
-    hev_data <- request$data %>%
-      filter(Year >= request$date_range[1] & Year <= request$date_range[2])
-    biol_metrics <- resolve_hev_biology_metrics(
-      hev_data,
-      request$biol_metric_selector,
-      request$show_all_metrics
-    )
-    flow_metrics <- resolve_hev_flow_metrics(
-      hev_data,
-      request$flow_metric_selector,
-      request$show_high_low
-    )
-    validate(
-      need(nrow(hev_data) > 0, "No HEV records are available for the selected site and date range."),
-      need(length(biol_metrics) > 0, "No selected biology metric is available in the current HEV data."),
-      need(length(flow_metrics) > 0, "No selected flow metric is available in the current HEV data.")
-    )
+    req(!is.null(hev_request()))
+    safe_plot_result(
+      operation = function() {
+        req(!identical(hev_plot_dependency_status()$status, "error"))
+        request <- HEV_go()
+        hev_data <- request$data %>%
+          filter(Year >= request$date_range[1] & Year <= request$date_range[2])
+        biol_metrics <- resolve_hev_biology_metrics(
+          hev_data,
+          request$biol_metric_selector,
+          request$show_all_metrics
+        )
+        flow_metrics <- resolve_hev_flow_metrics(
+          hev_data,
+          request$flow_metric_selector,
+          request$show_high_low
+        )
+        if (nrow(hev_data) == 0L || length(biol_metrics) == 0L || length(flow_metrics) == 0L) {
+          return(list(plot = NULL, data = NULL, provenance = NULL))
+        }
 
-    plot <- plot_hev_dash(data = hev_data,
-                          date_col = "date",
-                          flow_stat = flow_metrics,
-                          biol_metric = biol_metrics,
-                          multiplot = request$show_all_metrics,
-                          clr_by = "Season")
-    provenance <- build_hev_output_provenance(
-      analysis_context = request$analysis_context,
-      plot_data = hev_data,
-      site_id = request$site_id,
-      date_range = request$date_range,
-      biology_metrics = biol_metrics,
-      flow_metrics = flow_metrics,
-      show_all_metrics = request$show_all_metrics,
-      show_high_low = request$show_high_low,
-      show_status = request$show_status
+        plot <- plot_hev_dash(data = hev_data,
+                              date_col = "date",
+                              flow_stat = flow_metrics,
+                              biol_metric = biol_metrics,
+                              multiplot = request$show_all_metrics,
+                              clr_by = "Season")
+        provenance <- build_hev_output_provenance(
+          analysis_context = request$analysis_context,
+          plot_data = hev_data,
+          site_id = request$site_id,
+          date_range = request$date_range,
+          biology_metrics = biol_metrics,
+          flow_metrics = flow_metrics,
+          show_all_metrics = request$show_all_metrics,
+          show_high_low = request$show_high_low,
+          show_status = request$show_status
+        )
+        list(plot = plot, data = hev_data, provenance = provenance)
+      },
+      plot_value = function(value) value$plot
     )
-    list(plot = plot, data = hev_data, provenance = provenance)
   })
 
   HEV_plot <- reactive({
-    HEV_result()$plot
+    req(identical(hev_current_result()$status, "success"))
+    req(workflow_artifact_is_current("hev_result"))
+    hev_current_result()$plot
   })
 
   observeEvent(HEV_result(), {
     result <- HEV_result()
-    req(!is.null(result$plot))
-    hev_current_result(list(
-      status = "success",
-      plot = result$plot,
-      data = result$data,
-      provenance = result$provenance,
-      messages = "Generated the current HEV plot from the current analysis dataset."
-    ))
-    workflow_complete_artifact(
+    if (identical(result$status, "success")) {
+      value <- result$value
+      hev_current_result(list(
+        status = "success",
+        plot = value$plot,
+        data = value$data,
+        provenance = value$provenance,
+        messages = "Generated the current HEV plot from the current analysis dataset."
+      ))
+      workflow_complete_artifact(
+        "hev_result",
+        "HEV plot generation",
+        summarise_hev_provenance(value$provenance)
+      )
+      return()
+    }
+
+    previous <- isolate(hev_current_result())
+    retained_message <- if (!is.null(previous$plot)) {
+      "The previous valid HEV plot is retained as history but is not current."
+    } else {
+      NULL
+    }
+    hev_current_result(modifyList(previous, list(
+      status = "failed",
+      messages = c(result$message, retained_message)
+    )))
+    workflow_set_artifact(
       "hev_result",
-      "HEV plot generation",
-      summarise_hev_provenance(result$provenance)
+      "failed",
+      data_source = if (is.null(previous$provenance)) NULL else "Previous HEV plot generation",
+      history_summary = if (is.null(previous$provenance)) NULL else summarise_hev_provenance(previous$provenance),
+      blocking_reason = result$message,
+      next_action = "Check the HEV site, date range and metric selections, then create the plot again."
     )
-  })
+    message(sprintf(
+      "RAW-18 plot diagnostic [HEV/%s]: %s",
+      result$failure,
+      result$diagnostic
+    ))
+    showNotification(result$message, type = "error", duration = 10)
+  }, priority = -100)
 
   output$HEV_plot <- renderPlot({
-    HEV_plot()
+    final_render <- safe_final_plot_render(HEV_plot())
+    if (!identical(final_render$status, "success")) {
+      message(sprintf(
+        "RAW-18 final-render diagnostic [HEV/%s]: %s",
+        final_render$failure,
+        final_render$diagnostic
+      ))
+      validate(need(FALSE, final_render$message))
+    }
+    invisible(NULL)
   }) 
   
   output$hev_download_history_table <- DT::renderDataTable({
@@ -3432,15 +4155,15 @@ function(input, output, session){
   }
 
   workspace_user_error_message <- function(error) {
-    message <- conditionMessage(error)
     safe_prefixes <- c(
       "Workspace", "workspace", "A workspace", "Enter a workspace",
       "Dataset", "Saved dataset", "Local workspace"
     )
-    if (any(startsWith(message, safe_prefixes))) {
-      return(message)
-    }
-    "Workspace could not be saved. Check the name and local storage configuration."
+    raw24_safe_condition_message(
+      error,
+      safe_prefixes = safe_prefixes,
+      fallback = "Workspace could not be saved. Check the name and local storage configuration."
+    )
   }
 
   observeEvent(input$save_workspace, {
@@ -3496,6 +4219,7 @@ function(input, output, session){
       workspace_save_status(list(status = "success", message = message, result = result))
       showNotification(message, type = "message", duration = 6)
     }, error = function(error) {
+      record_raw24_condition_diagnostic("workspace save", error)
       message <- workspace_user_error_message(error)
       workspace_save_status(list(status = "error", message = message, result = NULL))
       showNotification(message, type = "error", duration = 8)

@@ -217,11 +217,13 @@ Expected result:
 Steps:
 1. Complete the existing biology-flow workflow required for HEV.
 2. Go to HEV Plots.
-3. Select one biology metric and one flow metric.
-4. Click Create HEV plot.
+3. Select Flow Statistics as the Flow data mode.
+4. Select one biology metric and one calculated Flow statistic.
+5. Click Create HEV plot.
 
 Expected result:
-- Existing single HEV plot renders.
+- The existing single HEV plot renders from the selected `calc_flowstats()` result.
+- The provenance summary identifies `flow_statistics`, the selected statistic, and the source revision/fingerprint.
 - Existing HEV download remains available.
 
 ## TC-017 HEV All Four Plots
@@ -241,8 +243,9 @@ Expected result:
 Steps:
 1. Complete the HEV prerequisites.
 2. Go to HEV Plots.
-3. Check Overlay low-flow and high-flow statistics.
-4. Click Create HEV plot.
+3. Select Flow Statistics as the Flow data mode.
+4. Check Overlay low-flow and high-flow statistics.
+5. Click Create HEV plot.
 
 Expected result:
 - High-flow and low-flow statistics are plotted together when matching columns exist.
@@ -317,18 +320,52 @@ Expected result:
 
 Steps:
 1. Build or load a current analysis dataset.
-2. Generate an HEV plot for one site, date range, biology metric, and flow metric.
+2. Generate an HEV plot for one Flow data mode, site, date range, biology metric, and Flow field/statistic.
 3. Confirm the source/provenance summary is shown.
 4. Change one HEV setting without regenerating.
 5. Regenerate the HEV plot and download it.
 
 Expected result:
-- The HEV result records the source dataset, source fingerprint, filter version, selected site, metrics, and date range.
+- The HEV result records the Flow data mode, source dataset, source fingerprint/revision, filter version, mapped biology and Flow site IDs, selected field/statistic, and date range.
 - Changing HEV settings marks the previous result stale and prevents it being downloaded as the current result.
 - Regenerating creates a current HEV result again.
 - Download history records the download format and the provenance of the downloaded HEV result.
 
-## TC-043 Biology Duplicate Choice Contract
+## TC-043 HEV Raw Daily Flow
+
+Steps:
+1. Import and validate Biology, Environmental, site-mapping, and raw daily Flow data.
+2. Process Biology and calculate O:E ratios.
+3. Do not calculate Flow Statistics, or ensure that no current Flow Statistics result exists.
+4. Go to HEV Plots and select Raw daily Flow as the Flow data mode.
+5. Select a mapped site, biology metric, and date range containing daily Flow records.
+6. Click Create HEV plot.
+
+Expected result:
+- The HEV plot renders a continuous line from the canonical numeric `flow` field and the selected biology observations.
+- Flow Statistics are not requested or required.
+- Exact daily dates and the explicit biology-to-Flow site mapping are used.
+- The provenance summary and downloaded plot history identify `daily_flow`, the daily Flow source revision/fingerprint, mapped site IDs, `flow`, and the selected date range.
+- A missing, stale, invalid, duplicated, or unmapped daily Flow source produces an actionable message and does not silently use Flow Statistics.
+
+## TC-044 HEV Flow Mode Switching and Recovery
+
+Steps:
+1. Generate a current HEV plot in Raw daily Flow mode.
+2. Change the Flow data mode to Flow Statistics without regenerating.
+3. Confirm the previous plot is stale and cannot be downloaded as the current result.
+4. Calculate or confirm current Flow Statistics, choose a statistic, and regenerate the plot.
+5. Make the selected Flow Statistics unavailable or stale and retry generation.
+6. Restore valid Flow Statistics and retry in the same session.
+
+Expected result:
+- Changing modes marks the previous HEV output stale.
+- The Flow Statistics plot uses the selected `calc_flowstats()` field rather than raw `flow`.
+- An unavailable selected mode is blocked without falling back to the other mode or overwriting the previous successful result.
+- Correcting the selected source allows an explicit same-session retry to succeed.
+- Provenance and download history distinguish the two modes and their respective source revisions/fingerprints.
+
+## TC-045 Biology Duplicate Choice Contract
 
 Steps:
 1. Build or load an analysis dataset containing same-site same-day and same-site same-month Biology duplicate records.

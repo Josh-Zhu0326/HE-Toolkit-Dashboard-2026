@@ -1,26 +1,41 @@
 read_dashboard_csv <- function(path, label) {
   if (is.null(path) || !file.exists(path)) {
-    return(list(data = NULL, status = "error", messages = paste0(label, " CSV could not be found.")))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = paste0(label, " CSV could not be found. Please select the file and upload it again.")
+    ))
   }
 
-  data <- tryCatch(
-    data.table::fread(path, colClasses = "character", data.table = FALSE, encoding = "UTF-8"),
-    error = function(e) NULL
-  )
+  data <- read_character_csv(path = path)
 
   if (is.null(data)) {
-    return(list(data = NULL, status = "error", messages = paste0(label, " CSV could not be read. Please upload a valid CSV file.")))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = paste0(
+        label,
+        " CSV could not be read or validated. Please correct the CSV structure and upload it again."
+      )
+    ))
   }
 
   if (nrow(data) == 0 || ncol(data) == 0) {
-    return(list(data = data, status = "error", messages = paste0(label, " CSV appears to be empty.")))
+    return(list(
+      data = data,
+      status = "error",
+      messages = paste0(
+        label,
+        " CSV appears to be empty. Please upload a CSV containing at least one data row."
+      )
+    ))
   }
 
   list(data = data, status = "success", messages = paste0(label, " CSV loaded successfully."))
 }
 
 validate_supporting_mapping <- function(mapping) {
-  required <- c("biol_site_id", "flow_site_id", "wq_site_id", "rhs_survey_id")
+  required <- c("biol_site_id", "flow_site_id")
   if (is.null(mapping) || nrow(mapping) == 0) {
     return(list(status = "error", messages = "Mapping data are missing."))
   }
@@ -42,7 +57,11 @@ validate_supporting_mapping <- function(mapping) {
   if (length(missing_columns) > 0) {
     return(list(
       status = "error",
-      messages = paste0("Mapping CSV is missing required column(s): ", paste(missing_columns, collapse = ", "), ".")
+      messages = paste0(
+        "Site metadata is missing required column(s): ",
+        paste(missing_columns, collapse = ", "),
+        ". Please add the required mapping column(s) and validate again."
+      )
     ))
   }
 
@@ -54,12 +73,28 @@ validate_supporting_mapping <- function(mapping) {
     error = function(e) e
   )
   if (inherits(normalised, "error")) {
-    return(list(status = "error", messages = conditionMessage(normalised)))
+    message <- if (grepl("Invalid flow_input value", conditionMessage(normalised), fixed = TRUE)) {
+      "Site metadata contains an invalid flow_input value. Use NRFA or HDE, then validate the mapping again."
+    } else if (grepl("without flow_site_id", conditionMessage(normalised), fixed = TRUE)) {
+      "Site metadata cannot use flow_input without flow_site_id. Add flow_site_id or remove flow_input, then validate again."
+    } else {
+      "Site metadata could not be validated. Please correct the mapping columns and try again."
+    }
+    return(list(status = "error", messages = message))
   }
 
   if (any(!nzchar(normalised$biol_site_id) | is.na(normalised$biol_site_id))) {
-    status <- "warning"
-    messages <- c(messages, "Some rows have missing biol_site_id values.")
+    return(list(
+      status = "error",
+      messages = "Site metadata contains blank biol_site_id values. Complete those required values, then validate the mapping again."
+    ))
+  }
+
+  if (any(!nzchar(normalised$flow_site_id) | is.na(normalised$flow_site_id))) {
+    return(list(
+      status = "error",
+      messages = "Site metadata contains blank flow_site_id values. Complete those required values, then validate the mapping again."
+    ))
   }
 
   duplicated_biol <- unique(normalised$biol_site_id[duplicated(normalised$biol_site_id) & nzchar(normalised$biol_site_id)])
@@ -68,12 +103,22 @@ validate_supporting_mapping <- function(mapping) {
     messages <- c(messages, paste0("Duplicated biol_site_id value(s) found: ", paste(duplicated_biol, collapse = ", "), "."))
   }
 
-  if (any(!nzchar(normalised$wq_site_id) | is.na(normalised$wq_site_id) | toupper(normalised$wq_site_id) == "TBC")) {
+  if (!"wq_site_id" %in% names(normalised)) {
+    if (identical(status, "success")) {
+      status <- "info"
+    }
+    messages <- c(messages, "Optional WQ mapping was not supplied. The core Biology and Flow workflow can continue.")
+  } else if (any(!nzchar(normalised$wq_site_id) | is.na(normalised$wq_site_id) | toupper(normalised$wq_site_id) == "TBC")) {
     status <- "warning"
     messages <- c(messages, "Some rows have missing or TBC wq_site_id values. WQ mapping will be incomplete for those rows.")
   }
 
-  if (any(!nzchar(normalised$rhs_survey_id) | is.na(normalised$rhs_survey_id) | toupper(normalised$rhs_survey_id) == "TBC")) {
+  if (!"rhs_survey_id" %in% names(normalised)) {
+    if (identical(status, "success")) {
+      status <- "info"
+    }
+    messages <- c(messages, "Optional RHS mapping was not supplied. The core Biology and Flow workflow can continue.")
+  } else if (any(!nzchar(normalised$rhs_survey_id) | is.na(normalised$rhs_survey_id) | toupper(normalised$rhs_survey_id) == "TBC")) {
     status <- "warning"
     messages <- c(messages, "Some rows have missing or TBC rhs_survey_id values. RHS import and mapping will skip those rows safely.")
   }
@@ -93,7 +138,14 @@ validate_local_invertebrate <- function(data) {
 
   missing_columns <- setdiff(required, tolower(names(data)))
   if (length(missing_columns) > 0) {
-    return(list(status = "error", messages = paste0("Local invertebrate CSV is missing required column(s): ", paste(missing_columns, collapse = ", "), ".")))
+    return(list(
+      status = "error",
+      messages = paste0(
+        "Local invertebrate CSV is missing required column(s): ",
+        paste(missing_columns, collapse = ", "),
+        ". Add the required column(s), then upload the file again."
+      )
+    ))
   }
 
   list(status = "success", messages = "Local invertebrate CSV passed basic validation. It is previewed separately and is not used in O:E unless a future explicit workflow maps it into the required HE Toolkit format.")
@@ -108,7 +160,15 @@ validate_local_flow <- function(data) {
   names_lower <- tolower(names(data))
   missing_columns <- setdiff(required, names_lower)
   if (length(missing_columns) > 0) {
-    return(list(data = NULL, status = "error", messages = paste0("Local flow CSV is missing required column(s): ", paste(missing_columns, collapse = ", "), ".")))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = paste0(
+        "Local flow CSV is missing required column(s): ",
+        paste(missing_columns, collapse = ", "),
+        ". Add the required column(s), then upload the file again."
+      )
+    ))
   }
 
   normalised <- data
@@ -116,7 +176,11 @@ validate_local_flow <- function(data) {
   extra_columns <- setdiff(names_lower, required)
   normalised$flow_site_id <- trimws(as.character(normalised$flow_site_id))
   if (any(is.na(normalised$flow_site_id) | !nzchar(normalised$flow_site_id))) {
-    return(list(data = NULL, status = "error", messages = "Local flow CSV contains blank flow_site_id values."))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = "Local flow CSV contains blank flow_site_id values. Complete those values, then upload the file again."
+    ))
   }
 
   date_values <- if (inherits(normalised$date, "Date")) {
@@ -128,18 +192,30 @@ validate_local_flow <- function(data) {
     )
   }
   if (any(is.na(date_values))) {
-    return(list(data = NULL, status = "error", messages = "Local flow CSV contains blank or invalid date values."))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = "Local flow CSV contains blank or invalid date values. Correct the dates, then upload the file again."
+    ))
   }
   normalised$date <- date_values
 
   raw_flow_values <- trimws(as.character(normalised$flow))
   missing_flow_values <- is.na(raw_flow_values) | !nzchar(raw_flow_values)
   if (any(missing_flow_values)) {
-    return(list(data = NULL, status = "error", messages = "Local flow CSV contains missing or blank flow values."))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = "Local flow CSV contains missing or blank flow values. Complete the flow values, then upload the file again."
+    ))
   }
   flow_values <- suppressWarnings(as.numeric(raw_flow_values))
   if (any(is.na(flow_values))) {
-    return(list(data = NULL, status = "error", messages = "Local flow CSV contains non-numeric flow values."))
+    return(list(
+      data = NULL,
+      status = "error",
+      messages = "Local flow CSV contains non-numeric flow values. Correct the flow values, then upload the file again."
+    ))
   }
   normalised$flow <- flow_values
 
@@ -159,11 +235,11 @@ validate_local_flow <- function(data) {
 
 build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
   if (is.null(data) || nrow(data) == 0) {
-    return(list(status = "error", messages = "Joined HE data are not available yet. Pair biology and flow data first.", plot = NULL, summary = NULL))
+    return(list(status = "error", messages = "Joined HE data are not available yet. Pair biology and flow data first.", plot = NULL, summary = NULL, diagnostics = NULL, diagnostic_plot = NULL))
   }
 
   if (!all(c(flow_var, ecology_var) %in% names(data))) {
-    return(list(status = "error", messages = "Select valid flow and ecology variables.", plot = NULL, summary = NULL))
+    return(list(status = "error", messages = "Select valid flow and ecology variables.", plot = NULL, summary = NULL, diagnostics = NULL, diagnostic_plot = NULL))
   }
 
   model_data <- data.frame(
@@ -173,7 +249,7 @@ build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
   model_data <- model_data[stats::complete.cases(model_data), , drop = FALSE]
 
   if (nrow(model_data) < 3) {
-    return(list(status = "error", messages = "At least 3 complete numeric observations are needed for a basic model.", plot = NULL, summary = NULL))
+    return(list(status = "error", messages = "At least 3 complete numeric observations are needed for a basic model.", plot = NULL, summary = NULL, diagnostics = NULL, diagnostic_plot = NULL))
   }
 
   fit <- stats::lm(ecology ~ flow, data = model_data)
@@ -201,5 +277,30 @@ build_basic_flow_ecology_model <- function(data, flow_var, ecology_var) {
     ggplot2::labs(x = flow_var, y = ecology_var, title = "Basic flow-ecology relationship") +
     ggplot2::theme_minimal()
 
-  list(status = "success", messages = "Basic model completed.", plot = plot, summary = summary_table)
+  diagnostics <- data.frame(
+    fitted = as.numeric(stats::fitted(fit)),
+    residual = as.numeric(stats::resid(fit)),
+    stringsAsFactors = FALSE
+  )
+  diagnostic_plot <- ggplot2::ggplot(
+    diagnostics,
+    ggplot2::aes(x = fitted, y = residual)
+  ) +
+    ggplot2::geom_hline(yintercept = 0, colour = "#637069", linetype = "dashed") +
+    ggplot2::geom_point(alpha = 0.75, colour = "#008938") +
+    ggplot2::labs(
+      x = "Fitted value",
+      y = "Residual",
+      title = "Residuals versus fitted values"
+    ) +
+    ggplot2::theme_minimal()
+
+  list(
+    status = "success",
+    messages = "Model fitted and diagnostic outputs generated.",
+    plot = plot,
+    summary = summary_table,
+    diagnostics = diagnostics,
+    diagnostic_plot = diagnostic_plot
+  )
 }

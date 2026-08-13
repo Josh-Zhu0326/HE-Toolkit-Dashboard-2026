@@ -2,6 +2,7 @@
 # Run in RStudio: open the project, then Source this file.
 # Expect: "test_model_interface_helpers.R: all checks passed"
 
+source(file.path("R", "csv_input_helpers.R"))
 source(file.path("R", "dashboard_backlog_helpers.R"))
 source(file.path("R", "model_interface_helpers.R"))
 
@@ -69,7 +70,39 @@ stopifnot(one_effective_site$summary$observations == 20)
 
 # --- 9. Result always has the expected shape --------------------------------
 for (r in list(ok, bad_type, missing_site, not_ready)) {
-  stopifnot(all(c("status", "messages", "plot", "summary") %in% names(r)))
+  stopifnot(all(c("status", "messages", "plot", "summary", "diagnostic") %in% names(r)))
 }
+
+# --- 10. RAW-24 model exceptions keep diagnostics out of the user message ---
+attempts <- 0L
+raw_model_detail <- paste(
+  "lm.fit internal failure in stats package at",
+  "C:/Users/developer/AppData/Local/Temp/model-input.csv"
+)
+retrying_model_runner <- function(data, flow_var, ecology_var) {
+  attempts <<- attempts + 1L
+  if (attempts == 1L) {
+    stop(raw_model_detail, call. = FALSE)
+  }
+  build_basic_flow_ecology_model(data, flow_var, ecology_var)
+}
+joined_before_failure <- joined
+failed_model <- run_model(
+  joined,
+  list(flow_var = "Q95", ecology_var = "LIFE_OE"),
+  model_runner = retrying_model_runner
+)
+retried_model <- run_model(
+  joined,
+  list(flow_var = "Q95", ecology_var = "LIFE_OE"),
+  model_runner = retrying_model_runner
+)
+stopifnot(identical(failed_model$status, "error"))
+stopifnot(identical(failed_model$messages, model_fit_failure_message()))
+stopifnot(identical(failed_model$diagnostic, raw_model_detail))
+stopifnot(!grepl("lm.fit|stats package|C:/Users|AppData|model-input", failed_model$messages))
+stopifnot(identical(joined, joined_before_failure))
+stopifnot(identical(retried_model$status, "success"))
+stopifnot(identical(attempts, 2L))
 
 cat("test_model_interface_helpers.R: all checks passed\n")

@@ -9,22 +9,117 @@ render_workflow_html <- function(tag) {
 testthat::test_that("Task selector renders all five client-confirmed Tasks", {
   html <- render_workflow_html(workflow_task_selector_ui())
 
-  testthat::expect_length(gregexpr("Start or resume Task", html, fixed = TRUE)[[1]], 5L)
-  testthat::expect_length(gregexpr("Required stages", html, fixed = TRUE)[[1]], 5L)
-  testthat::expect_length(gregexpr("Reusable outputs", html, fixed = TRUE)[[1]], 5L)
-  testthat::expect_length(gregexpr("Next step", html, fixed = TRUE)[[1]], 5L)
+  testthat::expect_length(gregexpr("Start Task", html, fixed = TRUE)[[1]], 5L)
+  testthat::expect_length(gregexpr("Task 0", html, fixed = TRUE)[[1]], 5L)
+  testthat::expect_length(gregexpr("Primary output", html, fixed = TRUE)[[1]], 5L)
+  testthat::expect_false(grepl("Goal", html, fixed = TRUE))
+  testthat::expect_false(grepl("Required stages", html, fixed = TRUE))
+  testthat::expect_false(grepl("Reusable outputs", html, fixed = TRUE))
+  testthat::expect_false(grepl("Next step", html, fixed = TRUE))
   testthat::expect_match(html, "Assess ecological condition", fixed = TRUE)
   testthat::expect_match(html, "Summarise the flow regime", fixed = TRUE)
   testthat::expect_match(
     html,
-    "Join biomonitoring indices with flow statistics and other environmental data",
+    "Combine biology, flow and environmental data",
     fixed = TRUE
   )
-  testthat::expect_match(html, "Generate HEV plots", fixed = TRUE)
-  testthat::expect_match(html, "Undertake HE modelling", fixed = TRUE)
+  testthat::expect_match(html, "Generate and interpret HEV plots", fixed = TRUE)
+  testthat::expect_match(html, "Build and diagnose an HE model", fixed = TRUE)
 })
 
-testthat::test_that("workflow shell preserves the v2.2 prototype structure", {
+testthat::test_that("Task selector keeps five columns on laptops and reflows on small screens", {
+  style_html <- render_workflow_html(workflow_style_tags())
+
+  testthat::expect_match(
+    style_html,
+    ".workflow-task-grid { margin-top:26px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr))",
+    fixed = TRUE
+  )
+  testthat::expect_match(style_html, "@media (max-width:959px)", fixed = TRUE)
+  testthat::expect_match(
+    style_html,
+    ".workflow-task-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }",
+    fixed = TRUE
+  )
+  testthat::expect_match(style_html, "@media (max-width:599px)", fixed = TRUE)
+  testthat::expect_match(
+    style_html,
+    ".workflow-task-grid { grid-template-columns:minmax(0,1fr); }",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-task-output { margin:0 0 17px;",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-task-card > .action-label { min-width:0; display:flex; flex:1 1 auto; flex-direction:column;",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-action-label { align-self:flex-start; margin-top:auto;",
+    fixed = TRUE
+  )
+})
+
+testthat::test_that("chart pages and tables expose one responsive content width", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  server_code <- paste(readLines(file.path(project_root, "server.R"), warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(ui_code, ".dashboard-page-wide", fixed = TRUE)
+  testthat::expect_match(ui_code, ".dataTables_scrollBody", fixed = TRUE)
+  testthat::expect_match(ui_code, "overflow-x: auto !important", fixed = TRUE)
+  testthat::expect_false(grepl('scrollY = "400px"', server_code, fixed = TRUE))
+  testthat::expect_false(grepl('scrollY = "600px"', server_code, fixed = TRUE))
+})
+
+testthat::test_that("Stage workspaces share the workflow visual system", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  style_html <- render_workflow_html(workflow_style_tags())
+
+  testthat::expect_length(
+    gregexpr("workflow-stage-workspace", ui_code, fixed = TRUE)[[1]],
+    7L
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-stage-workspace { width:100%; max-width:1180px;",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-stage-workspace .nav-tabs .nav-link.active",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-stage-workspace .client-action-button.btn",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    "grid-template-areas:'sidebar' 'main'!important",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    ui_code,
+    'class = "client-action-button workflow-secondary-action"',
+    fixed = TRUE
+  )
+  testthat::expect_match(ui_code, 'uiOutput("analysis_record_selector")', fixed = TRUE)
+  testthat::expect_false(grepl('textInput("analysis_record_id"', ui_code, fixed = TRUE))
+  testthat::expect_match(
+    style_html,
+    ".analysis-record-selector .selectize-input { padding-right:34px!important; }",
+    fixed = TRUE
+  )
+})
+
+testthat::test_that("workflow shell separates Task goals from Stage steps", {
   selector_html <- render_workflow_html(workflow_shell_ui())
   workspace_html <- render_workflow_html(workflow_shell_ui("build_he_dataset", 3L))
 
@@ -33,7 +128,14 @@ testthat::test_that("workflow shell preserves the v2.2 prototype structure", {
     5L
   )
   testthat::expect_match(selector_html, "workflow-contextbar", fixed = TRUE)
-  testthat::expect_match(selector_html, "workflow-stagebar-shell", fixed = TRUE)
+  testthat::expect_false(grepl("workflow-stagebar-shell", selector_html, fixed = TRUE))
+  testthat::expect_match(selector_html, "Choose a Task", fixed = TRUE)
+  testthat::expect_match(
+    selector_html,
+    "Explore, combine and analyse hydrological and ecological data in one guided workflow.",
+    fixed = TRUE
+  )
+  testthat::expect_match(workspace_html, "Steps to complete this Task", fixed = TRUE)
   testthat::expect_match(workspace_html, "workflow-stage-overview", fixed = TRUE)
   testthat::expect_match(workspace_html, "workflow-grid", fixed = TRUE)
   testthat::expect_match(workspace_html, 'aria-current="step"', fixed = TRUE)
@@ -86,6 +188,22 @@ testthat::test_that("Stage 3 exposes the processed dataset checkpoint round trip
   testthat::expect_match(ui_code, '"processed_dataset_checkpoint_download"', fixed = TRUE)
 })
 
+testthat::test_that("Task 4 and Task 5 pages expose distinct user paths", {
+  ui_code <- paste(
+    readLines(testthat::test_path("..", "..", "ui.R"), warn = FALSE),
+    collapse = "\n"
+  )
+
+  testthat::expect_match(ui_code, "Generate and interpret HEV plots", fixed = TRUE)
+  testthat::expect_match(ui_code, "Interpretation checklist", fixed = TRUE)
+  testthat::expect_match(ui_code, "1. Select variables and fit the model", fixed = TRUE)
+  testthat::expect_match(ui_code, "3. Review residual diagnostics", fixed = TRUE)
+  testthat::expect_match(ui_code, "4. Export the current model", fixed = TRUE)
+  testthat::expect_match(ui_code, 'uiOutput("basic_model_result_review")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'uiOutput("basic_model_diagnostic_review")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'uiOutput("basic_model_download_controls")', fixed = TRUE)
+})
+
 testthat::test_that("Task selector consumes completion artifact state", {
   registry <- new_he_artifact_registry()
   registry <- set_he_artifact_status(registry, "biology_input", "complete")
@@ -94,10 +212,10 @@ testthat::test_that("Task selector consumes completion artifact state", {
   registry <- set_he_artifact_status(registry, "processed_biology", "complete")
   html <- render_workflow_html(workflow_task_selector_ui(registry = registry))
 
-  testthat::expect_length(gregexpr("Review completed Task", html, fixed = TRUE)[[1]], 1L)
-  testthat::expect_length(gregexpr("Start or resume Task", html, fixed = TRUE)[[1]], 4L)
-  testthat::expect_match(html, "Processed biology", fixed = TRUE)
-  testthat::expect_match(html, "Review Stage 2", fixed = TRUE)
+  testthat::expect_length(gregexpr("Review Task", html, fixed = TRUE)[[1]], 1L)
+  testthat::expect_length(gregexpr("Start Task", html, fixed = TRUE)[[1]], 4L)
+  testthat::expect_match(html, 'data-completion-status="complete"', fixed = TRUE)
+  testthat::expect_false(grepl("Processed biology", html, fixed = TRUE))
 })
 
 testthat::test_that("legacy hard-coded progress navigation is removed", {
@@ -404,15 +522,14 @@ testthat::test_that("Core-only scope is informational and disappears when enrich
   )
 })
 
-testthat::test_that("Task cards expose configured Stage labels and stable state attributes", {
+testthat::test_that("Task cards expose stable state without route detail", {
   html <- render_workflow_html(workflow_task_selector_ui())
 
   testthat::expect_match(html, 'data-task-id="build_he_dataset"', fixed = TRUE)
   testthat::expect_match(html, 'data-completion-status="not_started"', fixed = TRUE)
   testthat::expect_match(html, 'data-resume-stage="1"', fixed = TRUE)
-  for (stage in he_workflow_stages) {
-    testthat::expect_match(html, stage$stage_label, fixed = TRUE)
-  }
+  testthat::expect_false(grepl("workflow-stagebar-shell", html, fixed = TRUE))
+  testthat::expect_false(grepl("Required stages", html, fixed = TRUE))
 })
 
 testthat::test_that("Checkpoint and announcement expose accessibility state", {
@@ -433,6 +550,11 @@ testthat::test_that("Rendered workflow excludes superseded user-facing terminolo
   )
 
   testthat::expect_false(grepl("Goal", html, fixed = TRUE))
+  testthat::expect_match(
+    html,
+    "Explore, combine and analyse hydrological and ecological data in one guided workflow.",
+    fixed = TRUE
+  )
   testthat::expect_false(grepl("analysis_dataset", html, fixed = TRUE))
   testthat::expect_false(grepl("NRFA fallback", html, fixed = TRUE))
 })

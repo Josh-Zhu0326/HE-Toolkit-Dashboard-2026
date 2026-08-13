@@ -1,22 +1,78 @@
-project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
-workflow_dashboard_server <- local({
-  previous_dir <- getwd()
-  setwd(project_root)
-  on.exit(setwd(previous_dir), add = TRUE)
-  source("global.R")
-  source("server.R")$value
+testthat::test_that("analysis record selector follows the dataset identifier column", {
+  sample_spec <- analysis_record_selector_spec(data.frame(
+    sample_id = c("S002", "S001", "S002"),
+    stringsAsFactors = FALSE
+  ))
+  testthat::expect_identical(sample_spec$id_column, "sample_id")
+  testthat::expect_identical(sample_spec$label, "Sample ID")
+  testthat::expect_identical(sample_spec$choices, c("S002", "S001"))
+
+  record_spec <- analysis_record_selector_spec(data.frame(
+    record_id = c("R1", "R2"),
+    sample_id = c("S1", "S2"),
+    stringsAsFactors = FALSE
+  ))
+  testthat::expect_identical(record_spec$id_column, "record_id")
+  testthat::expect_identical(record_spec$label, "Record ID")
+  testthat::expect_identical(record_spec$choices, c("R1", "R2"))
+
+  empty_spec <- analysis_record_selector_spec(NULL)
+  testthat::expect_true(is.na(empty_spec$id_column))
+  testthat::expect_length(empty_spec$choices, 0L)
+  testthat::expect_identical(empty_spec$placeholder, "Joined HE dataset required")
+  testthat::expect_identical(
+    empty_spec$hint,
+    "Build or load a Joined HE dataset before selecting a record."
+  )
 })
 
-muffle_interrupted_workflow_promise <- function(expression) {
-  withCallingHandlers(
-    expression,
-    warning = function(warning) {
-      if (grepl("restarting interrupted promise evaluation", conditionMessage(warning), fixed = TRUE)) {
-        invokeRestart("muffleWarning")
-      }
-    }
-  )
-}
+testthat::test_that("RAW-23 workbook preview observer accepts missing and empty sheet input", {
+  shiny::testServer(workflow_dashboard_server, {
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(session$flushReact()),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = character(0))
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(session$flushReact()),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = NA_character_)
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = "")
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(
+        session$setInputs(dc11_workbook_preview_sheet = "not_a_workbook_sheet")
+      ),
+      NA
+    )
+    testthat::expect_warning(
+      muffle_interrupted_workflow_promise(session$flushReact()),
+      NA
+    )
+
+    artifact_statuses <- vapply(
+      workflow_artifacts(),
+      function(artifact) artifact$status,
+      character(1)
+    )
+    testthat::expect_false(any(artifact_statuses %in% c("running", "busy")))
+  })
+})
 
 testthat::test_that("Task selection and stage navigation use the shared workflow session", {
   shiny::testServer(workflow_dashboard_server, {
@@ -155,6 +211,86 @@ testthat::test_that("Flow-statistics attempt without Flow input becomes recovera
   })
 })
 
+testthat::test_that("RAW-04 donor inputs reject all-whitespace text and allow in-session retry", {
+  reader_calls <- 0L
+  rlang::local_bindings(
+    read_character_csv = function(path = NULL, text = NULL) {
+      reader_calls <<- reader_calls + 1L
+      data.table::fread(text = text, colClasses = "character", data.table = FALSE)
+    },
+    .env = environment(workflow_dashboard_server)
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "flow_statistics",
+      "complete",
+      data_source = "retained test Flow Statistics",
+      history_summary = "Generated before donor validation."
+    )
+    workflow_artifacts(registry)
+
+    whitespace_inputs <- c("", "   ", "\t", "\n", " \t\n ")
+    for (value in whitespace_inputs) {
+      muffle_interrupted_workflow_promise(session$setInputs(
+        donor_mapping_paste = value,
+        donor_list_paste = value
+      ))
+      muffle_interrupted_workflow_promise(session$flushReact())
+
+      mapping_message <- tryCatch(
+        {
+          donor_mapping()
+          NULL
+        },
+        error = conditionMessage
+      )
+      list_message <- tryCatch(
+        {
+          donor_list()
+          NULL
+        },
+        error = conditionMessage
+      )
+      testthat::expect_match(
+        mapping_message,
+        "If imputing flows please add donor mapping.",
+        fixed = TRUE
+      )
+      testthat::expect_match(
+        list_message,
+        "please add the donor site list",
+        fixed = TRUE
+      )
+      testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+      testthat::expect_false(identical(workflow_artifacts()$flow_statistics$status, "running"))
+    }
+    testthat::expect_identical(reader_calls, 0L)
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      donor_mapping_paste = paste(
+        "donee_flow_site_id,donor_flow_site_id",
+        "F1,F2",
+        sep = "\n"
+      ),
+      donor_list_paste = paste(
+        "flow_site_id,flow_input",
+        "F2,HDE",
+        sep = "\n"
+      )
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(donor_mapping()$donor_flow_site_id, "F2")
+    testthat::expect_identical(donor_list()$flow_site_id, "F2")
+    testthat::expect_identical(donor_list()$flow_input, "HDE")
+    testthat::expect_identical(reader_calls, 2L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+  })
+})
+
 testthat::test_that("Join-setting changes stale current outputs without rerunning them", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -260,7 +396,7 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
   })
 })
 
-testthat::test_that("real business outputs advance the shared artifact registry", {
+testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in session", {
   biology_fixture <- data.frame(
     biol_site_id = "B1",
     SAMPLE_ID = paste0("S", 1:3),
@@ -293,6 +429,9 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     CALCIUM = 30
   )
 
+  join_calls <- 0L
+  hev_plot_mode <- new.env(parent = emptyenv())
+  hev_plot_mode$value <- "success"
   rlang::local_bindings(
     import_inv = function(...) biology_fixture,
     import_env = function(...) environment_fixture,
@@ -317,6 +456,7 @@ testthat::test_that("real business outputs advance the shared artifact registry"
       )
     },
     join_he = function(..., join_type) {
+      join_calls <<- join_calls + 1L
       if (identical(join_type, "add_flows")) {
         return(data.frame(
           biol_site_id = "B1",
@@ -340,7 +480,15 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     plot_sitepca_dash = function(...) {
       ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y))
     },
-    plot_hev_dash = function(...) ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y)),
+    plot_hev_dash = function(...) {
+      if (identical(hev_plot_mode$value, "error")) {
+        stop("ggplot internal failure at C:/private/hev-source.csv", call. = FALSE)
+      }
+      if (identical(hev_plot_mode$value, "null")) {
+        return(NULL)
+      }
+      ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y))
+    },
     hev_dependency_check = function(...) list(
       status = "success",
       message = "HEV plotting dependencies are available."
@@ -350,38 +498,204 @@ testthat::test_that("real business outputs advance the shared artifact registry"
 
   shiny::testServer(workflow_dashboard_server, {
     local_flow_path <- testthat::test_path("..", "fixtures", "local_flow.csv")
-    local_flow_input <- list(
-      name = basename(local_flow_path),
-      size = file.info(local_flow_path)$size,
-      type = "text/csv",
-      datapath = normalizePath(local_flow_path, winslash = "/", mustWork = TRUE)
-    )
+    local_flow_input <- shiny_upload_input(local_flow_path)
 
     muffle_interrupted_workflow_promise(session$setInputs(
       meta_paste = "biol_site_id,flow_site_id,flow_input\nB1,F1,HDE",
       local_flow_csv = local_flow_input,
       date_range_biol = as.Date(c("2020-01-01", "2022-12-31")),
       date_range_flow = as.Date(c("2020-01-01", "2022-12-31")),
-      import_inv = 1,
       import_env = 1
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
 
-    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 1))
-    muffle_interrupted_workflow_promise(session$flushReact())
+    # RAW-12: missing Biology blocks O:E before running and retains other inputs.
     muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 1))
     muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$oe_result$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$oe_result$blocking_reason,
+      "Biology data are required",
+      fixed = TRUE
+    )
+    testthat::expect_null(oe_request())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+
+    muffle_interrupted_workflow_promise(session$setInputs(import_inv = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_identical(workflow_artifacts()$oe_result$status, "blocked")
+
+    # RAW-13: missing and stale Environmental states block RICT and retain Biology.
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "environment_input",
+      "not_started",
+      next_action = "Import Environmental data."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$processed_environment$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$processed_environment$blocking_reason,
+      "Environmental data are required",
+      fixed = TRUE
+    )
+    testthat::expect_null(rict_request())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "environment_input",
+      "stale",
+      blocking_reason = "Synthetic stale Environmental state.",
+      next_action = "Regenerate Environmental data."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$processed_environment$status, "blocked")
+    testthat::expect_null(rict_request())
+
+    muffle_interrupted_workflow_promise(session$setInputs(import_env = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+
+    # RAW-14: current Biology/Environment do not substitute for RICT predictions.
+    muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$oe_result$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$oe_result$next_action,
+      "Run RICT predictions before calculating O:E ratios.",
+      fixed = TRUE
+    )
+    testthat::expect_null(oe_request())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$environment_input))
+
+    muffle_interrupted_workflow_promise(session$setInputs(run_rict = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$processed_environment))
+    muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+
+    # RAW-15: missing and stale Flow Statistics block join without consuming them.
+    muffle_interrupted_workflow_promise(session$setInputs(
+      choose_lags = 0,
+      choose_join_method = "A",
+      join_he = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$joined_core$blocking_reason,
+      "Flow Statistics are missing or out of date.",
+      fixed = TRUE
+    )
+    testthat::expect_null(join_request())
+    testthat::expect_identical(join_calls, 0L)
+
     muffle_interrupted_workflow_promise(session$setInputs(
       win_width_selector = 6,
       win_step_selector = 6,
       calc_flow_stats = 1
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "flow_statistics",
+      "stale",
+      data_source = "retained stale Flow Statistics",
+      history_summary = "Must not be consumed by join.",
+      blocking_reason = "Synthetic stale Flow Statistics.",
+      next_action = "Regenerate Flow Statistics."
+    )
+    workflow_artifacts(registry)
     muffle_interrupted_workflow_promise(session$setInputs(
-      choose_lags = 0,
-      choose_join_method = "A",
-      join_he = 1
+      join_he = 2
     ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(join_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+
+    muffle_interrupted_workflow_promise(session$setInputs(calc_flow_stats = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    # RAW-16: missing and stale O:E block join while Flow Statistics are retained.
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "oe_result",
+      "not_started",
+      next_action = "Calculate O:E ratios."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$joined_core$blocking_reason,
+      "O:E ratios are required before building the Joined HE Dataset.",
+      fixed = TRUE
+    )
+    testthat::expect_null(join_request())
+    testthat::expect_identical(join_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "oe_result",
+      "stale",
+      data_source = "retained stale O:E",
+      history_summary = "Must not be consumed by join.",
+      blocking_reason = "Synthetic stale O:E state.",
+      next_action = "Regenerate O:E ratios."
+    )
+    workflow_artifacts(registry)
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 4))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$joined_core$blocking_reason,
+      "O:E ratios are required before building the Joined HE Dataset.",
+      fixed = TRUE
+    )
+    testthat::expect_null(join_request())
+    testthat::expect_identical(join_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    muffle_interrupted_workflow_promise(session$setInputs(calc_OE = 4))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+
+    # RAW-17: HEV blocks until a current Joined HE Dataset exists.
+    muffle_interrupted_workflow_promise(session$setInputs(
+      site_selector = "B1",
+      biol_metric_selector = "LIFE_F_OE",
+      flow_metric_selector = "Q95z",
+      HEV_date_range = c(2020, 2022),
+      HEV_show_all_metrics = FALSE,
+      HEV_show_high_low = FALSE,
+      renderHEV = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_match(
+      workflow_artifacts()$hev_result$blocking_reason,
+      "Joined HE Dataset is missing or out of date",
+      fixed = TRUE
+    )
+    testthat::expect_null(hev_request())
+
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 5))
     muffle_interrupted_workflow_promise(session$flushReact())
 
     expected_current <- c(
@@ -418,19 +732,73 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
 
     muffle_interrupted_workflow_promise(session$setInputs(
-      site_selector = "B1",
-      biol_metric_selector = "LIFE_F_OE",
-      flow_metric_selector = "Q95z",
-      HEV_date_range = c(2020, 2022),
-      HEV_show_all_metrics = FALSE,
-      HEV_show_high_low = FALSE,
-      renderHEV = 1
+      renderHEV = 2
     ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(hev_request(), 2)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(hev_plot_dependency_status()$status, "success")
+    testthat::expect_silent(HEV_data())
+    testthat::expect_silent(HEV_plot_data())
+    testthat::expect_silent(HEV_go())
+    testthat::expect_named(
+      HEV_go(),
+      c(
+        "data", "analysis_context", "site_id", "date_range",
+        "biol_metric_selector", "flow_metric_selector", "show_all_metrics",
+        "show_high_low", "show_status"
+      )
+    )
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    previous_provenance <- hev_current_result()$provenance
+    hev_download_history(append_hev_download_history(
+      hev_download_history(),
+      previous_provenance,
+      "PNG",
+      downloaded_at = as.POSIXct("2026-08-07 12:00:00", tz = "UTC")
+    ))
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
+
+    muffle_interrupted_workflow_promise(session$setInputs(choose_join_method = "B"))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_identical(hev_current_result()$status, "stale")
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
+    testthat::expect_identical(
+      hev_download_history()$source_fingerprint,
+      previous_provenance$source_fingerprint
+    )
+    testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
+
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 3))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_null(hev_request())
+    testthat::expect_false(identical(hev_current_result()$status, "success"))
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
+    testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+
+    muffle_interrupted_workflow_promise(session$setInputs(join_he = 6))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
+    testthat::expect_identical(hev_current_result()$status, "not_ready")
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
+
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 4))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
     testthat::expect_identical(hev_current_result()$status, "success")
     testthat::expect_identical(hev_current_result()$provenance$source_dataset, "joined_core")
     testthat::expect_identical(hev_current_result()$provenance$filter_version, 0L)
+    testthat::expect_equal(nrow(hev_download_history()), 1L)
 
     muffle_interrupted_workflow_promise(session$setInputs(HEV_show_high_low = TRUE))
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -442,10 +810,66 @@ testthat::test_that("real business outputs advance the shared artifact registry"
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
     testthat::expect_identical(hev_current_result()$status, "success")
 
+    # RAW-18: a plotting exception or unusable result fails only the new HEV
+    # request, retains prior HEV history/upstream data and can be retried.
+    retained_plot <- hev_current_result()$plot
+    retained_data <- hev_current_result()$data
+    retained_provenance <- hev_current_result()$provenance
+    retained_history <- hev_download_history()
+    retained_upstream <- workflow_artifacts()[c(
+      "biology_input", "environment_input", "flow_input", "flow_statistics",
+      "oe_result", "joined_core", "analysis_dataset", "model_result"
+    )]
+
+    hev_plot_mode$value <- "error"
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 5))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "failed")
+    testthat::expect_identical(hev_current_result()$status, "failed")
+    testthat::expect_identical(hev_current_result()$plot, retained_plot)
+    testthat::expect_identical(hev_current_result()$data, retained_data)
+    testthat::expect_identical(hev_current_result()$provenance, retained_provenance)
+    testthat::expect_identical(hev_download_history(), retained_history)
+    testthat::expect_false(workflow_artifacts()$hev_result$status %in% c("running", "complete", "warning"))
+    testthat::expect_match(output$hev_status_message$html, "The plot could not be created", fixed = TRUE)
+    testthat::expect_false(grepl("ggplot|C:/private|hev-source", output$hev_status_message$html))
+    testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
+    testthat::expect_identical(
+      vapply(workflow_artifacts()[names(retained_upstream)], `[[`, character(1), "status"),
+      vapply(retained_upstream, `[[`, character(1), "status")
+    )
+
+    hev_plot_mode$value <- "null"
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 6))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "failed")
+    testthat::expect_identical(hev_current_result()$plot, retained_plot)
+    testthat::expect_identical(hev_download_history(), retained_history)
+
+    hev_plot_mode$value <- "success"
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 7))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$status, "success")
+    testthat::expect_identical(hev_download_history(), retained_history)
+
     joined_before_filter <- join_data()
     record_ids <- as.character(joined_before_filter$sample_id)
     record_id <- record_ids[[1L]]
     excluded_row_count <- sum(record_ids == record_id)
+    selector_html <- output$analysis_record_selector$html
+
+    testthat::expect_match(selector_html, 'data-id-column="sample_id"', fixed = TRUE)
+    testthat::expect_match(selector_html, "Sample ID", fixed = TRUE)
+    testthat::expect_match(selector_html, record_id, fixed = TRUE)
+    testthat::expect_match(selector_html, 'width:100%', fixed = TRUE)
+    testthat::expect_match(
+      selector_html,
+      "Choose the identifier shown in the current Joined HE dataset.",
+      fixed = TRUE
+    )
 
     muffle_interrupted_workflow_promise(session$setInputs(
       analysis_record_id = record_id,
@@ -644,12 +1068,7 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
     provenance = list(source = "first test session"),
     app_version = "test-commit"
   )
-  upload <- list(
-    name = basename(checkpoint_path),
-    size = file.info(checkpoint_path)$size,
-    type = "application/octet-stream",
-    datapath = normalizePath(checkpoint_path, winslash = "/", mustWork = TRUE)
-  )
+  upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")
 
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -693,6 +1112,149 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
   })
 })
 
+testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state and retries", {
+  model_mode <- new.env(parent = emptyenv())
+  model_mode$value <- "error"
+  original_model_runner <- get(
+    "build_basic_flow_ecology_model",
+    envir = environment(workflow_dashboard_server)
+  )
+  rlang::local_bindings(
+    build_basic_flow_ecology_model = function(data, flow_var, ecology_var) {
+      if (identical(model_mode$value, "error")) {
+        stop(
+          paste(
+            "lm.fit stats package failure at",
+            "C:/Users/developer/AppData/Local/Temp/model-input.csv"
+          ),
+          call. = FALSE
+        )
+      }
+      original_model_runner(data, flow_var, ecology_var)
+    },
+    .env = environment(workflow_dashboard_server)
+  )
+
+  checkpoint_path <- tempfile("raw24-model-checkpoint-", fileext = ".rds")
+  on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
+  checkpoint_data <- data.frame(
+    biol_site_id = "B1",
+    sample_id = paste0("S", 1:4),
+    date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01", "2023-05-01")),
+    Year = 2020:2023,
+    Q95z_lag0 = c(-1.5, -0.5, 0.5, 1.5),
+    LIFE_F_OE = c(0.7, 0.92, 1.05, 1.31),
+    stringsAsFactors = FALSE
+  )
+  write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
+  upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    checkpoint_fallback <- paste(
+      "Processed dataset checkpoint could not be loaded.",
+      "Use a checkpoint downloaded from this dashboard."
+    )
+    checkpoint_path_error <- simpleError(paste(
+      "Processed dataset checkpoint readRDS failed at",
+      "C:/Users/developer/AppData/Local/Temp/checkpoint.rds"
+    ))
+    workspace_path_error <- simpleError(
+      "Workspace save failed in reactive storage at /tmp/private/workspace.rds"
+    )
+    testthat::expect_identical(
+      processed_checkpoint_user_error_message(checkpoint_path_error),
+      checkpoint_fallback
+    )
+    testthat::expect_identical(
+      processed_checkpoint_user_error_message(simpleError(
+        "Processed dataset checkpoint is missing required column 'Year'."
+      )),
+      "Processed dataset checkpoint is missing required column 'Year'."
+    )
+    testthat::expect_identical(
+      workspace_user_error_message(workspace_path_error),
+      "Workspace could not be saved. Check the name and local storage configuration."
+    )
+    testthat::expect_false(grepl(
+      "readRDS|reactive|C:/Users|AppData|/tmp/private",
+      paste(
+        processed_checkpoint_user_error_message(checkpoint_path_error),
+        workspace_user_error_message(workspace_path_error)
+      )
+    ))
+    testthat::expect_message(
+      record_raw24_condition_diagnostic("checkpoint test", checkpoint_path_error),
+      "C:/Users/developer/AppData/Local/Temp/checkpoint.rds",
+      fixed = TRUE
+    )
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      processed_dataset_checkpoint_file = upload,
+      load_processed_dataset_checkpoint = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    retained_upstream <- workflow_artifacts()[c("joined_core", "analysis_dataset")]
+
+    testthat::expect_message(
+      muffle_interrupted_workflow_promise(session$setInputs(
+        basic_model_flow_var = "Q95z_lag0",
+        basic_model_ecology_var = "LIFE_F_OE",
+        run_basic_model = 1
+      )),
+      "RAW-24 model diagnostic: lm.fit stats package failure",
+      fixed = TRUE
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    safe_message <- model_fit_failure_message()
+    testthat::expect_identical(basic_model_result()$status, "error")
+    testthat::expect_identical(basic_model_result()$messages, safe_message)
+    testthat::expect_match(basic_model_result()$diagnostic, "C:/Users/developer", fixed = TRUE)
+    testthat::expect_match(output$basic_model_status$html, safe_message, fixed = TRUE)
+    testthat::expect_false(grepl(
+      "conditionMessage|lm.fit|stats package|C:/Users|AppData|model-input",
+      output$basic_model_status$html
+    ))
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "failed")
+    testthat::expect_identical(
+      workflow_artifacts()$model_result$blocking_reason,
+      safe_message
+    )
+    testthat::expect_identical(
+      workflow_artifacts()[c("joined_core", "analysis_dataset")],
+      retained_upstream
+    )
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$analysis_dataset))
+
+    model_mode$value <- "success"
+    muffle_interrupted_workflow_promise(session$setInputs(run_basic_model = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(basic_model_result()$status, "success")
+    testthat::expect_null(basic_model_result()$diagnostic)
+    testthat::expect_s3_class(basic_model_result()$diagnostic_plot, "ggplot")
+    testthat::expect_identical(
+      names(basic_model_result()$diagnostics),
+      c("fitted", "residual")
+    )
+    testthat::expect_match(
+      output$basic_model_download_controls$html,
+      'id="download_basic_model_summary"',
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      output$basic_model_download_controls$html,
+      'id="download_basic_model_diagnostics"',
+      fixed = TRUE
+    )
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
+    testthat::expect_identical(current_analysis_data(), checkpoint_data)
+  })
+})
+
 testthat::test_that("a failed checkpoint upload does not replace current data", {
   valid_path <- tempfile("joined-he-checkpoint-", fileext = ".rds")
   invalid_path <- tempfile("joined-he-checkpoint-invalid-", fileext = ".rds")
@@ -707,12 +1269,7 @@ testthat::test_that("a failed checkpoint upload does not replace current data", 
   )
   write_processed_dataset_checkpoint(checkpoint_data, valid_path)
   writeLines("not an R checkpoint", invalid_path, useBytes = TRUE)
-  upload <- function(path) list(
-    name = basename(path),
-    size = file.info(path)$size,
-    type = "application/octet-stream",
-    datapath = normalizePath(path, winslash = "/", mustWork = TRUE)
-  )
+  upload <- function(path) shiny_upload_input(path, "application/octet-stream")
 
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -733,6 +1290,65 @@ testthat::test_that("a failed checkpoint upload does not replace current data", 
     testthat::expect_identical(join_data(), current_data)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
   })
+})
+
+testthat::test_that("RAW-19 HEV download records history only after a successful file write", {
+  plot_value <- ggplot2::ggplot(
+    data.frame(x = 1, y = 1),
+    ggplot2::aes(x, y)
+  ) + ggplot2::geom_point()
+  history <- empty_hev_download_history()
+  provenance <- list(
+    site_id = "B1",
+    biology_metrics = "LIFE_F_OE",
+    flow_metrics = "Q95z",
+    date_range = "2020-01-01-2020-12-31",
+    source_dataset = "joined_core",
+    source_fingerprint = "fixture-fingerprint",
+    filter_version = 0L
+  )
+  write_attempts <- 0L
+  write_plot <- function(file, plot) {
+    write_attempts <<- write_attempts + 1L
+    testthat::expect_identical(plot, plot_value)
+    if (write_attempts == 1L) {
+      stop("ggsave Permission denied C:/Users/private/hev.png", call. = FALSE)
+    }
+    writeLines("test image", file)
+  }
+  on_download <- function(format, file) {
+    history <<- append_hev_download_history(history, provenance, format)
+  }
+
+  shiny::testServer(
+    downloadServer,
+    args = list(
+      id = "hev_download_test",
+      plot = function() plot_value,
+      can_download = function() TRUE,
+      on_download = on_download,
+      write_plot = write_plot
+    ),
+    {
+      api <- session$getReturned()
+      output_path <- tempfile("hev-download-", fileext = ".png")
+      on.exit(unlink(output_path, force = TRUE), add = TRUE)
+
+      failure <- tryCatch(api$write_download(output_path, "PNG"), error = identity)
+      testthat::expect_s3_class(failure, "shiny.silent.error")
+      testthat::expect_match(conditionMessage(failure), "The file could not be created or saved", fixed = TRUE)
+      testthat::expect_false(grepl("ggsave|Permission denied|C:/Users", conditionMessage(failure)))
+      testthat::expect_equal(nrow(history), 0L)
+      testthat::expect_false(file.exists(output_path))
+
+      testthat::expect_error(api$write_download(output_path, "PNG"), NA)
+      testthat::expect_true(file.exists(output_path))
+      testthat::expect_equal(nrow(history), 1L)
+      testthat::expect_identical(history$format, "PNG")
+      testthat::expect_identical(write_attempts, 2L)
+      testthat::expect_identical(plot_value$data$x, 1)
+    }
+  )
 })
 
 testthat::test_that("RAW-01 missing HEV dependency blocks safely and ends the request", {

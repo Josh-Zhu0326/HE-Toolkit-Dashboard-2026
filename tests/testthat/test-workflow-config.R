@@ -161,27 +161,37 @@ testthat::test_that("client-confirmed Task wording is represented exactly", {
   testthat::expect_identical(condition_task$primary_output, "Expected values and O:E ratios")
   testthat::expect_identical(
     dataset_task$task_label,
-    "Join biomonitoring indices with flow statistics and other environmental data"
+    "Combine biology, flow and environmental data"
   )
   testthat::expect_identical(dataset_task$primary_output, "Joined HE dataset")
-  testthat::expect_identical(hev_task$task_label, "Generate HEV plots")
+  testthat::expect_identical(hev_task$task_label, "Generate and interpret HEV plots")
   testthat::expect_identical(
     hev_task$description,
-    "Produce HEV plots with daily flows or flow statistics."
+    "Select sites and biological and flow metrics, generate HEV plots, review patterns and export the current plot."
   )
   testthat::expect_identical(
     hev_task$primary_output,
-    "HEV plots, data and data history"
+    "HEV plots, plot data and provenance"
   )
-  testthat::expect_identical(model_task$task_label, "Undertake HE modelling")
+  testthat::expect_identical(model_task$task_label, "Build and diagnose an HE model")
   testthat::expect_identical(
     model_task$description,
-    "Fit, compare and visualise regression-based HE models."
+    "Select flow and ecology variables, fit an eligible model, review diagnostics and export the current results."
   )
   testthat::expect_identical(
     model_task$primary_output,
-    "Current model, diagnostics and data history"
+    "Model results, diagnostics and export files"
   )
+})
+
+testthat::test_that("confirmed Task 4 and Task 5 workflow contracts remain unchanged", {
+  hev_task <- get_he_workflow_task("generate_hev")
+  model_task <- get_he_workflow_task("he_modelling")
+
+  testthat::expect_identical(hev_task$stage_path, c("R", "R", "R", "R", "O"))
+  testthat::expect_identical(model_task$stage_path, c("R", "R", "R", "R", "R"))
+  testthat::expect_identical(hev_task$completion_artifact, "hev_result")
+  testthat::expect_identical(model_task$completion_artifact, "model_result")
 })
 
 testthat::test_that("user-facing workflow strings exclude superseded terminology", {

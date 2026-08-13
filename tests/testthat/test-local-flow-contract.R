@@ -1,3 +1,4 @@
+source(testthat::test_path("..", "..", "R", "csv_input_helpers.R"))
 source(testthat::test_path("..", "..", "R", "dashboard_backlog_helpers.R"))
 
 local_flow_fixture <- function(name) {
