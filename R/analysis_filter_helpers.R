@@ -196,6 +196,88 @@ apply_filter_selection <- function(joined, selection, id_col = NULL) {
   )
 }
 
+# Apply the current Stage 4 exclusions to the biological-sample layer used by
+# plot_rngflows(). Coverage rows and Flow statistics remain unchanged: an
+# excluded record simply stops counting as a current biological sample.
+apply_selection_to_coverage <- function(coverage_data,
+                                        selection,
+                                        biol_metric,
+                                        id_col = NULL) {
+  if (is.null(coverage_data) ||
+      !is.data.frame(coverage_data) ||
+      nrow(coverage_data) == 0L) {
+    return(coverage_data)
+  }
+
+  result <- coverage_data
+  excluded_ids <- trimws(as.character(active_excluded_ids(selection)))
+  excluded_ids <- unique(excluded_ids[
+    !is.na(excluded_ids) & nzchar(excluded_ids)
+  ])
+
+  # Preserve the existing Historical Coverage behaviour when Stage 4 has not
+  # excluded anything; no identifier is needed merely to draw the base plot.
+  if (length(excluded_ids) == 0L) {
+    return(result)
+  }
+
+  if (!is.null(id_col) &&
+      (length(id_col) != 1L || is.na(id_col) || !nzchar(id_col) ||
+       !id_col %in% names(result))) {
+    stop(
+      "Historical Coverage does not contain the current analysis identifier column.",
+      call. = FALSE
+    )
+  }
+
+  coverage_id_col <- analysis_record_id_column(
+    result,
+    preferred = id_col
+  )
+  if (is.na(coverage_id_col)) {
+    stop(
+      "Historical Coverage cannot apply the current sample selection because no compatible record identifier is available.",
+      call. = FALSE
+    )
+  }
+
+  if (length(biol_metric) != 1L || is.na(biol_metric) ||
+      !nzchar(biol_metric) || !biol_metric %in% names(result)) {
+    metric_label <- if (length(biol_metric) == 1L &&
+                        !is.na(biol_metric) && nzchar(biol_metric)) {
+      biol_metric
+    } else {
+      "the selected biology metric"
+    }
+    stop(
+      sprintf("Historical Coverage data do not contain %s.", metric_label),
+      call. = FALSE
+    )
+  }
+
+  record_ids <- trimws(as.character(result[[coverage_id_col]]))
+  matched_ids <- intersect(excluded_ids, unique(record_ids[
+    !is.na(record_ids) & nzchar(record_ids)
+  ]))
+  unmatched_ids <- setdiff(excluded_ids, matched_ids)
+
+  # Never display a plot that silently failed to apply some of the user's
+  # explicit exclusions.
+  if (length(unmatched_ids) > 0L) {
+    stop(
+      sprintf(
+        "Historical Coverage could not match excluded record(s): %s.",
+        paste(unmatched_ids, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+
+  excluded_rows <- !is.na(record_ids) & record_ids %in% matched_ids
+  result[[biol_metric]][excluded_rows] <- NA_real_
+  result
+}
+
 # build the log table. it lists every exclude/restore and whether the record
 # is dropped or restored right now.
 build_analysis_exclusion_log <- function(selection) {

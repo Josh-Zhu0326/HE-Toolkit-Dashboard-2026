@@ -35,6 +35,8 @@ workspace_saved_input_ids <- c(
   "analysis_record_id",
   "basic_model_flow_var",
   "basic_model_ecology_var",
+  "basic_model_wq_var",
+  "basic_model_rhs_var",
   "site_selector",
   "biol_metric_selector",
   "flow_metric_selector",
