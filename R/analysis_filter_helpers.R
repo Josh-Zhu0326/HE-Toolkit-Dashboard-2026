@@ -48,7 +48,8 @@ analysis_record_selector_spec <- function(data) {
       id_column = NA_character_,
       label = "Record identifier",
       choices = character(),
-      placeholder = "Build or load a Joined HE dataset first"
+      placeholder = "Joined HE dataset required",
+      hint = "Build or load a Joined HE dataset before selecting a record."
     ))
   }
 
@@ -58,7 +59,8 @@ analysis_record_selector_spec <- function(data) {
       id_column = NA_character_,
       label = "Record identifier",
       choices = character(),
-      placeholder = "No record identifier is available"
+      placeholder = "No record identifier available",
+      hint = "The current Joined HE dataset must contain a record_id or sample_id field."
     ))
   }
 
@@ -70,7 +72,8 @@ analysis_record_selector_spec <- function(data) {
     id_column = id_column,
     label = label,
     choices = choices,
-    placeholder = sprintf("Choose a %s", tolower(label))
+    placeholder = sprintf("Choose a %s", tolower(label)),
+    hint = "Choose the identifier shown in the current Joined HE dataset."
   )
 }
 

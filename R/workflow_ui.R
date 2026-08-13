@@ -232,6 +232,11 @@ workflow_style_tags <- function() {
     .workflow-stage-workspace .form-select,
     .workflow-stage-workspace .selectize-input,
     .workflow-stage-workspace .bootstrap-select > .dropdown-toggle { border-color:var(--wf-line)!important; border-radius:6px!important; background:#fff!important; box-shadow:none!important; }
+    .workflow-stage-workspace .analysis-record-selector .shiny-input-container,
+    .workflow-stage-workspace .analysis-record-selector .selectize-control { width:100%!important; }
+    .workflow-stage-workspace .analysis-record-selector .selectize-input { padding-right:34px!important; }
+    .workflow-stage-workspace .analysis-record-selector .selectize-input:not(.has-items) > input { width:100%!important; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .workflow-stage-workspace .analysis-record-hint { margin-top:-.2rem; }
     .workflow-stage-workspace .form-control:focus,
     .workflow-stage-workspace .form-select:focus,
     .workflow-stage-workspace .selectize-input.focus { border-color:var(--wf-green)!important; box-shadow:0 0 0 3px rgba(36,95,59,.14)!important; }
@@ -417,7 +422,7 @@ workflow_task_selector_ui <- function(
       shiny::h1("What do you want to achieve?"),
       shiny::p(
         class = "workflow-lead",
-        "Choose the outcome you want. After you start a Task, Stages show the steps for completing it."
+        "Explore, combine and analyse hydrological and ecological data in one guided workflow."
       ),
       shiny::div(
         class = "workflow-task-grid",

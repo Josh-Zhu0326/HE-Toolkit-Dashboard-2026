@@ -633,10 +633,6 @@ page_navbar(
             class = "dashboard-card",
             card_header("Exclude or restore a record"),
             uiOutput("analysis_record_selector"),
-            p(
-              class = "hint-text",
-              "Choose the identifier shown in the current Joined HE dataset."
-            ),
             div(
               class = "action-stack",
               actionButton(
