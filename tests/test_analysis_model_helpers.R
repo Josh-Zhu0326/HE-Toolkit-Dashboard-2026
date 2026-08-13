@@ -52,4 +52,47 @@ stopifnot(identical(run_analysis_model(joined,
 # --- 6. Empty data -> blocked, not a crash ----------------------------------
 stopifnot(identical(run_analysis_model(joined[0, ], spec)$status, "blocked"))
 
+# --- 7. Stage 5 choices route Flow fields by site count ---------------------
+single_choices <- analysis_model_variable_choices(transform(
+  joined,
+  orthophosphate_mean = seq_len(nrow(joined)) / 10,
+  ammonia_p90 = seq_len(nrow(joined)) / 5,
+  HMSRBB = seq_len(nrow(joined))
+))
+stopifnot(single_choices$model_path == "single_site_additive")
+stopifnot(all(c("Q95_lag0", "Q95z_lag0") %in% single_choices$flow))
+stopifnot(identical(single_choices$wq, c("orthophosphate_mean", "ammonia_p90")))
+stopifnot(identical(single_choices$rhs, "HMSRBB"))
+
+multi_choices <- analysis_model_variable_choices(multi)
+stopifnot(multi_choices$model_path == "multi_site_mixed")
+stopifnot("Q95z_lag0" %in% multi_choices$flow)
+stopifnot(!"Q95_lag0" %in% multi_choices$flow)
+stopifnot(analysis_model_year_column(joined) == "sampling_year")
+stopifnot(analysis_model_year_column(
+  data.frame(Year = 2020:2021)
+) == "Year")
+
+legacy_year <- joined
+legacy_year$Year <- legacy_year$sampling_year
+legacy_year$sampling_year <- NULL
+legacy_year_result <- run_analysis_model(
+  legacy_year,
+  spec,
+  year_col = analysis_model_year_column(legacy_year)
+)
+stopifnot(identical(legacy_year_result$status, "success"))
+stopifnot(grepl("sampling_year_centered", legacy_year_result$formula, fixed = TRUE))
+
+# --- 8. Formal results produce Stage 5 tables and plots ---------------------
+export <- model_result_export(res)
+stopifnot(is.data.frame(export$summary))
+stopifnot(is.data.frame(export$coefficients))
+stopifnot(is.data.frame(export$diagnostics))
+stopifnot(is.null(export$random_effects))
+if (requireNamespace("ggplot2", quietly = TRUE)) {
+  stopifnot(inherits(analysis_model_coefficient_plot(res), "ggplot"))
+  stopifnot(inherits(analysis_model_diagnostic_plot(res), "ggplot"))
+}
+
 cat("test_analysis_model_helpers.R: all checks passed\n")

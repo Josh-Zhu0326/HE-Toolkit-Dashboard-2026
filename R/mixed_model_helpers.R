@@ -73,7 +73,7 @@ MIXED_CORR_WARN        <- 0.9
     fixed_effects = NULL, random_effects = NULL,
     fit_metrics = NULL, diagnostics = NULL,
     convergence_status = NA_character_, singularity_status = NA_character_,
-    provenance = NULL
+    provenance = NULL, diagnostic = NULL
   )
   modifyList(base, list(...))
 }
@@ -213,11 +213,10 @@ run_mixed_model <- function(analysis_dataset, model_spec,
     warning = function(w) { conv_msgs <<- c(conv_msgs, conditionMessage(w)); invokeRestart("muffleWarning") }
   )
   if (inherits(fit, "error")) {
-    return(.mixed_result("failed", paste0("The mixed model did not converge or could not be fitted. (",
-      conditionMessage(fit), ")"),
+    return(.mixed_result("failed", "The mixed model did not converge or could not be fitted.",
       formula = formula_txt, random_effect_structure = re_struct,
       n_input = n_input, n_complete = n_complete, n_excluded = n_excluded, site_count = site_count,
-      convergence_status = "failed to converge"))
+      convergence_status = "failed to converge", diagnostic = conditionMessage(fit)))
   }
 
   # MC-O08: convergence / singularity state
@@ -246,11 +245,11 @@ run_mixed_model <- function(analysis_dataset, model_spec,
   # MC-O09: Nakagawa marginal / conditional R2
   r2 <- tryCatch({
     if (requireNamespace("performance", quietly = TRUE)) {
-      x <- performance::r2_nakagawa(fit)
+      x <- suppressMessages(suppressWarnings(performance::r2_nakagawa(fit)))
       list(marginal = as.numeric(x$R2_marginal), conditional = as.numeric(x$R2_conditional),
            source = paste0("performance ", as.character(utils::packageVersion("performance"))))
     } else if (requireNamespace("MuMIn", quietly = TRUE)) {
-      x <- MuMIn::r.squaredGLMM(fit)
+      x <- suppressMessages(suppressWarnings(MuMIn::r.squaredGLMM(fit)))
       list(marginal = as.numeric(x[1, "R2m"]), conditional = as.numeric(x[1, "R2c"]),
            source = paste0("MuMIn ", as.character(utils::packageVersion("MuMIn"))))
     } else {
