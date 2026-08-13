@@ -9,6 +9,9 @@ set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 set "PROJECT_DIR=%SCRIPT_DIR%"
 set "RSCRIPT_EXE="
+set "R_VERSION="
+set "R_VERSION_KEY="
+set "R_LIBRARY_ROOT=%LOCALAPPDATA%\HE-Toolkit\R-library"
 set "LOG_DIR=%LOCALAPPDATA%\HE-Toolkit\logs"
 set "SETUP_LOG="
 set "SERVER_LOG="
@@ -85,18 +88,16 @@ call :save_r_path
 :r_ready
 call :validate_r
 if errorlevel 1 goto :failed
+call :configure_r_library
+if errorlevel 1 goto :failed
 
 echo R found:
 echo %RSCRIPT_EXE%
+echo Detected R version: %R_VERSION%
+echo R library version key: %R_VERSION_KEY%
+echo Customer runtime library: %R_LIBS_USER%
 echo.
 echo Checking and installing required R packages. The first run may take a while.
-
-set "R_LIBS_USER=%LOCALAPPDATA%\HE-Toolkit\R-library"
-if not exist "%R_LIBS_USER%" mkdir "%R_LIBS_USER%"
-if errorlevel 1 (
-  echo [ERROR] A writable personal R package folder could not be created.
-  goto :failed
-)
 
 "%RSCRIPT_EXE%" --vanilla "%PROJECT_DIR%\scripts\setup_dashboard_dependencies.R" >>"%SETUP_LOG%" 2>&1
 set "INSTALL_RESULT=%ERRORLEVEL%"
@@ -139,6 +140,10 @@ echo Starting the dashboard at http://127.0.0.1:%APP_PORT%
 echo Keep the new R window open while using the dashboard.
 >"%SERVER_LOG%" echo HE Toolkit dashboard server log
 >>"%SERVER_LOG%" echo Started: %DATE% %TIME%
+>>"%SERVER_LOG%" echo Rscript: %RSCRIPT_EXE%
+>>"%SERVER_LOG%" echo R version: %R_VERSION%
+>>"%SERVER_LOG%" echo R library version key: %R_VERSION_KEY%
+>>"%SERVER_LOG%" echo Customer runtime library: %R_LIBS_USER%
 start "HE Toolkit Dashboard Server" /D "%PROJECT_DIR%" "%RSCRIPT_EXE%" --vanilla -e "shiny::runApp('.', port=%APP_PORT%, host='127.0.0.1', launch.browser=FALSE)" 1>>"%SERVER_LOG%" 2>&1
 
 echo Waiting for the dashboard to become ready...
@@ -207,6 +212,40 @@ if errorlevel 1 (
   >>"%SETUP_LOG%" echo Rscript validation failed: --version returned a non-zero exit code.
   exit /b 1
 )
+exit /b 0
+
+:configure_r_library
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "& $env:RSCRIPT_EXE --vanilla -e 'cat(as.character(getRversion()))'"`) do if not defined R_VERSION set "R_VERSION=%%V"
+if not defined R_VERSION (
+  echo.
+  echo [ERROR] The installed R version could not be detected.
+  echo Please review the log:
+  echo %SETUP_LOG%
+  >>"%SETUP_LOG%" echo R version detection failed for: %RSCRIPT_EXE%
+  exit /b 1
+)
+for /f "usebackq delims=" %%K in (`powershell -NoProfile -Command "$parts=$env:R_VERSION -split '\.'; if($parts.Length -lt 2){exit 1}; '{0}.{1}' -f $parts[0],$parts[1]"`) do if not defined R_VERSION_KEY set "R_VERSION_KEY=%%K"
+if not defined R_VERSION_KEY (
+  echo.
+  echo [ERROR] The R major/minor library version could not be derived.
+  echo Please review the log:
+  echo %SETUP_LOG%
+  >>"%SETUP_LOG%" echo R library version-key detection failed for version: %R_VERSION%
+  exit /b 1
+)
+set "R_LIBS_USER=%R_LIBRARY_ROOT%\%R_VERSION_KEY%"
+if not exist "%R_LIBS_USER%" mkdir "%R_LIBS_USER%"
+if errorlevel 1 (
+  echo [ERROR] A writable version-specific R package folder could not be created.
+  echo Please review the log:
+  echo %SETUP_LOG%
+  >>"%SETUP_LOG%" echo Customer runtime library creation failed: %R_LIBS_USER%
+  exit /b 1
+)
+>>"%SETUP_LOG%" echo Detected R version: %R_VERSION%
+>>"%SETUP_LOG%" echo R library version key: %R_VERSION_KEY%
+>>"%SETUP_LOG%" echo Previous unversioned library: %R_LIBRARY_ROOT%
+>>"%SETUP_LOG%" echo Customer runtime library: %R_LIBS_USER%
 exit /b 0
 
 :failed

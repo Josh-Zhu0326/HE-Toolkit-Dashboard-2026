@@ -16,8 +16,59 @@ dashboard_required_packages <- unique(c(
   dashboard_runtime_packages
 ))
 
+HETOOLKIT_REPO <- "APEM-LTD/hetoolkit"
+HETOOLKIT_REF <- "b9d3f34b4dcad62dbe951069aaf3c39ee3b5883d"
+
 dashboard_package_available <- function(package) {
   requireNamespace(package, quietly = TRUE)
+}
+
+hetoolkit_description <- function() {
+  package_path <- find.package("hetoolkit", quiet = TRUE)
+  if (!length(package_path)) {
+    return(NULL)
+  }
+  packageDescription("hetoolkit", lib.loc = dirname(package_path))
+}
+
+hetoolkit_revision <- function(description = hetoolkit_description()) {
+  if (is.null(description)) {
+    return(NA_character_)
+  }
+  revision_fields <- c("RemoteSha", "GithubSHA", "GithubSHA1")
+  revisions <- unlist(description[revision_fields], use.names = FALSE)
+  revisions <- revisions[!is.na(revisions) & nzchar(revisions)]
+  if (!length(revisions)) NA_character_ else as.character(revisions[[1L]])
+}
+
+hetoolkit_matches_verified_revision <- function(
+  description = hetoolkit_description()
+) {
+  revision <- hetoolkit_revision(description)
+  !is.na(revision) && identical(tolower(revision), tolower(HETOOLKIT_REF))
+}
+
+report_hetoolkit_metadata <- function(description = hetoolkit_description()) {
+  if (is.null(description)) {
+    cat("hetoolkit is not installed.\n")
+    return(invisible(NULL))
+  }
+  metadata_value <- function(field) {
+    value <- description[[field]]
+    if (is.null(value) || !length(value) || is.na(value[[1L]]) ||
+        !nzchar(value[[1L]])) {
+      "not recorded"
+    } else {
+      as.character(value[[1L]])
+    }
+  }
+  cat("Installed hetoolkit version:", metadata_value("Version"), "\n")
+  cat("Installed hetoolkit source:",
+      paste0(metadata_value("RemoteUsername"), "/",
+             metadata_value("RemoteRepo")), "\n")
+  cat("Installed hetoolkit reference:", metadata_value("RemoteRef"), "\n")
+  cat("Installed hetoolkit revision:", hetoolkit_revision(description), "\n")
+  invisible(description)
 }
 
 setup_dashboard_dependencies <- function() {
@@ -38,6 +89,10 @@ setup_dashboard_dependencies <- function() {
          call. = FALSE)
   }
   .libPaths(unique(c(customer_library, .libPaths())))
+  cat("Customer runtime library:", normalizePath(
+    customer_library, winslash = "/", mustWork = TRUE
+  ), "\n")
+  cat("Active R library paths:", paste(.libPaths(), collapse = "; "), "\n")
 
   cran_packages <- setdiff(dashboard_required_packages, "hetoolkit")
   missing_cran <- cran_packages[
@@ -57,7 +112,17 @@ setup_dashboard_dependencies <- function() {
     cat("All required CRAN packages are already available.\n")
   }
 
-  if (!dashboard_package_available("hetoolkit")) {
+  installed_hetoolkit <- hetoolkit_description()
+  if (hetoolkit_matches_verified_revision(installed_hetoolkit)) {
+    cat("hetoolkit already matches the verified revision", HETOOLKIT_REF, "\n")
+  } else {
+    if (is.null(installed_hetoolkit)) {
+      cat("hetoolkit is missing; installing the verified revision.\n")
+    } else {
+      cat("The installed hetoolkit revision is incorrect or unverified;",
+          "installing the verified revision.\n")
+      report_hetoolkit_metadata(installed_hetoolkit)
+    }
     if (!dashboard_package_available("remotes")) {
       cat("Installing remotes so hetoolkit can be installed.\n")
       install.packages(
@@ -71,14 +136,27 @@ setup_dashboard_dependencies <- function() {
       stop("The remotes package is unavailable; hetoolkit cannot be installed.",
            call. = FALSE)
     }
-    cat("Installing hetoolkit from APEM-LTD/hetoolkit.\n")
+    cat("Installing hetoolkit from", HETOOLKIT_REPO,
+        "at verified revision", HETOOLKIT_REF, "\n")
     remotes::install_github(
-      "APEM-LTD/hetoolkit",
+      paste0(HETOOLKIT_REPO, "@", HETOOLKIT_REF),
       lib = customer_library,
       dependencies = NA,
-      upgrade = "never"
+      upgrade = "never",
+      force = TRUE
     )
   }
+
+  final_hetoolkit <- hetoolkit_description()
+  if (!hetoolkit_matches_verified_revision(final_hetoolkit)) {
+    stop("hetoolkit does not match the verified revision after installation: ",
+         HETOOLKIT_REF, call. = FALSE)
+  }
+  if (!dashboard_package_available("hetoolkit")) {
+    stop("The verified hetoolkit revision could not be loaded.", call. = FALSE)
+  }
+  report_hetoolkit_metadata(final_hetoolkit)
+  cat("hetoolkit loaded successfully at the verified revision.\n")
 
   still_missing <- dashboard_required_packages[
     !vapply(dashboard_required_packages, dashboard_package_available, logical(1))
