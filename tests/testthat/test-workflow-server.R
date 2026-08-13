@@ -1,3 +1,5 @@
+source("tests/testthat/helper-server-recovery.R")
+
 testthat::test_that("analysis record selector follows the dataset identifier column", {
   sample_spec <- analysis_record_selector_spec(data.frame(
     sample_id = c("S002", "S001", "S002"),
