@@ -3247,6 +3247,169 @@ function(input, output, session){
     analysis_exclusion_log()
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
 
+  # WK6-06: table-based sample selection. Every sample starts selected; the user
+  # unticks the samples to exclude and applies. This writes the same
+  # analysis_filter_selection() that drives the correlation plots, Historical
+  # Coverage (WK6-07) and the Stage 5 model, so all of those refresh together.
+  analysis_sample_table_data <- reactive({
+    data <- tryCatch(
+      current_joined_source()$analysis_dataset,
+      error = function(error) {
+        if (inherits(error, "shiny.silent.error")) {
+          return(NULL)
+        }
+        NULL
+      }
+    )
+    if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+      return(NULL)
+    }
+    prepared <- tryCatch(
+      prepare_analysis_filter_data(data),
+      error = function(error) NULL
+    )
+    if (is.null(prepared)) {
+      return(NULL)
+    }
+
+    site_col <- intersect(c("biol_site_id", "site_id"), names(prepared))
+    display <- data.frame(
+      `Sample ID` = as.character(prepared$sample_id),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+    if (length(site_col) > 0L) {
+      display[["Site"]] <- as.character(prepared[[site_col[[1L]]]])
+    }
+    for (extra in c("Year", "Season", "SAMPLE_DATE", "date")) {
+      if (extra %in% names(prepared) && !extra %in% names(display)) {
+        display[[extra]] <- as.character(prepared[[extra]])
+      }
+    }
+    display$record_id <- as.character(prepared$record_id)
+    display
+  })
+
+  output$analysis_selection_summary <- renderUI({
+    tbl <- analysis_sample_table_data()
+    if (is.null(tbl) || nrow(tbl) == 0L) {
+      return(div(
+        class = "hint-text",
+        "Build or load a Joined HE dataset to choose samples."
+      ))
+    }
+    total <- nrow(tbl)
+    excluded <- length(active_excluded_ids(analysis_filter_selection()))
+    kept <- total - excluded
+    div(
+      class = "upload-status",
+      sprintf("Selected samples: %d / %d (%d excluded).", kept, total, excluded)
+    )
+  })
+
+  output$analysis_sample_table <- DT::renderDataTable({
+    tbl <- analysis_sample_table_data()
+    validate(need(
+      !is.null(tbl) && nrow(tbl) > 0L,
+      "Build or load a Joined HE dataset before selecting samples."
+    ))
+    display <- tbl[, setdiff(names(tbl), "record_id"), drop = FALSE]
+    excluded <- isolate(active_excluded_ids(analysis_filter_selection()))
+    kept_rows <- which(!tbl$record_id %in% excluded)
+    DT::datatable(
+      display,
+      rownames = FALSE,
+      selection = list(mode = "multiple", selected = kept_rows),
+      options = list(scrollX = TRUE, pageLength = 10, ordering = FALSE)
+    )
+  }, server = FALSE)
+
+  analysis_sample_table_proxy <- DT::dataTableProxy("analysis_sample_table")
+
+  observeEvent(input$analysis_select_all_samples, {
+    tbl <- isolate(analysis_sample_table_data())
+    req(!is.null(tbl), nrow(tbl) > 0L)
+    DT::selectRows(analysis_sample_table_proxy, seq_len(nrow(tbl)))
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$analysis_clear_all_samples, {
+    DT::selectRows(analysis_sample_table_proxy, NULL)
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$apply_analysis_sample_selection, {
+    tbl <- isolate(analysis_sample_table_data())
+    req(!is.null(tbl), nrow(tbl) > 0L)
+    joined <- isolate(current_joined_source()$analysis_dataset)
+    selected_rows <- isolate(input$analysis_sample_table_rows_selected)
+    all_ids <- tbl$record_id
+    kept_ids <- if (is.null(selected_rows)) {
+      character()
+    } else {
+      all_ids[selected_rows]
+    }
+    excluded_ids <- setdiff(all_ids, kept_ids)
+
+    next_selection <- new_filter_selection()
+    for (rid in excluded_ids) {
+      context <- tryCatch(
+        analysis_record_context(joined, rid),
+        error = function(error) NULL
+      )
+      if (is.null(context)) {
+        next
+      }
+      next_selection <- exclude_record(
+        next_selection,
+        record_id = context$record_id,
+        site_id = context$site_id,
+        sample_id = context$sample_id,
+        reason = "User excluded sample from the Stage 4 selection table"
+      )
+    }
+
+    filtered <- apply_filter_selection(joined, next_selection)
+    analysis_filter_selection(next_selection)
+
+    workflow_complete_artifact(
+      "filter_selection",
+      "User analysis selection",
+      sprintf(
+        "Applied the sample-selection table. Selection version %d excludes %d of %d records.",
+        filtered$filter_version,
+        filtered$n_excluded,
+        filtered$n_source
+      )
+    )
+    workflow_complete_artifact(
+      "exclusion_log",
+      "Exclusion and restore log",
+      sprintf("Recorded %d analysis-selection action(s).", filtered$filter_version)
+    )
+    workflow_complete_artifact(
+      "analysis_dataset",
+      "Current analysis selection",
+      sprintf(
+        "Current analysis dataset contains %d of %d records.",
+        filtered$n_kept,
+        filtered$n_source
+      )
+    )
+
+    basic_model_result(new_analysis_model_ui_result(
+      "The analysis selection changed. Run the model again."
+    ))
+    mark_hev_result_stale("The analysis selection changed.")
+
+    showNotification(
+      sprintf(
+        "Applied sample selection: %d kept, %d excluded.",
+        filtered$n_kept,
+        filtered$n_excluded
+      ),
+      type = "message"
+    )
+  }, ignoreInit = TRUE)
+
   commit_analysis_selection <- function(next_selection, action_label) {
     joined <- isolate(current_joined_source()$analysis_dataset)
     current_selection <- isolate(analysis_filter_selection())
@@ -3540,9 +3703,23 @@ function(input, output, session){
   #### coverage hull ----
   
   output$flow_hull <- renderPlot({
+    # WK6-07: Historical Coverage tracks the current Stage 4 sample selection.
+    # This reads current_coverage_data() and analysis_filter_selection(), so it
+    # re-renders automatically whenever samples are excluded or restored.
+    coverage <- current_coverage_data()
+    excluded <- length(active_excluded_ids(analysis_filter_selection()))
+    subtitle <- if (excluded > 0L) {
+      sprintf(
+        "Updated for the current Stage 4 selection: %d excluded sample(s) removed.",
+        excluded
+      )
+    } else {
+      "Showing all samples in the current Joined HE dataset (no Stage 4 exclusions)."
+    }
     safe_server_plot("Analysis Flow coverage", function() {
-      plot_rngflows(data = current_coverage_data(), flow_stats = c("Q95z_lag0", "Q10z_lag0"),
+      plot_rngflows(data = coverage, flow_stats = c("Q95z_lag0", "Q10z_lag0"),
                     biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
+        labs(subtitle = subtitle) +
         theme(text = element_text(size = 16))
     })
   })
