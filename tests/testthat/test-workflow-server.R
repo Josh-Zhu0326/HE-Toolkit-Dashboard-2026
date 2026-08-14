@@ -1,10 +1,10 @@
 testthat::test_that("analysis record selector follows the dataset identifier column", {
   sample_spec <- analysis_record_selector_spec(data.frame(
-    sample_id = c("S002", "S001", "S002"),
+    sample_id = c("S002", "S001"),
     stringsAsFactors = FALSE
   ))
-  testthat::expect_identical(sample_spec$id_column, "sample_id")
-  testthat::expect_identical(sample_spec$label, "Sample ID")
+  testthat::expect_identical(sample_spec$id_column, "record_id")
+  testthat::expect_identical(sample_spec$label, "Record ID")
   testthat::expect_identical(sample_spec$choices, c("S002", "S001"))
 
   record_spec <- analysis_record_selector_spec(data.frame(
@@ -901,8 +901,8 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     excluded_row_count <- sum(record_ids == record_id)
     selector_html <- output$analysis_record_selector$html
 
-    testthat::expect_match(selector_html, 'data-id-column="sample_id"', fixed = TRUE)
-    testthat::expect_match(selector_html, "Sample ID", fixed = TRUE)
+    testthat::expect_match(selector_html, 'data-id-column="record_id"', fixed = TRUE)
+    testthat::expect_match(selector_html, "Record ID", fixed = TRUE)
     testthat::expect_match(selector_html, record_id, fixed = TRUE)
     testthat::expect_match(selector_html, 'width:100%', fixed = TRUE)
     testthat::expect_match(
@@ -932,6 +932,8 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     exclusion_log_after_exclude <- analysis_exclusion_log()
     testthat::expect_equal(nrow(exclusion_log_after_exclude), 1L)
     testthat::expect_identical(exclusion_log_after_exclude$record_id, record_id)
+    testthat::expect_identical(exclusion_log_after_exclude$sample_id, record_id)
+    testthat::expect_false(is.na(exclusion_log_after_exclude$site_id))
     testthat::expect_identical(exclusion_log_after_exclude$current_status, "excluded")
 
     muffle_interrupted_workflow_promise(session$setInputs(

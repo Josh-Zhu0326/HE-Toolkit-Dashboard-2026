@@ -49,9 +49,9 @@ workspace_saved_input_ids <- c(
   "imp_flow_data_display",
   "flow_stats_display",
   "wq_plot_type",
-  "wq_date_col",
-  "wq_numeric_var",
-  "wq_group_col",
+  "wq_determinand_filter",
+  "wq_site_filter",
+  "wq_plot_date_range",
   "rhs_plot_type",
   "rhs_variable",
   "rhs_group_col"

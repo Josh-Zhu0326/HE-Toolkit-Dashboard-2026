@@ -798,39 +798,42 @@ function(input, output, session){
       ))
     }
 
-    names_lower <- tolower(names(df))
-    messages <- "Your WQ file was uploaded successfully."
-    status <- "success"
-
-    site_cols <- c("biol_site_id", "wq_site_id", "site_id", "monitoring_site_id")
-    if (!any(site_cols %in% names_lower)) {
+    canonical <- normalise_wq_preview_records(df)
+    required <- c("wq_site_id", "date_time", "det_id", "result")
+    missing <- setdiff(required, names(canonical))
+    if (length(missing) > 0L) {
       return(list(
         status = "error",
-        messages = paste(
-          "Your WQ file is missing a site identifier column.",
-          "Add one of biol_site_id, wq_site_id, site_id, or monitoring_site_id, then upload the file again."
+        messages = paste0(
+          "Your WQ file is missing required field(s): ",
+          paste(missing, collapse = ", "),
+          ". Use the standard WQ long-data fields before uploading again."
         )
       ))
     }
 
-    date_like <- stringr::str_detect(names_lower, "date|time|sample")
-    measurement_like <- stringr::str_detect(names_lower, "result|value|measure|determin|parameter|concentration|unit|qualifier|observation")
-    numeric_like <- purrr::map_lgl(df, is.numeric)
-
-    if (!any(date_like) && !any(measurement_like) && !any(numeric_like)) {
-      status <- "warning"
-      messages <- c(
-        messages,
-        "Your WQ file does not clearly contain a date-like or measurement-like column. Please add sample dates and measured results where possible."
-      )
+    invalid_det_id <- is.na(canonical$det_id) | !grepl("^[0-9]{4}$", canonical$det_id)
+    if (any(invalid_det_id)) {
+      return(list(
+        status = "error",
+        messages = "The WQ det_id field contains missing or invalid values. Use four-digit determinand IDs such as 0180 or 0111."
+      ))
+    }
+    parsed_dates <- wq_rhs_parse_date(canonical$date_time)
+    if (any(is.na(parsed_dates))) {
+      return(list(
+        status = "error",
+        messages = "The WQ date_time field contains missing or invalid dates. Use complete observation dates before uploading again."
+      ))
     }
 
-    messages <- c(
-      messages,
-      "This preview shows the first rows of your uploaded file. No modelling has been run yet."
+    list(
+      status = "success",
+      messages = c(
+        "Your WQ file was validated against the standard site, date, determinand and result fields.",
+        "This preview shows the first rows of your uploaded file. No modelling has been run yet."
+      )
     )
-
-    list(status = status, messages = messages)
   }
 
   validate_rhs_upload <- function(df) {
@@ -1700,7 +1703,7 @@ function(input, output, session){
   mapped_wq_plot_data <- reactive({
     imported <- wq_site_import_data()
     if (!is.null(imported) && nrow(imported) > 0) {
-      return(imported)
+      return(normalise_wq_preview_records(imported))
     }
 
     uploaded <- wq_upload()$data
@@ -1708,6 +1711,7 @@ function(input, output, session){
       return(NULL)
     }
 
+    uploaded <- normalise_wq_preview_records(uploaded)
     parsed <- parse_site_metadata(input$meta_paste)
     if (is.null(parsed$error) && !is.null(parsed$data) && all(c("biol_site_id", "wq_site_id") %in% names(parsed$data)) && "wq_site_id" %in% names(uploaded)) {
       mapped <- map_wq_records_to_biology(uploaded, parsed$data)
@@ -1756,17 +1760,37 @@ function(input, output, session){
 
   output$wq_plot_controls <- renderUI({
     data <- mapped_wq_plot_data()
-    numeric_cols <- wq_rhs_numeric_columns(data)
-    date_cols <- wq_rhs_date_columns(data)
-    group_cols <- if (is.null(data)) character(0) else names(data)
-    default_group <- if ("biol_site_id" %in% group_cols) "biol_site_id" else wq_rhs_default_group(data)
-    default_numeric <- if (length(numeric_cols) > 0) numeric_cols[[1]] else character(0)
-    default_date <- if (length(date_cols) > 0) date_cols[[1]] else character(0)
+    spec <- wq_preview_filter_spec(data)
+    determinant_choices <- c("All determinands" = "__all__", spec$determinand_choices)
+    site_choices <- c("All sites" = "__all__", spec$site_choices)
+    has_dates <- !is.na(spec$date_min) && !is.na(spec$date_max)
 
     tagList(
-      selectInput("wq_numeric_var", "WQ numeric variable", choices = numeric_cols, selected = default_numeric),
-      selectInput("wq_date_col", "WQ date column", choices = date_cols, selected = default_date),
-      selectInput("wq_group_col", "WQ grouping column", choices = group_cols, selected = default_group)
+      selectInput("wq_determinand_filter", "Determinand", choices = determinant_choices, selected = "__all__"),
+      selectInput("wq_site_filter", "WQ site", choices = site_choices, selected = "__all__"),
+      if (has_dates) {
+        dateRangeInput(
+          "wq_plot_date_range",
+          "Observation date range",
+          start = spec$date_min,
+          end = spec$date_max,
+          min = spec$date_min,
+          max = spec$date_max
+        )
+      },
+      if (is.na(spec$value_col)) {
+        div(class = "hint-text", "No contracted WQ result field is available to plot.")
+      }
+    )
+  })
+
+  filtered_wq_plot_data <- reactive({
+    data <- mapped_wq_plot_data()
+    filter_wq_preview_data(
+      data,
+      determinant = input$wq_determinand_filter,
+      site = input$wq_site_filter,
+      date_range = input$wq_plot_date_range
     )
   })
 
@@ -1791,12 +1815,14 @@ function(input, output, session){
   })
 
   current_wq_plot <- reactive({
+    data <- mapped_wq_plot_data()
+    spec <- wq_preview_filter_spec(data)
     result <- build_wq_plot(
-      data = mapped_wq_plot_data(),
+      data = filtered_wq_plot_data(),
       plot_type = input$wq_plot_type,
-      numeric_var = input$wq_numeric_var,
-      date_col = input$wq_date_col,
-      group_col = input$wq_group_col
+      numeric_var = spec$value_col,
+      date_col = spec$date_col,
+      group_col = spec$group_col
     )
     validate(need(!is.null(result$plot), result$message))
     safe_server_plot_value("WQ", function() result$plot)
@@ -3286,9 +3312,15 @@ function(input, output, session){
   observeEvent(input$exclude_analysis_record, {
     record_id <- trimws(input$analysis_record_id)
     req(nzchar(record_id))
+    context <- analysis_record_context(
+      isolate(current_joined_source()$analysis_dataset),
+      record_id
+    )
     next_selection <- exclude_record(
       isolate(analysis_filter_selection()),
-      record_id = record_id
+      record_id = context$record_id,
+      site_id = context$site_id,
+      sample_id = context$sample_id
     )
     commit_analysis_selection(
       next_selection,
