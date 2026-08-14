@@ -1,10 +1,9 @@
 # analysis_model_helpers.R
 # This is for WK8-08. It runs the model on the analysis_dataset.
 #
-# Important: the modelling contract is not final yet, so for now I only do the
-# single-site model. If there are two or more sites I return "not_ready" and do
-# NOT run a mixed model or a pooled lm(). I also don't set any number the
-# contract hasn't decided yet.
+# This is the formal Stage 5 entry point. It routes one-site analysis data to
+# the additive model and eligible multi-site data to the frozen mixed-effects
+# path. A multi-site failure is never replaced by a pooled lm().
 #
 # model_spec is a list, for example:
 #   list(response = "LIFE_F_OE",
@@ -13,7 +12,8 @@
 #        rhs_predictor = NULL)                           # up to 1
 #
 # Things I assumed (please tell me if they should change):
-# - site column is "biol_site_id", year column is "sampling_year".
+# - site column is "biol_site_id"; Stage 5 prefers "sampling_year" and supports
+#   the current generated-data compatibility field "Year".
 # - the single-site R2 is the normal lm R2.
 
 # a result with all the fields filled in with defaults, so every path returns
@@ -28,7 +28,7 @@
     fixed_effects = NULL, random_effects = "not applicable",
     fit_metrics = NULL, diagnostics = NULL,
     convergence_status = "not applicable", singularity_status = "not applicable",
-    provenance = NULL
+    provenance = NULL, diagnostic = NULL
   )
   modifyList(base, list(...))
 }
@@ -128,8 +128,12 @@ run_analysis_model <- function(analysis_dataset, model_spec,
                   error = function(e) e)
   if (inherits(fit, "error")) {
     return(do.call(.model_result, c(list("error",
-      paste0("The model could not be fitted. (", conditionMessage(fit), ")")),
-      c(base_fields, list(model_path = "single_site_additive", formula = formula_txt)))))
+      "The model could not be fitted with the selected variables."),
+      c(base_fields, list(
+        model_path = "single_site_additive",
+        formula = formula_txt,
+        diagnostic = conditionMessage(fit)
+      )))))
   }
 
   sm <- summary(fit)
@@ -163,6 +167,136 @@ run_analysis_model <- function(analysis_dataset, model_spec,
     ))))
 }
 
+analysis_model_variable_choices <- function(data, site_col = "biol_site_id") {
+  if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+    return(list(
+      response = character(), flow = character(), wq = character(),
+      rhs = character(), site_count = 0L, model_path = "not_ready"
+    ))
+  }
+
+  numeric_columns <- names(data)[vapply(data, is.numeric, logical(1))]
+  response <- numeric_columns[grepl(
+    "oe$|life|whpt|psi|ntaxa|aspt",
+    numeric_columns,
+    ignore.case = TRUE
+  )]
+
+  sites <- if (site_col %in% names(data)) {
+    values <- trimws(as.character(data[[site_col]]))
+    unique(values[!is.na(values) & nzchar(values)])
+  } else {
+    character()
+  }
+  site_count <- length(sites)
+
+  flow_pattern <- if (site_count >= 2L) {
+    "^Q(10|95)z_lag[01]$"
+  } else {
+    "^Q(10|95)z?_lag[01]$"
+  }
+  flow <- numeric_columns[grepl(flow_pattern, numeric_columns, ignore.case = TRUE)]
+
+  list(
+    response = response,
+    flow = flow,
+    wq = intersect(c("orthophosphate_mean", "ammonia_p90"), numeric_columns),
+    rhs = intersect("HMSRBB", numeric_columns),
+    site_count = site_count,
+    model_path = if (site_count == 1L) {
+      "single_site_additive"
+    } else if (site_count >= 2L) {
+      "multi_site_mixed"
+    } else {
+      "not_ready"
+    }
+  )
+}
+
+analysis_model_result_is_exportable <- function(result) {
+  !is.null(result) && result$status %in% c("success", "warning")
+}
+
+analysis_model_year_column <- function(data) {
+  if (is.data.frame(data) && "sampling_year" %in% names(data)) {
+    return("sampling_year")
+  }
+  if (is.data.frame(data) && "Year" %in% names(data)) {
+    return("Year")
+  }
+  "sampling_year"
+}
+
+new_analysis_model_ui_result <- function(message = paste(
+  "Prepare a current analysis dataset, choose eligible variables,",
+  "then fit the model."
+)) {
+  result <- .model_result("info", message)
+  result$summary <- NULL
+  result$plot <- NULL
+  result$diagnostic_plot <- NULL
+  result$export <- NULL
+  result
+}
+
+analysis_model_coefficient_plot <- function(result) {
+  effects <- result$fixed_effects
+  if (!analysis_model_result_is_exportable(result) ||
+      is.null(effects) || !is.data.frame(effects) || nrow(effects) == 0L ||
+      !requireNamespace("ggplot2", quietly = TRUE)) {
+    return(NULL)
+  }
+
+  estimate_col <- intersect(c("Estimate", "estimate"), names(effects))
+  std_error_col <- intersect(c("Std. Error", "Std.Error", "std.error"), names(effects))
+  if (length(estimate_col) == 0L || !"term" %in% names(effects)) {
+    return(NULL)
+  }
+
+  plot_data <- data.frame(
+    term = as.character(effects$term),
+    estimate = as.numeric(effects[[estimate_col[[1L]]]]),
+    stringsAsFactors = FALSE
+  )
+  plot_data$std_error <- if (length(std_error_col) > 0L) {
+    as.numeric(effects[[std_error_col[[1L]]]])
+  } else {
+    NA_real_
+  }
+
+  ggplot2::ggplot(plot_data, ggplot2::aes(x = estimate, y = stats::reorder(term, estimate))) +
+    ggplot2::geom_vline(xintercept = 0, colour = "#637069", linetype = "dashed") +
+    ggplot2::geom_errorbar(
+      ggplot2::aes(xmin = estimate - 1.96 * std_error,
+                   xmax = estimate + 1.96 * std_error),
+      width = 0.2,
+      orientation = "y",
+      na.rm = TRUE,
+      colour = "#333333"
+    ) +
+    ggplot2::geom_point(colour = "#008938", size = 2.6) +
+    ggplot2::labs(x = "Estimated effect (95% interval)", y = NULL,
+                  title = "Fixed-effect estimates") +
+    ggplot2::theme_minimal()
+}
+
+analysis_model_diagnostic_plot <- function(result) {
+  diagnostics <- result$diagnostics
+  if (!analysis_model_result_is_exportable(result) ||
+      is.null(diagnostics) || !is.data.frame(diagnostics) ||
+      !all(c("fitted", "residual") %in% names(diagnostics)) ||
+      !requireNamespace("ggplot2", quietly = TRUE)) {
+    return(NULL)
+  }
+
+  ggplot2::ggplot(diagnostics, ggplot2::aes(x = fitted, y = residual)) +
+    ggplot2::geom_hline(yintercept = 0, colour = "#637069", linetype = "dashed") +
+    ggplot2::geom_point(alpha = 0.75, colour = "#008938") +
+    ggplot2::labs(x = "Fitted value", y = "Residual",
+                  title = "Residuals versus fitted values") +
+    ggplot2::theme_minimal()
+}
+
 # turn a model result into flat tables the user can download.
 # returns a list with:
 #   summary: a two-column table (field, value) with the main numbers and the
@@ -170,26 +304,32 @@ run_analysis_model <- function(analysis_dataset, model_spec,
 #   coefficients: the fixed-effects table, or NULL if the model didn't fit
 model_result_export <- function(result) {
   fm <- result$fit_metrics
-  get <- function(x, default = NA) if (is.null(x)) default else x
+  get <- function(x, default = NA) {
+    if (is.null(x) || length(x) == 0L) default else x
+  }
 
   # start with the main fields
   fields <- list(
     status = result$status,
     model_path = get(result$model_path),
     formula = get(result$formula),
+    random_effect_structure = get(result$random_effect_structure),
     n_input = get(result$n_input),
     n_complete = get(result$n_complete),
     n_excluded = get(result$n_excluded),
     site_count = get(result$site_count),
     year_range = get(result$year_range),
     year_center = get(result$year_center),
-    r_squared = if (is.null(fm)) NA else fm$r_squared,
-    adj_r_squared = if (is.null(fm)) NA else fm$adj_r_squared,
-    sigma = if (is.null(fm)) NA else fm$sigma,
     convergence_status = get(result$convergence_status),
     singularity_status = get(result$singularity_status),
     messages = get(result$messages)
   )
+
+  if (!is.null(fm)) {
+    for (nm in names(fm)) {
+      fields[[nm]] <- get(fm[[nm]])
+    }
+  }
 
   # add every provenance item too (response, predictors, software, time, and
   # anything the caller passed in like source dataset or filter version)
@@ -208,5 +348,10 @@ model_result_export <- function(result) {
     stringsAsFactors = FALSE
   )
 
-  list(summary = summary, coefficients = result$fixed_effects)
+  list(
+    summary = summary,
+    coefficients = result$fixed_effects,
+    random_effects = if (is.data.frame(result$random_effects)) result$random_effects else NULL,
+    diagnostics = result$diagnostics
+  )
 }

@@ -462,25 +462,25 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
       if (identical(join_type, "add_flows")) {
         return(data.frame(
           biol_site_id = "B1",
-          sample_id = paste0("S", 1:3),
-          Year = 2020:2022,
-          Q95_lag0 = c(1.2, 1.1, 1.0),
-          Q10_lag0 = c(8.1, 8.2, 8.3),
-          Q95z_lag0 = c(-1, 0, 1),
-          LIFE_F_OE = c(0.8, 1.1, 1.2)
+          sample_id = paste0("S", 1:4),
+          Year = 2020:2023,
+          Q95_lag0 = c(1.2, 1.1, 1.0, 0.9),
+          Q10_lag0 = c(8.1, 8.2, 8.3, 8.4),
+          Q95z_lag0 = c(-1, 0.5, -0.25, 1),
+          LIFE_F_OE = c(0.83, 1.06, 0.97, 1.31)
         ))
       }
       data.frame(
         biol_site_id = "B1",
-        sample_id = paste0("S", 1:3),
-        date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01")),
-        Year = 2020:2022,
+        sample_id = paste0("S", 1:4),
+        date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01", "2023-05-01")),
+        Year = 2020:2023,
         Season = "Spring",
-        win_no_lag0 = 1:3,
-        Q95_lag0 = c(1.2, 1.1, 1.0),
-        Q10_lag0 = c(8.1, 8.2, 8.3),
-        Q95z_lag0 = c(-1, 0, 1),
-        LIFE_F_OE = c(0.8, 1, 1.2)
+        win_no_lag0 = 1:4,
+        Q95_lag0 = c(1.2, 1.1, 1.0, 0.9),
+        Q10_lag0 = c(8.1, 8.2, 8.3, 8.4),
+        Q95z_lag0 = c(-1, 0.5, -0.25, 1),
+        LIFE_F_OE = c(0.83, 1.06, 0.97, 1.31)
       )
     },
     plot_sitepca_dash = function(...) {
@@ -1096,15 +1096,74 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
   })
 })
 
+testthat::test_that("Stage 5 routes multi-site data through the formal mixed model", {
+  checkpoint_path <- tempfile("formal-mixed-model-checkpoint-", fileext = ".rds")
+  on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
+
+  sites <- paste0("B", 1:6)
+  years <- 2018:2023
+  checkpoint_data <- expand.grid(
+    biol_site_id = sites,
+    sampling_year = years,
+    stringsAsFactors = FALSE
+  )
+  checkpoint_data$sample_id <- paste0("M", seq_len(nrow(checkpoint_data)))
+  checkpoint_data$Year <- checkpoint_data$sampling_year
+  checkpoint_data$date <- as.Date(paste0(checkpoint_data$sampling_year, "-05-01"))
+  checkpoint_data$Q95z_lag0 <- rep(seq(-1.5, 1.5, length.out = length(years)), length(sites)) +
+    rep(seq(-0.2, 0.2, length.out = length(sites)), each = length(years))
+  site_effect <- stats::setNames(seq(-0.3, 0.3, length.out = length(sites)), sites)
+  checkpoint_data$LIFE_F_OE <- 1 +
+    0.2 * checkpoint_data$Q95z_lag0 +
+    0.03 * (checkpoint_data$sampling_year - mean(years)) +
+    site_effect[checkpoint_data$biol_site_id]
+
+  write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
+  upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")
+
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(session$setInputs(
+      processed_dataset_checkpoint_file = upload,
+      load_processed_dataset_checkpoint = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    muffle_interrupted_workflow_promise(session$setInputs(
+      basic_model_flow_var = "Q95z_lag0",
+      basic_model_ecology_var = "LIFE_F_OE",
+      basic_model_wq_var = "",
+      basic_model_rhs_var = "",
+      run_basic_model = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    result <- basic_model_result()
+    testthat::expect_true(result$status %in% c("success", "warning"))
+    testthat::expect_identical(result$model_path, "multi_site_mixed")
+    testthat::expect_match(result$formula, "biol_site_id", fixed = TRUE)
+    testthat::expect_equal(result$site_count, length(sites))
+    testthat::expect_s3_class(result$fixed_effects, "data.frame")
+    testthat::expect_s3_class(result$random_effects, "data.frame")
+    testthat::expect_s3_class(result$diagnostic_plot, "ggplot")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
+    testthat::expect_match(
+      output$basic_model_download_controls$html,
+      'id="download_basic_model_random_effects"',
+      fixed = TRUE
+    )
+  })
+})
+
 testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state and retries", {
   model_mode <- new.env(parent = emptyenv())
   model_mode$value <- "error"
   original_model_runner <- get(
-    "build_basic_flow_ecology_model",
+    "run_analysis_model",
     envir = environment(workflow_dashboard_server)
   )
   rlang::local_bindings(
-    build_basic_flow_ecology_model = function(data, flow_var, ecology_var) {
+    run_analysis_model = function(...) {
       if (identical(model_mode$value, "error")) {
         stop(
           paste(
@@ -1114,7 +1173,7 @@ testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state a
           call. = FALSE
         )
       }
-      original_model_runner(data, flow_var, ecology_var)
+      original_model_runner(...)
     },
     .env = environment(workflow_dashboard_server)
   )
@@ -1192,8 +1251,8 @@ testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state a
     )
     muffle_interrupted_workflow_promise(session$flushReact())
 
-    safe_message <- model_fit_failure_message()
-    testthat::expect_identical(basic_model_result()$status, "error")
+    safe_message <- "The model could not be fitted with the selected variables."
+    testthat::expect_identical(basic_model_result()$status, "failed")
     testthat::expect_identical(basic_model_result()$messages, safe_message)
     testthat::expect_match(basic_model_result()$diagnostic, "C:/Users/developer", fixed = TRUE)
     testthat::expect_match(output$basic_model_status$html, safe_message, fixed = TRUE)
@@ -1232,6 +1291,11 @@ testthat::test_that("RAW-24 model UI hides diagnostics, retains upstream state a
     testthat::expect_match(
       output$basic_model_download_controls$html,
       'id="download_basic_model_diagnostics"',
+      fixed = TRUE
+    )
+    testthat::expect_match(
+      output$basic_model_download_controls$html,
+      'id="download_basic_model_coefficients"',
       fixed = TRUE
     )
     testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
