@@ -689,7 +689,7 @@ page_navbar(
       h3(class = "section-title", "Build and diagnose an HE model"),
       p(
         class = "page-lead",
-        "Select variables, fit the current single-site model, review its diagnostics and export the current results."
+        "Select variables, fit the eligible single-site or multi-site model, review its diagnostics and export the current results."
       ),
       card(
         class = "dashboard-card",

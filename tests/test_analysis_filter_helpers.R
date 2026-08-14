@@ -87,4 +87,103 @@ record_only_error <- tryCatch(
 )
 stopifnot(grepl("DC-11 sample_id", record_only_error, fixed = TRUE))
 
+# --- 8. Coverage keeps Flow history but removes excluded sample markers ------
+coverage_before <- joined
+coverage_selected <- apply_selection_to_coverage(
+  coverage_data = coverage_before,
+  selection = sel,
+  biol_metric = "LIFE_F_OE",
+  id_col = "sample_id"
+)
+stopifnot(nrow(coverage_selected) == nrow(coverage_before))
+stopifnot(identical(coverage_selected$Q10_lag0, coverage_before$Q10_lag0))
+stopifnot(is.na(coverage_selected$LIFE_F_OE[
+  coverage_selected$sample_id == "S002"
+]))
+stopifnot(identical(
+  coverage_selected$LIFE_F_OE[coverage_selected$sample_id != "S002"],
+  coverage_before$LIFE_F_OE[coverage_before$sample_id != "S002"]
+))
+stopifnot(identical(joined, coverage_before))
+
+# --- 9. Restore rebuilds the biological-sample marker from source coverage ---
+coverage_restored <- apply_selection_to_coverage(
+  coverage_data = coverage_before,
+  selection = restore_record(sel, "S002", timestamp = "2026-07-23 10:15:00"),
+  biol_metric = "LIFE_F_OE",
+  id_col = "sample_id"
+)
+stopifnot(identical(coverage_restored, coverage_before))
+
+# --- 10. No exclusions preserve legacy coverage without requiring an ID ------
+coverage_without_id <- coverage_before[, setdiff(names(coverage_before), "sample_id")]
+stopifnot(identical(
+  apply_selection_to_coverage(
+    coverage_without_id,
+    new_filter_selection(),
+    biol_metric = "LIFE_F_OE"
+  ),
+  coverage_without_id
+))
+
+# --- 11. Identifier mismatches fail instead of silently ignoring exclusions --
+missing_id_error <- tryCatch(
+  {
+    apply_selection_to_coverage(
+      coverage_without_id,
+      sel,
+      biol_metric = "LIFE_F_OE",
+      id_col = "sample_id"
+    )
+    NULL
+  },
+  error = identity
+)
+stopifnot(inherits(missing_id_error, "error"))
+stopifnot(grepl("identifier column", conditionMessage(missing_id_error), fixed = TRUE))
+
+unmatched_sel <- exclude_record(
+  new_filter_selection(),
+  record_id = "NOT-IN-COVERAGE",
+  timestamp = "2026-07-23 10:20:00"
+)
+unmatched_error <- tryCatch(
+  {
+    apply_selection_to_coverage(
+      coverage_before,
+      unmatched_sel,
+      biol_metric = "LIFE_F_OE",
+      id_col = "sample_id"
+    )
+    NULL
+  },
+  error = identity
+)
+stopifnot(inherits(unmatched_error, "error"))
+stopifnot(grepl("NOT-IN-COVERAGE", conditionMessage(unmatched_error), fixed = TRUE))
+
+partial_sel <- exclude_record(
+  exclude_record(
+    new_filter_selection(),
+    record_id = "S001",
+    timestamp = "2026-07-23 10:25:00"
+  ),
+  record_id = "NOT-IN-COVERAGE",
+  timestamp = "2026-07-23 10:26:00"
+)
+partial_error <- tryCatch(
+  {
+    apply_selection_to_coverage(
+      coverage_before,
+      partial_sel,
+      biol_metric = "LIFE_F_OE",
+      id_col = "sample_id"
+    )
+    NULL
+  },
+  error = identity
+)
+stopifnot(inherits(partial_error, "error"))
+stopifnot(grepl("NOT-IN-COVERAGE", conditionMessage(partial_error), fixed = TRUE))
+
 cat("test_analysis_filter_helpers.R: all checks passed\n")
