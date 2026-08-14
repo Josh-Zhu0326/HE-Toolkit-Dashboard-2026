@@ -9,6 +9,7 @@ processed_checkpoint_fixture <- function() {
     sample_id = c("S1", "S2", "S3"),
     date = as.Date(c("2020-05-01", "2021-10-01", "2022-05-01")),
     Year = 2020:2022,
+    Q95_lag0 = c(1.2, 1.1, 1.0),
     Q95z_lag0 = c(-1, 0, 1),
     LIFE_F_OE = c(0.8, 1.0, 1.2),
     stringsAsFactors = FALSE
@@ -41,6 +42,9 @@ testthat::test_that("processed checkpoint HEV view preserves dates and normalise
   hev_data <- processed_dataset_checkpoint_hev_data(dataset)
 
   testthat::expect_s3_class(hev_data$date, "Date")
+  testthat::expect_true("Q95" %in% names(hev_data))
+  testthat::expect_false("Q95_lag0" %in% names(hev_data))
+  testthat::expect_identical(hev_data$Q95, dataset$Q95_lag0)
   testthat::expect_true("Q95z" %in% names(hev_data))
   testthat::expect_false("Q95z_lag0" %in% names(hev_data))
   testthat::expect_identical(hev_data$Q95z, dataset$Q95z_lag0)

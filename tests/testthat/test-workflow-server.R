@@ -351,7 +351,7 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
     testthat::expect_identical(join_revision(), built_request)
 
     muffle_interrupted_workflow_promise(
-      session$setInputs(choose_join_method = "B")
+      session$setInputs(choose_lags = 1)
     )
     muffle_interrupted_workflow_promise(session$flushReact())
 
@@ -387,7 +387,7 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
     testthat::expect_null(hev_revision())
 
     # Further edits do not recalculate or increment any retained output.
-    muffle_interrupted_workflow_promise(session$setInputs(choose_lags = 2))
+    muffle_interrupted_workflow_promise(session$setInputs(choose_lags = 1))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(
       vapply(workflow_artifacts(), `[[`, integer(1), "output_revision"),
@@ -450,9 +450,11 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
         data.frame(
           flow_site_id = "F1",
           start_date = as.Date(c("2020-01-01", "2021-01-01", "2022-01-01")),
+          Q95_lag0 = c(1.2, 1.1, 1.0),
+          Q10_lag0 = c(8.1, 8.2, 8.3),
           Q95z_lag0 = c(-1, 0, 1)
         ),
-        data.frame(flow_site_id = "F1", Q95z = 0)
+        data.frame(flow_site_id = "F1", Q95 = 1.1, Q10 = 8.2, Q95z = 0)
       )
     },
     join_he = function(..., join_type) {
@@ -462,6 +464,8 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
           biol_site_id = "B1",
           sample_id = paste0("S", 1:4),
           Year = 2020:2023,
+          Q95_lag0 = c(1.2, 1.1, 1.0, 0.9),
+          Q10_lag0 = c(8.1, 8.2, 8.3, 8.4),
           Q95z_lag0 = c(-1, 0.5, -0.25, 1),
           LIFE_F_OE = c(0.83, 1.06, 0.97, 1.31)
         ))
@@ -473,6 +477,8 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
         Year = 2020:2023,
         Season = "Spring",
         win_no_lag0 = 1:4,
+        Q95_lag0 = c(1.2, 1.1, 1.0, 0.9),
+        Q10_lag0 = c(8.1, 8.2, 8.3, 8.4),
         Q95z_lag0 = c(-1, 0.5, -0.25, 1),
         LIFE_F_OE = c(0.83, 1.06, 0.97, 1.31)
       )
@@ -497,7 +503,17 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
   )
 
   shiny::testServer(workflow_dashboard_server, {
-    local_flow_path <- testthat::test_path("..", "fixtures", "local_flow.csv")
+    local_flow_path <- tempfile("local-flow-f1-", fileext = ".csv")
+    utils::write.csv(
+      data.frame(
+        flow_site_id = "F1",
+        date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01")),
+        flow = c(2.4, 2.2, 2.0)
+      ),
+      local_flow_path,
+      row.names = FALSE
+    )
+    on.exit(unlink(local_flow_path, force = TRUE), add = TRUE)
     local_flow_input <- shiny_upload_input(local_flow_path)
 
     muffle_interrupted_workflow_promise(session$setInputs(
@@ -676,15 +692,36 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$oe_result))
 
-    # RAW-17: HEV blocks until a current Joined HE Dataset exists.
+    # Raw daily Flow HEV does not require Flow Statistics or the Joined HE Dataset.
     muffle_interrupted_workflow_promise(session$setInputs(
       site_selector = "B1",
+      hev_flow_data_mode = "daily_flow",
       biol_metric_selector = "LIFE_F_OE",
-      flow_metric_selector = "Q95z",
+      flow_metric_selector = "Q95",
       HEV_date_range = c(2020, 2022),
       HEV_show_all_metrics = FALSE,
       HEV_show_high_low = FALSE,
       renderHEV = 1
+    ))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(hev_request(), 1)
+    testthat::expect_silent(HEV_data())
+    testthat::expect_true("flow" %in% names(HEV_data()))
+    testthat::expect_s3_class(HEV_plot(), "ggplot")
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
+    testthat::expect_identical(hev_current_result()$provenance$flow_mode, "daily_flow")
+
+    # RAW-17: HEV blocks until a current Joined HE Dataset exists.
+    muffle_interrupted_workflow_promise(session$setInputs(
+      site_selector = "B1",
+      hev_flow_data_mode = "flow_statistics",
+      biol_metric_selector = "LIFE_F_OE",
+      flow_metric_selector = "Q95",
+      HEV_date_range = c(2020, 2022),
+      HEV_show_all_metrics = FALSE,
+      HEV_show_high_low = FALSE,
+      renderHEV = 2
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
@@ -732,10 +769,10 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
 
     muffle_interrupted_workflow_promise(session$setInputs(
-      renderHEV = 2
+      renderHEV = 3
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
-    testthat::expect_identical(hev_request(), 2)
+    testthat::expect_identical(hev_request(), 3)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
     testthat::expect_identical(hev_plot_dependency_status()$status, "success")
     testthat::expect_silent(HEV_data())
@@ -744,11 +781,13 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     testthat::expect_named(
       HEV_go(),
       c(
-        "data", "analysis_context", "site_id", "date_range",
+        "data", "analysis_context", "site_id",
+        "flow_mode", "flow_source_revision", "date_range",
         "biol_metric_selector", "flow_metric_selector", "show_all_metrics",
-        "show_high_low", "show_status"
+        "show_high_low", "show_status", "river_type"
       )
     )
+    testthat::expect_identical(HEV_go()$river_type, "non_chalk")
     testthat::expect_s3_class(HEV_plot(), "ggplot")
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
@@ -761,7 +800,7 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     ))
     testthat::expect_equal(nrow(hev_download_history()), 1L)
 
-    muffle_interrupted_workflow_promise(session$setInputs(choose_join_method = "B"))
+    muffle_interrupted_workflow_promise(session$setInputs(choose_lags = 1))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
@@ -773,7 +812,7 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     )
     testthat::expect_error(HEV_plot(), class = "shiny.silent.error")
 
-    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 3))
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 4))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "blocked")
     testthat::expect_null(hev_request())
@@ -790,13 +829,14 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     testthat::expect_identical(hev_current_result()$status, "not_ready")
     testthat::expect_equal(nrow(hev_download_history()), 1L)
 
-    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 4))
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 5))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_s3_class(HEV_plot(), "ggplot")
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
     testthat::expect_identical(hev_current_result()$status, "success")
     testthat::expect_identical(hev_current_result()$provenance$source_dataset, "joined_core")
+    testthat::expect_identical(hev_current_result()$provenance$flow_mode, "flow_statistics")
     testthat::expect_identical(hev_current_result()$provenance$filter_version, 0L)
     testthat::expect_equal(nrow(hev_download_history()), 1L)
 
@@ -805,7 +845,7 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
     testthat::expect_identical(hev_current_result()$status, "stale")
 
-    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 2))
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 3))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
     testthat::expect_identical(hev_current_result()$status, "success")
@@ -822,7 +862,7 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     )]
 
     hev_plot_mode$value <- "error"
-    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 5))
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 6))
     muffle_interrupted_workflow_promise(session$flushReact())
 
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "failed")
@@ -841,14 +881,14 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     )
 
     hev_plot_mode$value <- "null"
-    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 6))
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 7))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "failed")
     testthat::expect_identical(hev_current_result()$plot, retained_plot)
     testthat::expect_identical(hev_download_history(), retained_history)
 
     hev_plot_mode$value <- "success"
-    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 7))
+    muffle_interrupted_workflow_promise(session$setInputs(renderHEV = 8))
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_s3_class(HEV_plot(), "ggplot")
     testthat::expect_true(artifact_is_current(workflow_artifacts()$hev_result))
@@ -1001,6 +1041,7 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
     sample_id = paste0("S", 1:3),
     date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01")),
     Year = 2020:2022,
+    Q95_lag0 = c(1.2, 1.1, 1.0),
     Q95z_lag0 = c(-1, 0, 1),
     LIFE_F_OE = c(0.8, 1.0, 1.2),
     stringsAsFactors = FALSE
@@ -1029,7 +1070,7 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
     testthat::expect_identical(active_join_source(), "checkpoint")
     testthat::expect_identical(join_data(), checkpoint_data)
     testthat::expect_identical(current_analysis_data(), checkpoint_data)
-    testthat::expect_true("Q95z" %in% names(HEV_data()))
+    testthat::expect_true("Q95" %in% names(HEV_data()))
     testthat::expect_s3_class(HEV_data()$date, "Date")
     testthat::expect_identical(processed_checkpoint_load_status()$status, "success")
     testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
@@ -1308,7 +1349,7 @@ testthat::test_that("RAW-19 HEV download records history only after a successful
   provenance <- list(
     site_id = "B1",
     biology_metrics = "LIFE_F_OE",
-    flow_metrics = "Q95z",
+    flow_metrics = "Q95",
     date_range = "2020-01-01-2020-12-31",
     source_dataset = "joined_core",
     source_fingerprint = "fixture-fingerprint",

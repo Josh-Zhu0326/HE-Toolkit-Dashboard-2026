@@ -390,9 +390,21 @@ function(input, output, session){
   join_settings_used <- reactiveVal(NULL)
 
   normalise_join_settings <- function(lags, method) {
+    lags <- sort(unique(as.integer(lags)))
+    invalid_lags <- setdiff(lags, c(0L, 1L))
+    if (length(lags) == 0L || anyNA(lags)) {
+      stop("Select lag 0, lag 1, or both before building the Joined HE Dataset.", call. = FALSE)
+    }
+    if (length(invalid_lags) > 0L) {
+      stop("Only lag 0 and lag 1 are supported for the Dashboard workflow.", call. = FALSE)
+    }
+    method <- as.character(method)[[1L]]
+    if (is.na(method) || !identical(method, "A")) {
+      stop("Core joined/model dataset generation must use join method A.", call. = FALSE)
+    }
     list(
-      lags = sort(unique(as.integer(lags))),
-      method = as.character(method)[[1L]]
+      lags = lags,
+      method = method
     )
   }
 
@@ -515,6 +527,21 @@ function(input, output, session){
     join_revision(NULL)
     hev_revision(NULL)
     hev_request(NULL)
+    settings <- tryCatch(
+      normalise_join_settings(input$choose_lags, input$choose_join_method),
+      error = function(error) {
+        workflow_block_artifact(
+          "joined_core",
+          conditionMessage(error),
+          "Select lag 0 or lag 1 and build the Joined HE Dataset again."
+        )
+        showNotification(conditionMessage(error), type = "error", duration = 10)
+        NULL
+      }
+    )
+    if (is.null(settings)) {
+      return()
+    }
     if (!workflow_artifact_is_current("oe_result")) {
       workflow_block_artifact(
         "joined_core",
@@ -534,10 +561,7 @@ function(input, output, session){
     active_join_source("generated")
     join_request(list(
       flow_revision = isolate(flow_source_revision()),
-      settings = normalise_join_settings(
-        input$choose_lags,
-        input$choose_join_method
-      ),
+      settings = settings,
       request_id = input$join_he
     ))
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
@@ -545,6 +569,7 @@ function(input, output, session){
   observeEvent(input$renderHEV, {
     dependency <- hev_dependency_check()
     hev_plot_dependency_status(dependency)
+    flow_mode <- normalise_hev_flow_mode(input$hev_flow_data_mode)
     if (identical(dependency$status, "error")) {
       hev_request(NULL)
       workflow_set_artifact(
@@ -556,7 +581,26 @@ function(input, output, session){
       showNotification(dependency$message, type = "error", duration = 10)
       return()
     }
-    if (!workflow_artifact_is_current("joined_core")) {
+    if (identical(flow_mode, "daily_flow")) {
+      if (!workflow_artifact_is_current("oe_result")) {
+        hev_request(NULL)
+        workflow_block_artifact(
+          "hev_result",
+          "Current O:E ratios are required before generating a raw daily Flow HEV plot.",
+          "Calculate or regenerate O:E ratios, then create the HEV plot again."
+        )
+        return()
+      }
+      if (!workflow_artifact_is_current("flow_input")) {
+        hev_request(NULL)
+        workflow_block_artifact(
+          "hev_result",
+          "Current daily Flow data are required before generating a raw daily Flow HEV plot.",
+          "Upload or import Flow data, then create the HEV plot again."
+        )
+        return()
+      }
+    } else if (!workflow_artifact_is_current("joined_core")) {
       hev_request(NULL)
       workflow_block_artifact(
         "hev_result",
@@ -578,10 +622,13 @@ function(input, output, session){
         return()
       }
 
-      current_settings <- normalise_join_settings(
-        input$choose_lags,
-        input$choose_join_method
+      current_settings <- tryCatch(
+        normalise_join_settings(input$choose_lags, input$choose_join_method),
+        error = function(error) NULL
       )
+      if (is.null(current_settings)) {
+        return()
+      }
       if (identical(current_settings, settings_used)) {
         return()
       }
@@ -645,32 +692,49 @@ function(input, output, session){
   })
   
   output$cp_hev <- renderUI({
+    flow_mode <- normalise_hev_flow_mode(input$hev_flow_data_mode)
     tagList(
       workflow_checkpoint_card(
         "oe_result",
         "O:E ratios ready",
         "[Blocked] O:E not yet calculated"
       ),
-      workflow_checkpoint_card(
-        "flow_statistics",
-        "Flow statistics ready",
-        "[Blocked] Flow stats not yet calculated"
-      ),
-      workflow_checkpoint_card(
-        "joined_core",
-        "Biology and Flow paired",
-        "[Blocked] Data not yet joined (Analysis page)"
-      ),
-      workflow_checkpoint_card(
-        "analysis_dataset",
-        "Current analysis dataset ready",
-        "[Blocked] Current analysis dataset not yet available"
-      ),
-      if (workflow_artifact_is_current("oe_result") &&
-          workflow_artifact_is_current("flow_statistics") &&
-          workflow_artifact_is_current("joined_core") &&
-          workflow_artifact_is_current("analysis_dataset")) {
-        cp_card("pass", "All prerequisites met — ready to generate HEV plot")
+      if (identical(flow_mode, "daily_flow")) {
+        tagList(
+          workflow_checkpoint_card(
+            "flow_input",
+            "Daily Flow data ready",
+            "[Blocked] Daily Flow data not yet imported"
+          ),
+          if (workflow_artifact_is_current("oe_result") &&
+              workflow_artifact_is_current("flow_input")) {
+            cp_card("pass", "Raw daily Flow HEV prerequisites met")
+          }
+        )
+      } else {
+        tagList(
+          workflow_checkpoint_card(
+            "flow_statistics",
+            "Flow statistics ready",
+            "[Blocked] Flow stats not yet calculated"
+          ),
+          workflow_checkpoint_card(
+            "joined_core",
+            "Biology and Flow paired",
+            "[Blocked] Data not yet joined (Analysis page)"
+          ),
+          workflow_checkpoint_card(
+            "analysis_dataset",
+            "Current analysis dataset ready",
+            "[Blocked] Current analysis dataset not yet available"
+          ),
+          if (workflow_artifact_is_current("oe_result") &&
+              workflow_artifact_is_current("flow_statistics") &&
+              workflow_artifact_is_current("joined_core") &&
+              workflow_artifact_is_current("analysis_dataset")) {
+            cp_card("pass", "Flow-statistics HEV prerequisites met")
+          }
+        )
       }
     )
   })
@@ -3837,7 +3901,7 @@ function(input, output, session){
     hev_data$Season <- factor(hev_data$Season, levels = c("Spring", "Summer" ,"Autumn"))
     
     result <- join_he(biol_data = hev_data, flow_stats = flow_data_hev, mapping = mapping,
-                      method = "A", join_type = "add_biol") %>%
+                      method = "B", join_type = "add_biol") %>%
       select(-"win_no_lag0") %>%
       rename_with(~str_replace_all(.x, "_lag0", ""))
     hev_revision(request)
@@ -3845,7 +3909,42 @@ function(input, output, session){
     
   })
 
+  HEV_daily_flow_data <- reactive({
+    req(workflow_artifact_is_current("oe_result"))
+    req(workflow_artifact_is_current("flow_input"))
+    mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
+    build_hev_daily_flow_data(
+      biology_data = biol_all(),
+      flow_data = flow_data(),
+      mapping = mapping
+    )
+  })
+
+  HEV_analysis_context <- reactive({
+    flow_mode <- normalise_hev_flow_mode(input$hev_flow_data_mode)
+    if (identical(flow_mode, "daily_flow")) {
+      flow_data_current <- flow_data()
+      biology_current <- biol_all()
+      return(list(
+        source_dataset = "daily_flow",
+        source_fingerprint = paste(
+          nrow(flow_data_current),
+          nrow(biology_current),
+          flow_source_revision(),
+          sep = "::"
+        ),
+        filter_version = NA_integer_,
+        analysis_rows = nrow(biology_current)
+      ))
+    }
+    current_analysis_context()
+  })
+
   HEV_data <- reactive({
+    flow_mode <- normalise_hev_flow_mode(input$hev_flow_data_mode)
+    if (identical(flow_mode, "daily_flow")) {
+      return(HEV_daily_flow_data())
+    }
     if (identical(active_join_source(), "checkpoint")) {
       checkpoint_data <- current_analysis_data()
       req("date" %in% names(checkpoint_data))
@@ -3890,18 +3989,27 @@ function(input, output, session){
   HEV_go <- reactive({
     request_id <- hev_request()
     req(!is.null(request_id))
-    req(isolate(workflow_artifact_is_current("joined_core")))
+    flow_mode <- normalise_hev_flow_mode(isolate(input$hev_flow_data_mode))
+    if (identical(flow_mode, "flow_statistics")) {
+      req(isolate(workflow_artifact_is_current("joined_core")))
+    } else {
+      req(isolate(workflow_artifact_is_current("oe_result")))
+      req(isolate(workflow_artifact_is_current("flow_input")))
+    }
     plot_data <- isolate(HEV_plot_data())
     list(
       data = plot_data,
-      analysis_context = isolate(current_analysis_context()),
+      analysis_context = isolate(HEV_analysis_context()),
       site_id = isolate(input$site_selector),
+      flow_mode = flow_mode,
+      flow_source_revision = isolate(flow_source_revision()),
       date_range = isolate(input$HEV_date_range),
       biol_metric_selector = isolate(input$biol_metric_selector),
       flow_metric_selector = isolate(input$flow_metric_selector),
       show_all_metrics = isTRUE(isolate(input$HEV_show_all_metrics)),
       show_high_low = isTRUE(isolate(input$HEV_show_high_low)),
-      show_status = isTRUE(isolate(input$HEV_show_status))
+      show_status = isTRUE(isolate(input$HEV_show_status)),
+      river_type = normalise_hev_river_type(isolate(input$hev_river_type))
     )
   })
   
@@ -3926,10 +4034,10 @@ function(input, output, session){
     }
     result <- hev_current_result()
     messages <- result$messages
-    if (isTRUE(input$HEV_show_status)) {
+    if (isTRUE(input$HEV_show_status) && !identical(result$status, "success")) {
       messages <- c(
         messages,
-        "Status class boundaries require confirmed boundary/class data. None are currently available in the dashboard data, so no boundary lines are drawn."
+        "Status class boundaries will be drawn when a HEV plot is generated."
       )
     }
     display_status <- if (identical(result$status, "stale")) {
@@ -3971,7 +4079,8 @@ function(input, output, session){
         flow_metrics <- resolve_hev_flow_metrics(
           hev_data,
           request$flow_metric_selector,
-          request$show_high_low
+          request$show_high_low,
+          flow_mode = request$flow_mode
         )
         if (nrow(hev_data) == 0L || length(biol_metrics) == 0L || length(flow_metrics) == 0L) {
           return(list(plot = NULL, data = NULL, provenance = NULL))
@@ -3982,7 +4091,9 @@ function(input, output, session){
                               flow_stat = flow_metrics,
                               biol_metric = biol_metrics,
                               multiplot = request$show_all_metrics,
-                              clr_by = "Season")
+                              clr_by = "Season",
+                              show_status = request$show_status,
+                              river_type = request$river_type)
         provenance <- build_hev_output_provenance(
           analysis_context = request$analysis_context,
           plot_data = hev_data,
@@ -3990,9 +4101,12 @@ function(input, output, session){
           date_range = request$date_range,
           biology_metrics = biol_metrics,
           flow_metrics = flow_metrics,
+          flow_mode = request$flow_mode,
+          flow_source_revision = request$flow_source_revision,
           show_all_metrics = request$show_all_metrics,
           show_high_low = request$show_high_low,
-          show_status = request$show_status
+          show_status = request$show_status,
+          river_type = request$river_type
         )
         list(plot = plot, data = hev_data, provenance = provenance)
       },
@@ -4071,12 +4185,14 @@ function(input, output, session){
   observeEvent(
     list(
       input$site_selector,
+      input$hev_flow_data_mode,
       input$biol_metric_selector,
       input$flow_metric_selector,
       input$HEV_date_range,
       input$HEV_show_all_metrics,
       input$HEV_show_high_low,
-      input$HEV_show_status
+      input$HEV_show_status,
+      input$hev_river_type
     ),
     {
       mark_hev_result_stale("HEV settings changed after the current plot was generated.")

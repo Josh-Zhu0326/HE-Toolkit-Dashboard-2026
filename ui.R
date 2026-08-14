@@ -498,7 +498,7 @@ page_navbar(
               ),
               div(class = "sidebar-section control-stack action-stack",
                 h5("Flow statistics"),
-                sliderInput('win_width_selector', 'Window width (months)', min= 3, 
+                sliderInput('win_width_selector', 'Window width (months)', min= 6,
                             max= 36, value = 6, sep = ""),
                 sliderInput('win_step_selector', 'Window step (months)', min= 1, 
                             max= 12, value = 6, sep = ""),
@@ -547,13 +547,13 @@ page_navbar(
           pickerInput(
             inputId = "choose_lags",
             label = "Select lags",
-            choices = 0:10,
+            choices = c(0, 1),
             multiple = TRUE
           ),
           pickerInput(
             inputId = "choose_join_method",
             label = "Select join method",
-            choices = c("A", "B"),
+            choices = "A",
             multiple = FALSE
           ),
           actionButton(
@@ -735,15 +735,16 @@ page_navbar(
             div(class = "sidebar-section control-stack",
               h5("HEV plot setup"),
               uiOutput("picker"),
+              radioButtons(
+                inputId = "hev_flow_data_mode",
+                label = "Flow data mode",
+                choices = c("Raw daily Flow" = "daily_flow", "Flow statistics" = "flow_statistics"),
+                selected = "flow_statistics"
+              ),
               pickerInput(inputId = "biol_metric_selector", label = "Select biomonitoring index", 
-                          choices = c("WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE"), multiple = FALSE),
+                          choices = HEV_BIOLOGY_METRICS, multiple = FALSE),
               pickerInput(inputId = "flow_metric_selector", label = "Select flow metric", 
-                          choices = c("Q5", "Q5z", "Q10", "Q10z",
-                                      "Q30", "Q30z", "Q50", "Q50z",
-                                      "Q70", "Q70z", "Q75", "Q75z",
-                                      "Q80", "Q80z", "Q85", "Q85z",
-                                      "Q90", "Q90z", "Q95", "Q95z",
-                                      "Q99", "Q99z"), multiple = FALSE),
+                          choices = HEV_FLOW_STAT_METRICS, multiple = FALSE),
               sliderInput('HEV_date_range', 'Select date range', min= 1990, max= Sys.Date() %>% data.table::year() %>% as.numeric(), 
                           value = c(1990, 2025), sep = "", round = TRUE)
             ),
@@ -751,7 +752,13 @@ page_navbar(
               h5("Display options"),
               checkboxInput("HEV_show_all_metrics", "Show all 4 HEV plots", value = FALSE),
               checkboxInput("HEV_show_high_low", "Overlay low-flow and high-flow statistics", value = FALSE),
-              checkboxInput("HEV_show_status", "Show available status class boundaries", value = FALSE)
+              checkboxInput("HEV_show_status", "Show available status class boundaries", value = FALSE),
+              radioButtons(
+                inputId = "hev_river_type",
+                label = "River type for LIFE threshold",
+                choices = c("Non-chalk" = "non_chalk", "Chalk" = "chalk"),
+                selected = "non_chalk"
+              )
             ),
             div(class = "sidebar-section",
                 h5("Readiness check"),
