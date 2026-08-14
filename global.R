@@ -68,6 +68,7 @@ source(file.path("R", "joined_dataset_boundary_helpers.R"))
 source(file.path("R", "analysis_model_helpers.R"))
 source(file.path("R", "mixed_model_helpers.R"))
 source(file.path("R", "hev_output_helpers.R"))
+source(file.path("R", "hev_threshold_helpers.R"))
 
 # runApp(launch.browser=TRUE)
 # rsconnect::writeManifest()
@@ -447,7 +448,9 @@ plot_hev_dash <- function(data,
                           multiplot = TRUE,
                           save = FALSE,
                           save_dir = getwd(),
-                          clr_by = NULL){
+                          clr_by = NULL,
+                          show_status = FALSE,
+                          river_type = "non_chalk"){
   
   
   if(is.data.frame(data) == FALSE){stop("Data frame 'data' not found")}
@@ -473,6 +476,8 @@ plot_hev_dash <- function(data,
   
   if(is.null(clr_by) == FALSE && isTRUE(clr_by %in% names(data)) == FALSE)
   {stop("clr_by variable does not exist in data")}
+
+  river_type <- normalise_hev_river_type(river_type)
   
   # Pull-in data
   
@@ -604,6 +609,10 @@ plot_hev_dash <- function(data,
             axis.title.x = element_text(size = 12),
             axis.title.y.left = element_text(size = 12),
             axis.title.y.right = element_text(size = 12))
+
+    if (isTRUE(show_status)) {
+      p1 <- add_hev_status_layers(p1, biol_metric[1], rangeratio_1, minadj_1, y2_min, y2_max, river_type)
+    }
     
     if(is.na(biol_metric[2]) == FALSE){
       
@@ -642,6 +651,10 @@ plot_hev_dash <- function(data,
               axis.title.x = element_text(size = 12),
               axis.title.y.left = element_text(size = 12),
               axis.title.y.right = element_text(size = 12))
+
+      if (isTRUE(show_status)) {
+        p2 <- add_hev_status_layers(p2, biol_metric[2], rangeratio_2, minadj_2, y3_min, y3_max, river_type)
+      }
       
     }
     
@@ -683,6 +696,10 @@ plot_hev_dash <- function(data,
               axis.title.x = element_text(size = 12),
               axis.title.y.left = element_text(size = 12),
               axis.title.y.right = element_text(size = 12))
+
+      if (isTRUE(show_status)) {
+        p3 <- add_hev_status_layers(p3, biol_metric[3], rangeratio_3, minadj_3, y4_min, y4_max, river_type)
+      }
       
     }
     
@@ -723,6 +740,10 @@ plot_hev_dash <- function(data,
               axis.title.x = element_text(size = 12),
               axis.title.y.left = element_text(size = 12),
               axis.title.y.right = element_text(size = 12))
+
+      if (isTRUE(show_status)) {
+        p4 <- add_hev_status_layers(p4, biol_metric[4], rangeratio_4, minadj_4, y5_min, y5_max, river_type)
+      }
       
     }
     
@@ -756,6 +777,10 @@ plot_hev_dash <- function(data,
             axis.title.x = element_text(size = 12),
             axis.title.y.left = element_text(size = 12),
             axis.title.y.right = element_text(size = 12))
+
+    if (isTRUE(show_status)) {
+      p1 <- add_hev_status_layers(p1, biol_metric[1], rangeratio_1, minadj_1, y2_min, y2_max, river_type)
+    }
     
     if(is.na(biol_metric[2]) == FALSE){
       
@@ -793,6 +818,10 @@ plot_hev_dash <- function(data,
               axis.title.x = element_text(size = 12),
               axis.title.y.left = element_text(size = 12),
               axis.title.y.right = element_text(size = 12))
+
+      if (isTRUE(show_status)) {
+        p2 <- add_hev_status_layers(p2, biol_metric[2], rangeratio_2, minadj_2, y3_min, y3_max, river_type)
+      }
       
     }
     
@@ -834,6 +863,10 @@ plot_hev_dash <- function(data,
               axis.title.x = element_text(size = 12),
               axis.title.y.left = element_text(size = 12),
               axis.title.y.right = element_text(size = 12))
+
+      if (isTRUE(show_status)) {
+        p3 <- add_hev_status_layers(p3, biol_metric[3], rangeratio_3, minadj_3, y4_min, y4_max, river_type)
+      }
       
     }
     
@@ -873,6 +906,10 @@ plot_hev_dash <- function(data,
               axis.title.x = element_text(size = 12),
               axis.title.y.left = element_text(size = 12),
               axis.title.y.right = element_text(size = 12))
+
+      if (isTRUE(show_status)) {
+        p4 <- add_hev_status_layers(p4, biol_metric[4], rangeratio_4, minadj_4, y5_min, y5_max, river_type)
+      }
     }
     
   }
