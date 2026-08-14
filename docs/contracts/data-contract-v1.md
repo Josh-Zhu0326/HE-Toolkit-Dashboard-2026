@@ -211,6 +211,9 @@ timestamp
 
 **State rules**
 
+- `sample_id` remains the canonical DC-11 biology/joined identifier and is not renamed in source or derived datasets.
+- The filtering boundary uses `record_id` consistently for selection and audit events. When a joined dataset has no explicit `record_id`, the boundary derives the runtime value directly from a non-blank, unique `sample_id` without modifying the joined dataset schema.
+- Missing or duplicate runtime record identifiers block exclusion/restoration because the requested row would be ambiguous.
 - A filtering change must make prior model results `stale`.
 - Restoring a record must rebuild `analysis_dataset` while retaining an auditable exclusion/restoration history.
 - Content comparison or fingerprints must verify that upstream joined datasets are identical before and after filtering.
@@ -302,6 +305,12 @@ Q95z_lag1
 - V1 uses a fixed rolling three-calendar-year window anchored to each biology record's `sampling_year`. For `sampling_year = Y`, include WQ observations whose calendar year is `Y - 2`, `Y - 1`, or `Y`; equivalently, the inclusive boundaries are 1 January of `Y - 2` and 31 December of `Y`.
 - Records outside those inclusive calendar-year boundaries must not enter the summary. A missing, blank, or unparseable `sampling_year` blocks WQ matching for that biology record and produces a field-level error without invalidating `joined_core`.
 - `orthophosphate_mean` uses the mean, and `ammonia_p90` uses the default type 7 from R `quantile(..., probs = 0.90)`.
+
+**Dashboard preview controls**
+
+- WQ preview plots expose only contracted determinand, WQ site, and observation-date filters.
+- The plotted value comes from the canonical result/analysis-value field, and grouping uses the mapped biology site where available.
+- Coordinate fields and unrelated numeric columns must not be offered as WQ variables or grouping controls.
 
 **Traceability**
 

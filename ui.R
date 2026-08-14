@@ -278,7 +278,8 @@ page_navbar(
                 actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
               ),
               div(class = "sidebar-section control-stack action-stack",
-                h5("Supporting WQ/RHS imports"),
+                h5("Optional WQ/RHS inputs"),
+                div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
                 dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
                 actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
                 actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
@@ -342,7 +343,7 @@ page_navbar(
                           ),
                           card(class = "dashboard-card",
                             card_header("WQ preview plots"),
-                            div(class = "hint-text", "Preview plots use mapped WQ data only and do not define the contracted WQ summary fields."),
+                            div(class = "hint-text", "Preview plots use the contracted WQ determinant, site and date fields. Coordinate and unrelated numeric fields are not offered as plot controls."),
                             selectInput(
                               "wq_plot_type",
                               "WQ plot type",

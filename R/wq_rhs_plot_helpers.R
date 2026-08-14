@@ -133,6 +133,104 @@ wq_rhs_default_group <- function(data) {
   }
 }
 
+wq_preview_first_column <- function(data, candidates) {
+  if (is.null(data) || length(names(data)) == 0L) {
+    return(NA_character_)
+  }
+
+  names_lower <- tolower(names(data))
+  match_index <- match(tolower(candidates), names_lower, nomatch = 0L)
+  match_index <- match_index[match_index > 0L]
+  if (length(match_index) == 0L) NA_character_ else names(data)[match_index[[1L]]]
+}
+
+wq_preview_filter_spec <- function(data) {
+  if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+    return(list(
+      determinant_col = NA_character_,
+      site_col = NA_character_,
+      date_col = NA_character_,
+      value_col = NA_character_,
+      group_col = NA_character_,
+      determinant_choices = character(),
+      site_choices = character(),
+      date_min = as.Date(NA),
+      date_max = as.Date(NA)
+    ))
+  }
+
+  determinant_col <- wq_preview_first_column(
+    data,
+    "det_id"
+  )
+  site_col <- wq_preview_first_column(
+    data,
+    "wq_site_id"
+  )
+  date_col <- wq_preview_first_column(
+    data,
+    "date_time"
+  )
+  value_col <- wq_preview_first_column(
+    data,
+    c("analysis_value", "result", "value", "measurement")
+  )
+  group_col <- wq_preview_first_column(data, c("biol_site_id", "wq_site_id"))
+
+  clean_choices <- function(column_name) {
+    if (is.na(column_name)) {
+      return(character())
+    }
+    values <- trimws(as.character(data[[column_name]]))
+    sort(unique(values[!is.na(values) & nzchar(values)]))
+  }
+
+  dates <- if (is.na(date_col)) rep(as.Date(NA), nrow(data)) else wq_rhs_parse_date(data[[date_col]])
+  valid_dates <- dates[!is.na(dates)]
+
+  list(
+    determinant_col = determinant_col,
+    site_col = site_col,
+    date_col = date_col,
+    value_col = value_col,
+    group_col = group_col,
+    determinant_choices = clean_choices(determinant_col),
+    site_choices = clean_choices(site_col),
+    date_min = if (length(valid_dates) == 0L) as.Date(NA) else min(valid_dates),
+    date_max = if (length(valid_dates) == 0L) as.Date(NA) else max(valid_dates)
+  )
+}
+
+filter_wq_preview_data <- function(
+    data,
+    determinant = "__all__",
+    site = "__all__",
+    date_range = NULL,
+    spec = wq_preview_filter_spec(data)) {
+  if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+    return(data)
+  }
+
+  keep <- rep(TRUE, nrow(data))
+  selected <- function(value) {
+    length(value) == 1L && !is.na(value) && nzchar(value) && !identical(value, "__all__")
+  }
+
+  if (selected(determinant) && !is.na(spec$determinant_col)) {
+    keep <- keep & as.character(data[[spec$determinant_col]]) == determinant
+  }
+  if (selected(site) && !is.na(spec$site_col)) {
+    keep <- keep & as.character(data[[spec$site_col]]) == site
+  }
+  if (!is.null(date_range) && length(date_range) == 2L &&
+      all(!is.na(as.Date(date_range))) && !is.na(spec$date_col)) {
+    dates <- wq_rhs_parse_date(data[[spec$date_col]])
+    keep <- keep & !is.na(dates) & dates >= as.Date(date_range[[1L]]) & dates <= as.Date(date_range[[2L]])
+  }
+
+  data[keep, , drop = FALSE]
+}
+
 build_wq_plot <- function(data, plot_type, numeric_var, date_col = NULL, group_col = NULL) {
   if (is.null(data) || nrow(data) == 0) {
     return(list(plot = NULL, message = "No mapped WQ data are available yet. Import or upload WQ data first."))

@@ -9,8 +9,8 @@
 # restore is written to a log so the user can undo it.
 #
 # Things I assumed (please tell me if they should change):
-# - Each record is found by one stable id column. The DC-11 upload contract uses
-#   record_id or sample_id.
+# - DC-11 supplies sample_id. The analysis boundary adds record_id so filtering
+#   has one stable runtime identifier without renaming the source sample field.
 # - Duplicate detection is handled outside this filtering helper. WK8-16 covers
 #   same-site, same-day biology duplicates only.
 
@@ -34,12 +34,56 @@ analysis_record_id_column <- function(data, preferred = NULL, allow_row_number =
   NA_character_
 }
 
-analysis_record_ids <- function(data, preferred = NULL) {
-  id_col <- analysis_record_id_column(data, preferred = preferred)
-  if (is.na(id_col)) {
-    stop("Analysis data must contain record_id or sample_id for DC-11 filtering.", call. = FALSE)
+prepare_analysis_filter_data <- function(data) {
+  if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+    return(data)
   }
-  as.character(data[[id_col]])
+
+  if (!"sample_id" %in% names(data)) {
+    stop("Analysis data must contain DC-11 sample_id before record filtering.", call. = FALSE)
+  }
+  data$sample_id <- trimws(as.character(data$sample_id))
+  invalid_sample <- is.na(data$sample_id) | !nzchar(data$sample_id)
+  if (any(invalid_sample)) {
+    stop("Analysis sample_id values must not be missing or blank.", call. = FALSE)
+  }
+
+  if (!"record_id" %in% names(data)) {
+    data$record_id <- data$sample_id
+  } else {
+    data$record_id <- trimws(as.character(data$record_id))
+  }
+
+  invalid <- is.na(data$record_id) | !nzchar(data$record_id)
+  if (any(invalid)) {
+    stop("Analysis record_id values must not be missing or blank.", call. = FALSE)
+  }
+  if (anyDuplicated(data$record_id)) {
+    stop("Analysis record_id values must be unique before records can be excluded or restored.", call. = FALSE)
+  }
+
+  data
+}
+
+analysis_record_context <- function(data, record_id) {
+  prepared <- prepare_analysis_filter_data(data)
+  record_id <- trimws(as.character(record_id))
+  index <- match(record_id, prepared$record_id)
+  if (length(record_id) != 1L || is.na(index)) {
+    stop("The selected record_id does not exist in the current analysis source.", call. = FALSE)
+  }
+
+  site_col <- intersect(c("biol_site_id", "site_id"), names(prepared))
+  list(
+    record_id = prepared$record_id[[index]],
+    sample_id = prepared$sample_id[[index]],
+    site_id = if (length(site_col) == 0L) NA_character_ else as.character(prepared[[site_col[[1L]]]][[index]])
+  )
+}
+
+analysis_record_ids <- function(data, preferred = NULL) {
+  data <- prepare_analysis_filter_data(data)
+  as.character(data$record_id)
 }
 
 analysis_record_selector_spec <- function(data) {
@@ -53,20 +97,24 @@ analysis_record_selector_spec <- function(data) {
     ))
   }
 
-  id_column <- analysis_record_id_column(data, allow_row_number = FALSE)
-  if (is.na(id_column)) {
+  prepared <- tryCatch(
+    prepare_analysis_filter_data(data),
+    error = function(error) error
+  )
+  if (inherits(prepared, "error")) {
     return(list(
       id_column = NA_character_,
       label = "Record identifier",
       choices = character(),
       placeholder = "No record identifier available",
-      hint = "The current Joined HE dataset must contain a record_id or sample_id field."
+      hint = conditionMessage(prepared)
     ))
   }
 
-  choices <- trimws(as.character(data[[id_column]]))
+  id_column <- "record_id"
+  choices <- trimws(as.character(prepared$record_id))
   choices <- unique(choices[!is.na(choices) & nzchar(choices)])
-  label <- if (identical(id_column, "sample_id")) "Sample ID" else "Record ID"
+  label <- "Record ID"
 
   list(
     id_column = id_column,
@@ -164,9 +212,11 @@ apply_filter_selection <- function(joined, selection, id_col = NULL) {
                 n_kept = 0L, id_col = id_col, filter_version = nrow(selection$events)))
   }
 
-  # get the id for each row using the canonical contract names.
-  id_col <- analysis_record_id_column(joined, preferred = id_col)
-  if (is.na(id_col)) {
+  prepared <- tryCatch(
+    prepare_analysis_filter_data(joined),
+    error = function(error) error
+  )
+  if (inherits(prepared, "error")) {
     return(list(
       analysis_dataset = NULL,
       n_source = nrow(joined),
@@ -175,10 +225,11 @@ apply_filter_selection <- function(joined, selection, id_col = NULL) {
       id_col = NA_character_,
       filter_version = nrow(selection$events),
       status = "error",
-      messages = "Analysis data must contain record_id or sample_id for DC-11 filtering."
+      messages = conditionMessage(prepared)
     ))
   }
-  ids <- analysis_record_ids(joined, preferred = id_col)
+  id_col <- "record_id"
+  ids <- prepared$record_id
 
   excluded <- active_excluded_ids(selection)
   keep <- !ids %in% excluded

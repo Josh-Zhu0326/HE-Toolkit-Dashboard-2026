@@ -1,5 +1,6 @@
 source(file.path("R", "csv_input_helpers.R"))
 source(file.path("R", "site_mapping_helpers.R"))
+source(file.path("R", "wq_contract_helpers.R"))
 source(file.path("R", "wq_rhs_plot_helpers.R"))
 
 mapping_text <- paste(
@@ -42,6 +43,39 @@ stopifnot(inherits(wq_boxplot$plot, "ggplot"))
 
 wq_bar <- build_wq_plot(mapped_wq, "Mean bar chart by biological site ID", "phosphate", NULL, "biol_site_id")
 stopifnot(inherits(wq_bar$plot, "ggplot"))
+
+contract_wq <- data.frame(
+  biol_site_id = c("291", "291", "292"),
+  wq_site_id = c("WQ01", "WQ01", "WQ02"),
+  date_time = c("2024-01-01", "2024-02-01", "2024-03-01"),
+  det_id = c("0180", "0111", "0180"),
+  result = c(0.08, 0.12, 0.10),
+  wq_easting = c(410000, 410000, 420000),
+  wq_northing = c(220000, 220000, 230000),
+  stringsAsFactors = FALSE
+)
+contract_spec <- wq_preview_filter_spec(contract_wq)
+stopifnot(contract_spec$determinand_col == "det_id")
+stopifnot(contract_spec$site_col == "wq_site_id")
+stopifnot(contract_spec$date_col == "date_time")
+stopifnot(contract_spec$value_col == "result")
+stopifnot(contract_spec$group_col == "biol_site_id")
+stopifnot(!contract_spec$value_col %in% c("wq_easting", "wq_northing"))
+
+numeric_det_id <- contract_wq
+numeric_det_id$det_id <- c(180, 111, 180)
+numeric_det_id <- normalise_wq_preview_records(numeric_det_id)
+stopifnot(identical(numeric_det_id$det_id, c("0180", "0111", "0180")))
+
+contract_filtered <- filter_wq_preview_data(
+  contract_wq,
+  determinant = "0180",
+  site = "WQ02",
+  date_range = as.Date(c("2024-02-01", "2024-03-31"))
+)
+stopifnot(nrow(contract_filtered) == 1L)
+stopifnot(contract_filtered$wq_site_id == "WQ02")
+stopifnot(contract_filtered$det_id == "0180")
 
 long_site_wq <- data.frame(
   biol_site_id = sprintf("BIO_SITE_%02d_LONG_LABEL", 1:12),

@@ -21,7 +21,13 @@ sel <- new_filter_selection()
 r <- apply_filter_selection(joined, sel)
 stopifnot(r$n_kept == nrow(joined))
 stopifnot(r$n_excluded == 0)
+stopifnot(!"record_id" %in% names(r$analysis_dataset))
+stopifnot(identical(analysis_record_ids(r$analysis_dataset), joined$sample_id))
 stopifnot(nrow(build_analysis_exclusion_log(sel)) == 0)
+context <- analysis_record_context(joined, "S002")
+stopifnot(context$record_id == "S002")
+stopifnot(context$sample_id == "S002")
+stopifnot(context$site_id == "291")
 
 # --- 2. Exclude one record -> it leaves the analysis, joined is untouched ----
 sel <- exclude_record(sel, record_id = "S002", site_id = "291", sample_id = "S002",
@@ -57,8 +63,9 @@ r <- apply_filter_selection(joined, sel)
 stopifnot(!("S002" %in% r$analysis_dataset$sample_id))
 stopifnot(tail(active_excluded_ids(sel), 1) == "S002")
 
-# --- 5. Canonical lowercase sample_id is the expected DC-11 identifier --------
-stopifnot(r$id_col == "sample_id")
+# --- 5. DC-11 sample_id becomes the analysis runtime record_id --------------
+stopifnot(r$id_col == "record_id")
+stopifnot("sample_id" %in% names(r$analysis_dataset))
 
 # --- 6. Missing stable ID blocks DC-11 filtering -----------------------------
 no_id <- joined[, setdiff(names(joined), "sample_id")]
@@ -66,5 +73,18 @@ sel2 <- exclude_record(new_filter_selection(), record_id = "3")
 r2 <- apply_filter_selection(no_id, sel2, id_col = "sample_id")
 stopifnot(identical(r2$status, "error"))
 stopifnot(is.null(r2$analysis_dataset))
+
+# --- 7. Duplicate runtime IDs block ambiguous exclusion ----------------------
+duplicate_ids <- rbind(joined[1, , drop = FALSE], joined[1, , drop = FALSE])
+r3 <- apply_filter_selection(duplicate_ids, new_filter_selection())
+stopifnot(identical(r3$status, "error"))
+stopifnot(grepl("must be unique", r3$messages, fixed = TRUE))
+
+record_only <- data.frame(record_id = "R1", stringsAsFactors = FALSE)
+record_only_error <- tryCatch(
+  analysis_record_context(record_only, "R1"),
+  error = function(error) conditionMessage(error)
+)
+stopifnot(grepl("DC-11 sample_id", record_only_error, fixed = TRUE))
 
 cat("test_analysis_filter_helpers.R: all checks passed\n")

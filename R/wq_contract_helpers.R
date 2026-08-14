@@ -76,6 +76,18 @@ wq_apply_contract_column_aliases <- function(data) {
   data
 }
 
+normalise_wq_preview_records <- function(data) {
+  if (is.null(data) || !is.data.frame(data)) {
+    return(data)
+  }
+
+  data <- wq_apply_contract_column_aliases(data)
+  if ("det_id" %in% names(data)) {
+    data$det_id <- wq_normalise_det_id(data$det_id)
+  }
+  data
+}
+
 wq_is_below_detection <- function(qualifier) {
   qualifier <- trimws(as.character(qualifier))
   qualifier_lower <- tolower(qualifier)

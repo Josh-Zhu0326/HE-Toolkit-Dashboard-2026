@@ -357,9 +357,9 @@ testthat::test_that("RAW-18 WQ and RHS shared reactives retain downloadable plot
       wq_csv = shiny_upload_input(testthat::test_path("..", "fixtures", "wq.csv")),
       rhs_csv = shiny_upload_input(testthat::test_path("..", "fixtures", "rhs.csv")),
       wq_plot_type = "Boxplot by biological site ID",
-      wq_numeric_var = "pH",
-      wq_date_col = "date",
-      wq_group_col = "biol_site_id",
+      wq_determinand_filter = "0180",
+      wq_site_filter = "__all__",
+      wq_plot_date_range = as.Date(c("2024-01-01", "2024-12-31")),
       rhs_plot_type = "Numeric variable by biological site ID",
       rhs_variable = "habitat_score",
       rhs_group_col = "biol_site_id"
