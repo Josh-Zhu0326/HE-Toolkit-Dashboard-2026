@@ -309,7 +309,15 @@ page_navbar(
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imported flow data"),
                           radioButtons(inputId = "flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
-                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap"))
+                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap")),
+                          conditionalPanel(
+                            condition = "input.flow_data_display === 'Heatmap'",
+                            div(
+                              class = "download-row",
+                              downloadSelectUI("FlowHeatmap"),
+                              downloadButtonUI("FlowHeatmap")
+                            )
+                          )
                         )
                       )
             ),
@@ -514,8 +522,17 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imputed flow data"),
+                          p(class = "hint-text", "This view refreshes after additional donor Flow is imported and after Flow imputation is completed."),
                           radioButtons(inputId = "imp_flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
-                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap_imp"))
+                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap_imp")),
+                          conditionalPanel(
+                            condition = "input.imp_flow_data_display === 'Heatmap'",
+                            div(
+                              class = "download-row",
+                              downloadSelectUI("ImputedFlowHeatmap"),
+                              downloadButtonUI("ImputedFlowHeatmap")
+                            )
+                          )
                         )
                       )
             ),

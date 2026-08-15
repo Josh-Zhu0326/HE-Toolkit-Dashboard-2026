@@ -76,6 +76,21 @@ testthat::test_that("chart pages and tables expose one responsive content width"
   testthat::expect_false(grepl('scrollY = "600px"', server_code, fixed = TRUE))
 })
 
+testthat::test_that("Flow heatmaps expose PDF, JPEG and PNG download controls", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(ui_code, 'downloadSelectUI("FlowHeatmap")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'downloadButtonUI("FlowHeatmap")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'downloadSelectUI("ImputedFlowHeatmap")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'downloadButtonUI("ImputedFlowHeatmap")', fixed = TRUE)
+
+  selector_html <- render_workflow_html(downloadSelectUI("FlowHeatmap"))
+  testthat::expect_match(selector_html, "PDF", fixed = TRUE)
+  testthat::expect_match(selector_html, "JPEG", fixed = TRUE)
+  testthat::expect_match(selector_html, "PNG", fixed = TRUE)
+})
+
 testthat::test_that("Stage workspaces share the workflow visual system", {
   project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
   ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")

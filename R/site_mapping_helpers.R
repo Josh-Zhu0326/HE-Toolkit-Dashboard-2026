@@ -170,6 +170,12 @@ parse_donor_site_list <- function(text, reader = read_character_csv) {
   list(data = data, error = NULL)
 }
 
+missing_donor_flow_sites <- function(donor_sites, available_sites) {
+  donor_sites <- unique(as.character(donor_sites))
+  available_sites <- unique(as.character(available_sites))
+  setdiff(donor_sites[!is.na(donor_sites) & nzchar(donor_sites)], available_sites)
+}
+
 normalise_site_metadata_flow_input <- function(metadata) {
   if (is.null(metadata)) {
     stop("Site metadata are missing.", call. = FALSE)

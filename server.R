@@ -412,9 +412,15 @@ function(input, output, session){
     upload$validation$status %in% c("success", "warning")
   }
 
-  invalidate_flow_derived_state <- function(reset_external = FALSE) {
+  invalidate_flow_derived_state <- function(
+      reset_external = FALSE,
+      preserve_flow_input = FALSE,
+      preserved_data_source = NULL,
+      preserved_history_summary = NULL) {
+    previous_flow_input <- isolate(workflow_artifacts()$flow_input)
     mark_hev_result_stale("The Flow source changed after the current HEV plot was generated.")
-    flow_source_revision(isolate(flow_source_revision()) + 1L)
+    next_flow_revision <- isolate(flow_source_revision()) + 1L
+    flow_source_revision(next_flow_revision)
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
@@ -431,6 +437,28 @@ function(input, output, session){
       external_flow_loaded(FALSE)
       external_flow_revision(NULL)
       external_import_requested_revision(NULL)
+    } else if (isTRUE(preserve_flow_input)) {
+      if (isTRUE(isolate(external_flow_loaded()))) {
+        external_flow_revision(next_flow_revision)
+      }
+      preserved_status <- if (previous_flow_input$status %in% c("complete", "warning")) {
+        previous_flow_input$status
+      } else {
+        "complete"
+      }
+      if (is.null(preserved_data_source)) {
+        preserved_data_source <- previous_flow_input$data_source
+      }
+      if (is.null(preserved_history_summary)) {
+        preserved_history_summary <- previous_flow_input$history_summary
+      }
+      workflow_set_artifact(
+        "flow_input",
+        preserved_status,
+        data_source = preserved_data_source,
+        history_summary = preserved_history_summary,
+        invalidate_downstream = TRUE
+      )
     }
 
     for (flag_name in c("flow_data_exist", "flow_stats_exist", "HEV_data_exist")) {
@@ -2262,10 +2290,8 @@ function(input, output, session){
   
   ### displaying ----
   
-  showHeatmap <- reactiveVal(TRUE)
-  
-  observeEvent(input$flow_data_display, {
-    showHeatmap(!showHeatmap())
+  showHeatmap <- reactive({
+    identical(input$flow_data_display, "Heatmap")
   })
   
   output$flow_heatmap <- renderUI({
@@ -2286,12 +2312,23 @@ function(input, output, session){
   }
   
   #### render heatmap ----
-  output$flow_fig <- renderPlot({
-    safe_server_plot("Flow heatmap", function() {
-      plot_heatmap_dash(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
-        pluck(1) %>% grid.arrange() %>% print()
-    })
+  flow_heatmap_plot <- reactive({
+    safe_server_plot_value(
+      "Flow heatmap",
+      function() build_flow_heatmap_plot(flow_data())
+    )
   })
+
+  output$flow_fig <- renderPlot({
+    safe_server_plot_render("Flow heatmap", flow_heatmap_plot())
+  })
+
+  downloadServer(
+    "FlowHeatmap",
+    flow_heatmap_plot,
+    can_download = function() workflow_artifact_is_current("flow_input"),
+    context = "Flow heatmap"
+  )
   
   
   ## Map of sites ----
@@ -2563,6 +2600,11 @@ function(input, output, session){
     messages = "Add donor sites, then import the additional Flow data if required."
   ))
   import_donor_flow_success <- reactiveVal(FALSE)
+  flow_imputation_result <- reactiveVal(list(
+    status = "info",
+    messages = "Add a donor mapping, then run Flow imputation.",
+    data = NULL
+  ))
 
   flow_data_extra <- reactive({
     req(donor_flow_import_data())
@@ -2615,24 +2657,55 @@ function(input, output, session){
     combined <- bind_rows(flow_data(), import_result$data)
     donor_flow_import_data(combined)
     import_donor_flow_success(TRUE)
+    flow_imputation_result(list(
+      status = "info",
+      messages = "Additional donor Flow data changed. Run Flow imputation again.",
+      data = NULL
+    ))
     donor_flow_import_result(list(
       status = "success",
       messages = sprintf("Imported additional Flow data for %d donor site(s).", length(unique(import_result$data$flow_site_id)))
     ))
-    shinyalert(title = "Additional flow data successfully imported", type = "success")
+    invalidate_flow_derived_state(
+      preserve_flow_input = TRUE,
+      preserved_data_source = "Flow source with additional donor data",
+      preserved_history_summary = sprintf(
+        "Imported additional Flow data for %d donor site(s); downstream Flow outputs require regeneration.",
+        length(unique(import_result$data$flow_site_id))
+      )
+    )
+    showNotification(
+      paste(
+        "Additional donor Flow data successfully imported.",
+        "The Process Flow view has been refreshed with the current donor data."
+      ),
+      type = "message",
+      duration = 6
+    )
   })
   
   #### warning message for unID'd donor sites ----
+  missed_donor_flow_sites <- reactive({
+    parsed <- donor_list_result()
+    req(is.null(parsed$error), !is.null(parsed$data))
+    missing_donor_flow_sites(
+      parsed$data$flow_site_id,
+      flow_data_extra()$flow_site_id
+    )
+  })
+
   observeEvent(flow_data_extra(), {
-    missed_donor_sites <- donor_list() %>% filter(!flow_site_id %in% flow_data_extra()$flow_site_id) %>% select(flow_site_id)
-    missed_donor_sites_text <- gsub("c\\(|\\)",'', missed_donor_sites)
-    
-    if(length(missed_donor_sites > 0)) {
-      
-      shinyalert(paste("Flow data could not be found for donor station(s)", paste(missed_donor_sites_text, collapse = ",")), 
-                 type = "warning")
-    } 
-    
+    missed_sites <- missed_donor_flow_sites()
+    if (length(missed_sites) > 0L) {
+      showNotification(
+        paste(
+          "Flow data could not be found for donor station(s):",
+          paste(missed_sites, collapse = ", ")
+        ),
+        type = "warning",
+        duration = 10
+      )
+    }
   })
   
   #### run imputation ----
@@ -2644,12 +2717,6 @@ function(input, output, session){
       flow_data()
     }
   })
-
-  flow_imputation_result <- reactiveVal(list(
-    status = "info",
-    messages = "Add a donor mapping, then run Flow imputation.",
-    data = NULL
-  ))
 
   observeEvent(input$impute_flow, {
     parsed <- donor_mapping_result()
@@ -2705,6 +2772,14 @@ function(input, output, session){
       messages = "Flow imputation completed successfully.",
       data = imputation$data
     ))
+    invalidate_flow_derived_state(
+      preserve_flow_input = TRUE,
+      preserved_data_source = "Imputed Flow data",
+      preserved_history_summary = sprintf(
+        "Completed Flow imputation for %d Flow record(s); downstream Flow outputs require regeneration.",
+        nrow(imputation$data)
+      )
+    )
   })
 
   flow_data_imputed <- reactive({
@@ -2712,13 +2787,22 @@ function(input, output, session){
     validate(need(identical(result$status, "success"), result$messages))
     result$data
   })
+
+  flow_data_for_display <- reactive({
+    result <- flow_imputation_result()
+    if (identical(result$status, "success")) {
+      return(result$data)
+    }
+    if (isTRUE(import_donor_flow_success())) {
+      return(flow_data_extra())
+    }
+    flow_data()
+  })
   
   #### displaying ----
   
-  showHeatmapimp <- reactiveVal(TRUE)
-  
-  observeEvent(input$imp_flow_data_display, {
-    showHeatmapimp(!showHeatmapimp())
+  showHeatmapimp <- reactive({
+    identical(input$imp_flow_data_display, "Heatmap")
   })
   
   output$flow_heatmap_imp <- renderUI({
@@ -2732,19 +2816,30 @@ function(input, output, session){
   
   ##### render table ----
   output$flow_table_imp <- function() {
-    plot_heatmap(data = flow_data_imputed(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
+    plot_heatmap(data = flow_data_for_display(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
       pluck(3) %>%
       kable("html") %>% kable_styling("striped", full_width = F) %>% 
       scroll_box(height = "300px")
   }
   
   ##### render heatmap ----
-  output$flow_fig_imp <- renderPlot({
-    safe_server_plot("Imputed Flow heatmap", function() {
-      plot_heatmap_dash(data = flow_data_imputed(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
-        pluck(1) %>% grid.arrange() %>% print()
-    })
+  imputed_flow_heatmap_plot <- reactive({
+    safe_server_plot_value(
+      "Imputed Flow heatmap",
+      function() build_flow_heatmap_plot(flow_data_for_display())
+    )
   })
+
+  output$flow_fig_imp <- renderPlot({
+    safe_server_plot_render("Imputed Flow heatmap", imputed_flow_heatmap_plot())
+  })
+
+  downloadServer(
+    "ImputedFlowHeatmap",
+    imputed_flow_heatmap_plot,
+    can_download = function() workflow_artifact_is_current("flow_input"),
+    context = "Imputed Flow heatmap"
+  )
   
   
   ## Calculating flow stats ----
