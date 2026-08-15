@@ -514,6 +514,7 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imputed flow data"),
+                          p(class = "hint-text", "This view refreshes after additional donor Flow is imported and after Flow imputation is completed."),
                           radioButtons(inputId = "imp_flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
                           div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap_imp"))
                         )
