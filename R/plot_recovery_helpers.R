@@ -8,6 +8,21 @@ plot_recovery_user_message <- function() {
   )
 }
 
+build_flow_heatmap_plot <- function(data) {
+  data <- as.data.frame(data)
+  if ("flow" %in% names(data)) {
+    data$flow <- as.numeric(data$flow)
+  }
+  plots <- plot_heatmap_dash(
+    data = data,
+    x = "date",
+    y = "flow_site_id",
+    fill = "flow",
+    dual = FALSE
+  )
+  purrr::pluck(plots, 1L)
+}
+
 plot_result_is_usable <- function(plot) {
   if (is.null(plot)) {
     return(FALSE)

@@ -61,6 +61,17 @@ testthat::test_that("RAW-03 donor list rejects column names duplicated by normal
   testthat::expect_identical(valid_list$data$flow_input, "NRFA")
 })
 
+testthat::test_that("Donor availability reports only sites that were not imported", {
+  testthat::expect_identical(
+    missing_donor_flow_sites(c("27034", "28043"), c("27090", "27034")),
+    "28043"
+  )
+  testthat::expect_identical(
+    missing_donor_flow_sites(c("27034", "27034"), c("27090", "27034")),
+    character()
+  )
+})
+
 testthat::test_that("RAW-22 result boundary classifies service, empty, invalid and usable results", {
   service_error <- safe_external_import(
     function() stop("curl timeout at C:/private/token.txt"),
@@ -138,6 +149,8 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     session$flushReact()
     testthat::expect_identical(flow_imputation_result()$status, "success")
     testthat::expect_identical(imputation_calls, 1L)
+    initial_imputed_rows <- nrow(flow_data_for_display())
+    testthat::expect_identical(flow_data_for_display(), flow_imputation_result()$data)
 
     raw_recovery_set_inputs(session, donor_list_paste = "flow_input\nHDE", import_donor_flow = 1)
     session$flushReact()
@@ -162,6 +175,21 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     testthat::expect_identical(donor_flow_import_result()$status, "success")
     testthat::expect_true(import_donor_flow_success())
     testthat::expect_true("27091" %in% flow_data_extra()$flow_site_id)
+    testthat::expect_identical(missed_donor_flow_sites(), character())
+    testthat::expect_identical(flow_imputation_result()$status, "info")
+    testthat::expect_match(
+      flow_imputation_result()$messages,
+      "Run Flow imputation again",
+      fixed = TRUE
+    )
+    testthat::expect_identical(flow_data_for_display(), flow_data_extra())
+    testthat::expect_gt(nrow(flow_data_for_display()), initial_imputed_rows)
+
+    raw_recovery_set_inputs(session, impute_flow = 3)
+    session$flushReact()
+    testthat::expect_identical(flow_imputation_result()$status, "success")
+    testthat::expect_identical(imputation_calls, 2L)
+    testthat::expect_identical(flow_data_for_display(), flow_imputation_result()$data)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
   })
 })

@@ -92,6 +92,28 @@ testthat::test_that("Task selection and stage navigation use the shared workflow
   })
 })
 
+testthat::test_that("Flow display controls match the selected table or heatmap view", {
+  shiny::testServer(workflow_dashboard_server, {
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      flow_data_display = "Completeness stats",
+      imp_flow_data_display = "Completeness stats"
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_false(showHeatmap())
+    testthat::expect_false(showHeatmapimp())
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      flow_data_display = "Heatmap",
+      imp_flow_data_display = "Heatmap"
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(showHeatmap())
+    testthat::expect_true(showHeatmapimp())
+  })
+})
+
 testthat::test_that("Change Task preserves reusable runtime artifacts", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
