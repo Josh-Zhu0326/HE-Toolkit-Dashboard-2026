@@ -192,6 +192,47 @@ restore_record <- function(selection, record_id, user_comment = "", timestamp = 
   selection
 }
 
+# update a selection from the Stage 4 table state (which record ids are kept vs
+# all record ids). It keeps the existing history and only appends events for
+# records whose status actually changes: newly unticked -> exclude, newly
+# re-ticked -> restore. context_fn(rid) can return list(record_id, site_id,
+# sample_id) to fill context on new excludes; if it returns NULL that record is
+# skipped (e.g. it is not in the joined data).
+update_selection_from_table <- function(selection, all_ids, kept_ids,
+                                        context_fn = NULL,
+                                        exclude_reason = "User excluded sample from the Stage 4 selection table",
+                                        restore_comment = "Restored from the Stage 4 selection table",
+                                        timestamp = NULL) {
+  all_ids <- as.character(all_ids)
+  kept_ids <- as.character(kept_ids)
+  excluded_ids <- setdiff(all_ids, kept_ids)
+
+  currently_excluded <- active_excluded_ids(selection)
+  to_exclude <- setdiff(excluded_ids, currently_excluded)   # newly unticked
+  to_restore <- intersect(kept_ids, currently_excluded)     # newly re-ticked
+
+  for (rid in to_exclude) {
+    ctx <- if (is.null(context_fn)) {
+      list(record_id = rid, site_id = NA_character_, sample_id = NA_character_)
+    } else {
+      tryCatch(context_fn(rid), error = function(e) NULL)
+    }
+    if (is.null(ctx)) next
+    selection <- exclude_record(
+      selection, record_id = ctx$record_id,
+      site_id = ctx$site_id, sample_id = ctx$sample_id,
+      reason = exclude_reason, timestamp = timestamp
+    )
+  }
+  for (rid in to_restore) {
+    selection <- restore_record(
+      selection, record_id = rid,
+      user_comment = restore_comment, timestamp = timestamp
+    )
+  }
+  selection
+}
+
 # find which records are dropped right now. a record is dropped if its most
 # recent action was "exclude".
 active_excluded_ids <- function(selection) {

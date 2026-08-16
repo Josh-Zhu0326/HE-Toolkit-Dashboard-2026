@@ -3326,6 +3326,19 @@ function(input, output, session){
 
   analysis_sample_table_proxy <- DT::dataTableProxy("analysis_sample_table")
 
+  # Keep the table's ticked rows in sync with the committed selection, so a
+  # single-record exclude/restore (or Apply) is reflected in the checkboxes
+  # instead of leaving the table showing a stale selection.
+  observeEvent(analysis_filter_selection(), {
+    tbl <- isolate(analysis_sample_table_data())
+    if (is.null(tbl) || nrow(tbl) == 0L) {
+      return(invisible(NULL))
+    }
+    excluded <- active_excluded_ids(analysis_filter_selection())
+    kept_rows <- which(!tbl$record_id %in% excluded)
+    DT::selectRows(analysis_sample_table_proxy, kept_rows)
+  }, ignoreInit = TRUE)
+
   observeEvent(input$analysis_select_all_samples, {
     tbl <- isolate(analysis_sample_table_data())
     req(!is.null(tbl), nrow(tbl) > 0L)
@@ -3347,25 +3360,14 @@ function(input, output, session){
     } else {
       all_ids[selected_rows]
     }
-    excluded_ids <- setdiff(all_ids, kept_ids)
-
-    next_selection <- new_filter_selection()
-    for (rid in excluded_ids) {
-      context <- tryCatch(
-        analysis_record_context(joined, rid),
-        error = function(error) NULL
-      )
-      if (is.null(context)) {
-        next
-      }
-      next_selection <- exclude_record(
-        next_selection,
-        record_id = context$record_id,
-        site_id = context$site_id,
-        sample_id = context$sample_id,
-        reason = "User excluded sample from the Stage 4 selection table"
-      )
-    }
+    # Keep the existing exclude/restore history and only append events for
+    # records whose status actually changes (see update_selection_from_table).
+    next_selection <- update_selection_from_table(
+      isolate(analysis_filter_selection()),
+      all_ids = all_ids,
+      kept_ids = kept_ids,
+      context_fn = function(rid) analysis_record_context(joined, rid)
+    )
 
     filtered <- apply_filter_selection(joined, next_selection)
     analysis_filter_selection(next_selection)
@@ -3704,19 +3706,20 @@ function(input, output, session){
   
   output$flow_hull <- renderPlot({
     # WK6-07: Historical Coverage tracks the current Stage 4 sample selection.
-    # This reads current_coverage_data() and analysis_filter_selection(), so it
-    # re-renders automatically whenever samples are excluded or restored.
-    coverage <- current_coverage_data()
-    excluded <- length(active_excluded_ids(analysis_filter_selection()))
-    subtitle <- if (excluded > 0L) {
-      sprintf(
-        "Updated for the current Stage 4 selection: %d excluded sample(s) removed.",
-        excluded
-      )
-    } else {
-      "Showing all samples in the current Joined HE dataset (no Stage 4 exclusions)."
-    }
+    # Everything, including reading the coverage data, runs inside
+    # safe_server_plot so a missing/unmatched identifier becomes a controlled
+    # user message instead of a raw Shiny error.
     safe_server_plot("Analysis Flow coverage", function() {
+      coverage <- current_coverage_data()
+      excluded <- length(active_excluded_ids(analysis_filter_selection()))
+      subtitle <- if (excluded > 0L) {
+        sprintf(
+          "Updated for the current Stage 4 selection: %d excluded sample(s) removed.",
+          excluded
+        )
+      } else {
+        "Showing all samples in the current Joined HE dataset (no Stage 4 exclusions)."
+      }
       plot_rngflows(data = coverage, flow_stats = c("Q95z_lag0", "Q10z_lag0"),
                     biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
         labs(subtitle = subtitle) +
