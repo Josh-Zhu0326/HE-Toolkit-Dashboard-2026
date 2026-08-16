@@ -277,7 +277,9 @@ analysis_model_coefficient_plot <- function(result) {
     ggplot2::geom_point(colour = "#008938", size = 2.6) +
     ggplot2::labs(x = "Estimated effect (95% interval)", y = NULL,
                   title = "Fixed-effect estimates") +
-    ggplot2::theme_minimal()
+    ggplot2::theme_minimal() +
+    # keep the panel square so the relationship is easier to read (user test #11)
+    ggplot2::theme(aspect.ratio = 1)
 }
 
 analysis_model_diagnostic_plot <- function(result) {
@@ -294,7 +296,9 @@ analysis_model_diagnostic_plot <- function(result) {
     ggplot2::geom_point(alpha = 0.75, colour = "#008938") +
     ggplot2::labs(x = "Fitted value", y = "Residual",
                   title = "Residuals versus fitted values") +
-    ggplot2::theme_minimal()
+    ggplot2::theme_minimal() +
+    # square panel to match the model plot (user test #11)
+    ggplot2::theme(aspect.ratio = 1)
 }
 
 # turn a model result into flat tables the user can download.

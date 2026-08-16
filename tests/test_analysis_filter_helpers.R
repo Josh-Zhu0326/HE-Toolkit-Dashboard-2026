@@ -186,4 +186,40 @@ partial_error <- tryCatch(
 stopifnot(inherits(partial_error, "error"))
 stopifnot(grepl("NOT-IN-COVERAGE", conditionMessage(partial_error), fixed = TRUE))
 
+# --- 12. Applying the table keeps history and only appends changed records ----
+# (server "Apply" path; the review flagged that it used to wipe the log.)
+all_ids <- joined$sample_id
+ctx <- function(rid) analysis_record_context(joined, rid)
+
+# start empty, apply a table with S002 unticked -> one exclude event
+sel12 <- update_selection_from_table(
+  new_filter_selection(), all_ids = all_ids,
+  kept_ids = setdiff(all_ids, "S002"), context_fn = ctx,
+  timestamp = "2026-07-23 11:00:00"
+)
+stopifnot(nrow(sel12$events) == 1)
+stopifnot(identical(active_excluded_ids(sel12), "S002"))
+
+# apply again with S002 re-ticked and S004 unticked -> +2 events, history kept
+sel12 <- update_selection_from_table(
+  sel12, all_ids = all_ids,
+  kept_ids = setdiff(all_ids, "S004"), context_fn = ctx,
+  timestamp = "2026-07-23 11:05:00"
+)
+stopifnot(nrow(sel12$events) == 3)                       # log grew, not reset
+stopifnot(identical(active_excluded_ids(sel12), "S004")) # S002 restored, S004 out
+
+# re-applying the same state adds nothing (no phantom events)
+sel12b <- update_selection_from_table(
+  sel12, all_ids = all_ids,
+  kept_ids = setdiff(all_ids, "S004"), context_fn = ctx
+)
+stopifnot(nrow(sel12b$events) == 3)
+
+# new exclude events carry site/sample context from the lookup
+excl_row <- sel12$events[sel12$events$record_id == "S004" &
+                           sel12$events$action == "exclude", ]
+stopifnot(excl_row$site_id[1] == "291")
+stopifnot(excl_row$sample_id[1] == "S004")
+
 cat("test_analysis_filter_helpers.R: all checks passed\n")

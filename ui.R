@@ -649,19 +649,54 @@ page_navbar(
           class = "dashboard-page dashboard-page-wide",
           card(
             class = "dashboard-card",
-            card_header("Exclude or restore a record"),
-            uiOutput("analysis_record_selector"),
+            card_header("Sample selection"),
+            p(
+              class = "hint-text",
+              "Every sample in the Joined HE dataset starts selected. Untick any samples you want to leave out, then choose Apply selection. Excluded samples are dropped from the correlation plots, Historical Coverage and the Stage 5 model, but the Joined HE dataset itself is never changed."
+            ),
+            uiOutput("analysis_selection_summary"),
             div(
               class = "action-stack",
               actionButton(
-                "exclude_analysis_record",
-                "Exclude record",
+                "analysis_select_all_samples",
+                "Select all",
                 class = "client-action-button"
               ),
               actionButton(
-                "restore_analysis_record",
-                "Restore record",
+                "analysis_clear_all_samples",
+                "Clear selection",
                 class = "client-action-button"
+              ),
+              actionButton(
+                "apply_analysis_sample_selection",
+                "Apply selection",
+                class = "client-action-button"
+              )
+            ),
+            DT::dataTableOutput("analysis_sample_table")
+          ),
+          card(
+            class = "dashboard-card",
+            card_header("Exclude or restore a single record"),
+            tags$details(
+              tags$summary("Adjust one record by ID (optional)"),
+              p(
+                class = "hint-text",
+                "Use this to exclude or restore a single record by its identifier without changing the rest of the current sample selection."
+              ),
+              uiOutput("analysis_record_selector"),
+              div(
+                class = "action-stack",
+                actionButton(
+                  "exclude_analysis_record",
+                  "Exclude record",
+                  class = "client-action-button"
+                ),
+                actionButton(
+                  "restore_analysis_record",
+                  "Restore record",
+                  class = "client-action-button"
+                )
               )
             )
           ),
