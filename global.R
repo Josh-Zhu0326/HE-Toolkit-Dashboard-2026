@@ -1022,6 +1022,7 @@ downloadSelectUI <- function(id) {
 downloadServer <- function(id, plot,
                            can_download = function() TRUE,
                            on_download = function(format, file) NULL,
+                           context = "plot",
                            write_plot = function(file, plot) {
                              ggplot2::ggsave(file, plot = plot, width = 10, height = 5)
                            }) {
@@ -1031,7 +1032,8 @@ downloadServer <- function(id, plot,
       result <- safe_file_operation(function() write_plot(file, plot()))
       if (!identical(result$status, "success")) {
         message(sprintf(
-          "RAW-19/21 file-operation diagnostic [HEV plot/%s]: %s",
+          "RAW-19/21 file-operation diagnostic [%s/%s]: %s",
+          context,
           result$failure,
           result$diagnostic
         ))

@@ -412,9 +412,15 @@ function(input, output, session){
     upload$validation$status %in% c("success", "warning")
   }
 
-  invalidate_flow_derived_state <- function(reset_external = FALSE) {
+  invalidate_flow_derived_state <- function(
+      reset_external = FALSE,
+      preserve_flow_input = FALSE,
+      preserved_data_source = NULL,
+      preserved_history_summary = NULL) {
+    previous_flow_input <- isolate(workflow_artifacts()$flow_input)
     mark_hev_result_stale("The Flow source changed after the current HEV plot was generated.")
-    flow_source_revision(isolate(flow_source_revision()) + 1L)
+    next_flow_revision <- isolate(flow_source_revision()) + 1L
+    flow_source_revision(next_flow_revision)
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
@@ -431,6 +437,28 @@ function(input, output, session){
       external_flow_loaded(FALSE)
       external_flow_revision(NULL)
       external_import_requested_revision(NULL)
+    } else if (isTRUE(preserve_flow_input)) {
+      if (isTRUE(isolate(external_flow_loaded()))) {
+        external_flow_revision(next_flow_revision)
+      }
+      preserved_status <- if (previous_flow_input$status %in% c("complete", "warning")) {
+        previous_flow_input$status
+      } else {
+        "complete"
+      }
+      if (is.null(preserved_data_source)) {
+        preserved_data_source <- previous_flow_input$data_source
+      }
+      if (is.null(preserved_history_summary)) {
+        preserved_history_summary <- previous_flow_input$history_summary
+      }
+      workflow_set_artifact(
+        "flow_input",
+        preserved_status,
+        data_source = preserved_data_source,
+        history_summary = preserved_history_summary,
+        invalidate_downstream = TRUE
+      )
     }
 
     for (flag_name in c("flow_data_exist", "flow_stats_exist", "HEV_data_exist")) {
@@ -2284,9 +2312,23 @@ function(input, output, session){
   }
   
   #### render heatmap ----
-  output$flow_fig <- renderPlot({
-    safe_server_plot("Flow heatmap", function() build_flow_heatmap_plot(flow_data()))
+  flow_heatmap_plot <- reactive({
+    safe_server_plot_value(
+      "Flow heatmap",
+      function() build_flow_heatmap_plot(flow_data())
+    )
   })
+
+  output$flow_fig <- renderPlot({
+    safe_server_plot_render("Flow heatmap", flow_heatmap_plot())
+  })
+
+  downloadServer(
+    "FlowHeatmap",
+    flow_heatmap_plot,
+    can_download = function() workflow_artifact_is_current("flow_input"),
+    context = "Flow heatmap"
+  )
   
   
   ## Map of sites ----
@@ -2624,6 +2666,14 @@ function(input, output, session){
       status = "success",
       messages = sprintf("Imported additional Flow data for %d donor site(s).", length(unique(import_result$data$flow_site_id)))
     ))
+    invalidate_flow_derived_state(
+      preserve_flow_input = TRUE,
+      preserved_data_source = "Flow source with additional donor data",
+      preserved_history_summary = sprintf(
+        "Imported additional Flow data for %d donor site(s); downstream Flow outputs require regeneration.",
+        length(unique(import_result$data$flow_site_id))
+      )
+    )
     showNotification(
       paste(
         "Additional donor Flow data successfully imported.",
@@ -2722,6 +2772,14 @@ function(input, output, session){
       messages = "Flow imputation completed successfully.",
       data = imputation$data
     ))
+    invalidate_flow_derived_state(
+      preserve_flow_input = TRUE,
+      preserved_data_source = "Imputed Flow data",
+      preserved_history_summary = sprintf(
+        "Completed Flow imputation for %d Flow record(s); downstream Flow outputs require regeneration.",
+        nrow(imputation$data)
+      )
+    )
   })
 
   flow_data_imputed <- reactive({
@@ -2765,12 +2823,23 @@ function(input, output, session){
   }
   
   ##### render heatmap ----
-  output$flow_fig_imp <- renderPlot({
-    safe_server_plot(
+  imputed_flow_heatmap_plot <- reactive({
+    safe_server_plot_value(
       "Imputed Flow heatmap",
       function() build_flow_heatmap_plot(flow_data_for_display())
     )
   })
+
+  output$flow_fig_imp <- renderPlot({
+    safe_server_plot_render("Imputed Flow heatmap", imputed_flow_heatmap_plot())
+  })
+
+  downloadServer(
+    "ImputedFlowHeatmap",
+    imputed_flow_heatmap_plot,
+    can_download = function() workflow_artifact_is_current("flow_input"),
+    context = "Imputed Flow heatmap"
+  )
   
   
   ## Calculating flow stats ----
