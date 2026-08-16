@@ -134,6 +134,7 @@ testthat::test_that("donor failures retain state and successful processing inval
     workflow_complete_artifact("joined_core", "test", "Retained before donor retry.")
     workflow_complete_artifact("analysis_dataset", "test", "Retained before donor retry.")
     workflow_complete_artifact("hev_result", "test", "Retained before donor retry.")
+    testthat::expect_identical(flow_data_with_donors(), flow_data())
 
     raw_recovery_set_inputs(session, donor_mapping_paste = "C:/private/missing-donor-map.csv", impute_flow = 1)
     session$flushReact()
@@ -187,6 +188,8 @@ testthat::test_that("donor failures retain state and successful processing inval
     testthat::expect_identical(donor_flow_import_result()$status, "success")
     testthat::expect_true(import_donor_flow_success())
     testthat::expect_true("27091" %in% flow_data_extra()$flow_site_id)
+    testthat::expect_identical(flow_data_with_donors(), flow_data_extra())
+    testthat::expect_gt(nrow(flow_data_with_donors()), nrow(flow_data()))
     testthat::expect_identical(missed_donor_flow_sites(), character())
     testthat::expect_identical(flow_imputation_result()$status, "info")
     testthat::expect_match(

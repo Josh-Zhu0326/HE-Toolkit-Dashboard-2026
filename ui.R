@@ -278,6 +278,17 @@ page_navbar(
                 actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
               ),
               div(class = "sidebar-section control-stack action-stack",
+                h5("Additional donor Flow"),
+                div(class = "hint-text", "Add donor mappings and import any donor Flow sites that are not already present in the main Flow data."),
+                textAreaInput("donor_mapping_paste", "Paste donor mapping here"),
+                tags$strong("Donor mapping"),
+                tableOutput("table2"),
+                textAreaInput("donor_list_paste", "Paste additional flow donor sites here"),
+                tags$strong("Donor list"),
+                tableOutput("table3"),
+                actionButton("import_donor_flow", "Import additional donor flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+              ),
+              div(class = "sidebar-section control-stack action-stack",
                 h5("Optional WQ/RHS inputs"),
                 div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
                 dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
@@ -308,13 +319,14 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imported flow data"),
+                          p(class = "hint-text", "This view refreshes when the main Flow source or additional donor Flow data is imported."),
                           radioButtons(inputId = "flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
                           div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap")),
                           conditionalPanel(
                             condition = "input.flow_data_display === 'Heatmap'",
                             div(
                               class = "download-row",
-                              downloadSelectUI("FlowHeatmap"),
+                              downloadSelectUI("FlowHeatmap", choices = c("PDF", "CSV", "PNG")),
                               downloadButtonUI("FlowHeatmap")
                             )
                           )
@@ -491,18 +503,9 @@ page_navbar(
                   h5("Readiness check"),
                   uiOutput("cp_flow")
               ),
-              div(class = "sidebar-section control-stack",
-                h5("Donor flow setup"),
-                textAreaInput("donor_mapping_paste", "Paste donor mapping here"),
-                tags$strong("Donor mapping"),
-                tableOutput("table2"),
-                textAreaInput("donor_list_paste", "Paste additional flow donor sites here"),
-                tags$strong("Donor list"),
-                tableOutput("table3")
-              ),
               div(class = "sidebar-section action-stack",
-                h5("Imputation"),
-                actionButton("import_donor_flow", "Import additional donor flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
+                h5("Flow imputation"),
+                div(class = "hint-text", "Uses the donor mapping and additional donor Flow prepared in Stage 1."),
                 actionButton("impute_flow", "Impute missing flow data", class = "client-action-button", icon = shiny::icon("calculator", verify_fa = FALSE))
               ),
               div(class = "sidebar-section control-stack action-stack",
@@ -529,7 +532,7 @@ page_navbar(
                             condition = "input.imp_flow_data_display === 'Heatmap'",
                             div(
                               class = "download-row",
-                              downloadSelectUI("ImputedFlowHeatmap"),
+                              downloadSelectUI("ImputedFlowHeatmap", choices = c("PDF", "CSV", "PNG")),
                               downloadButtonUI("ImputedFlowHeatmap")
                             )
                           )
