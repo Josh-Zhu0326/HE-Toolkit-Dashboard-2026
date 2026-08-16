@@ -96,7 +96,7 @@ testthat::test_that("RAW-22 result boundary classifies service, empty, invalid a
   testthat::expect_identical(success$data$id, "x")
 })
 
-testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retry in-session", {
+testthat::test_that("donor failures retain state and successful processing invalidates downstream outputs", {
   donor_import_calls <- 0L
   imputation_calls <- 0L
   rlang::local_bindings(
@@ -131,6 +131,9 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     )
     session$flushReact()
     workflow_complete_artifact("flow_statistics", "test", "Retained before donor retry.")
+    workflow_complete_artifact("joined_core", "test", "Retained before donor retry.")
+    workflow_complete_artifact("analysis_dataset", "test", "Retained before donor retry.")
+    workflow_complete_artifact("hev_result", "test", "Retained before donor retry.")
 
     raw_recovery_set_inputs(session, donor_mapping_paste = "C:/private/missing-donor-map.csv", impute_flow = 1)
     session$flushReact()
@@ -151,11 +154,20 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     testthat::expect_identical(imputation_calls, 1L)
     initial_imputed_rows <- nrow(flow_data_for_display())
     testthat::expect_identical(flow_data_for_display(), flow_imputation_result()$data)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    workflow_complete_artifact("flow_statistics", "test", "Regenerated after imputation.")
+    workflow_complete_artifact("joined_core", "test", "Regenerated after imputation.")
+    workflow_complete_artifact("analysis_dataset", "test", "Regenerated after imputation.")
+    workflow_complete_artifact("hev_result", "test", "Regenerated after imputation.")
 
     raw_recovery_set_inputs(session, donor_list_paste = "flow_input\nHDE", import_donor_flow = 1)
     session$flushReact()
     testthat::expect_identical(donor_flow_import_result()$status, "error")
     testthat::expect_identical(donor_import_calls, 0L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
 
     raw_recovery_set_inputs(
       session,
@@ -184,13 +196,20 @@ testthat::test_that("RAW-02 and RAW-03 donor failures retain Flow state and retr
     )
     testthat::expect_identical(flow_data_for_display(), flow_data_extra())
     testthat::expect_gt(nrow(flow_data_for_display()), initial_imputed_rows)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
+    testthat::expect_error(flow_stats(), class = "shiny.silent.error")
 
     raw_recovery_set_inputs(session, impute_flow = 3)
     session$flushReact()
     testthat::expect_identical(flow_imputation_result()$status, "success")
     testthat::expect_identical(imputation_calls, 2L)
     testthat::expect_identical(flow_data_for_display(), flow_imputation_result()$data)
-    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_error(flow_stats(), class = "shiny.silent.error")
   })
 })
 
