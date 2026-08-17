@@ -99,6 +99,7 @@ testthat::test_that("RAW-22 result boundary classifies service, empty, invalid a
 testthat::test_that("donor failures retain state and successful processing invalidates downstream outputs", {
   donor_import_calls <- 0L
   imputation_calls <- 0L
+  flow_stats_calls <- 0L
   rlang::local_bindings(
     import_dashboard_flow = function(sites, inputs, start_date, end_date) {
       donor_import_calls <<- donor_import_calls + 1L
@@ -118,6 +119,16 @@ testthat::test_that("donor failures retain state and successful processing inval
       testthat::expect_identical(as.character(donor[[2L]]), "27090")
       data
     },
+    calc_flowstats = function(data, ...) {
+      flow_stats_calls <<- flow_stats_calls + 1L
+      statistics <- data.frame(
+        flow_site_id = unique(data$flow_site_id),
+        start_date = as.Date("2024-01-01"),
+        end_date = as.Date("2024-12-31"),
+        stringsAsFactors = FALSE
+      )
+      list(statistics, statistics)
+    },
     .env = environment(raw_recovery_server)
   )
 
@@ -127,7 +138,9 @@ testthat::test_that("donor failures retain state and successful processing inval
       session,
       meta_paste = "biol_site_id,flow_site_id\nB1,27090",
       local_flow_csv = raw_recovery_upload_input(local_flow_path),
-      date_range_flow = as.Date(c("2024-01-01", "2024-12-31"))
+      date_range_flow = as.Date(c("2024-01-01", "2024-12-31")),
+      win_width_selector = 6,
+      win_step_selector = 6
     )
     session$flushReact()
     workflow_complete_artifact("flow_statistics", "test", "Retained before donor retry.")
@@ -156,10 +169,11 @@ testthat::test_that("donor failures retain state and successful processing inval
     initial_imputed_rows <- nrow(flow_data_for_display())
     testthat::expect_identical(flow_data_for_display(), flow_imputation_result()$data)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
-    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(flow_stats_calls, 1L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_identical(flow_stats_revision(), flow_source_revision())
     testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
-    workflow_complete_artifact("flow_statistics", "test", "Regenerated after imputation.")
     workflow_complete_artifact("joined_core", "test", "Regenerated after imputation.")
     workflow_complete_artifact("analysis_dataset", "test", "Regenerated after imputation.")
     workflow_complete_artifact("hev_result", "test", "Regenerated after imputation.")
@@ -211,8 +225,10 @@ testthat::test_that("donor failures retain state and successful processing inval
     testthat::expect_identical(imputation_calls, 2L)
     testthat::expect_identical(flow_data_for_display(), flow_imputation_result()$data)
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
-    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
-    testthat::expect_error(flow_stats(), class = "shiny.silent.error")
+    testthat::expect_identical(flow_stats_calls, 2L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_identical(flow_stats_revision(), flow_source_revision())
+    testthat::expect_silent(flow_stats())
   })
 })
 

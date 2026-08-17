@@ -372,6 +372,8 @@ function(input, output, session){
   external_flow_revision <- reactiveVal(NULL)
   external_import_requested_revision <- reactiveVal(NULL)
   flow_stats_revision <- reactiveVal(NULL)
+  flow_stats_result_state <- reactiveVal(list(request_id = 0L, result = NULL))
+  flow_stats_request_source <- reactiveVal(NULL)
   join_revision <- reactiveVal(NULL)
   hev_revision <- reactiveVal(NULL)
   rict_request <- reactiveVal(NULL)
@@ -534,7 +536,7 @@ function(input, output, session){
     oe_request(input$calc_OE)
     workflow_begin_artifact("oe_result", "Complete the O:E calculation.")
   }, ignoreInit = TRUE, priority = 100)
-  observeEvent(input$calc_flow_stats, {
+  request_flow_statistics <- function(source = "manual") {
     if (!workflow_artifact_is_current("flow_input")) {
       workflow_set_artifact(
         "flow_statistics",
@@ -542,10 +544,25 @@ function(input, output, session){
         blocking_reason = "Flow statistics require current validated Flow data.",
         next_action = "Upload or import Flow data, then calculate Flow statistics again."
       )
-      return()
+      return(FALSE)
     }
+    flow_stats_request_source(source)
     workflow_begin_artifact("flow_statistics", "Complete the Flow-statistics calculation.")
-  }, ignoreInit = TRUE, priority = 100)
+    result <- calculate_flow_statistics()
+    if (is.null(result)) {
+      return(FALSE)
+    }
+    previous_state <- isolate(flow_stats_result_state())
+    flow_stats_result_state(list(
+      request_id = previous_state$request_id + 1L,
+      result = result
+    ))
+    TRUE
+  }
+
+  observeEvent(input$calc_flow_stats, {
+    request_flow_statistics("manual")
+  }, ignoreInit = FALSE, priority = -10)
   # Snapshot controls at click time so lazy output consumers cannot run a new
   # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
@@ -2784,6 +2801,7 @@ function(input, output, session){
         nrow(imputation$data)
       )
     )
+    request_flow_statistics("imputation")
   })
 
   flow_data_imputed <- reactive({
@@ -2857,7 +2875,7 @@ function(input, output, session){
     }
   })
   
-  flow_stats_result <- eventReactive(input$calc_flow_stats, {
+  calculate_flow_statistics <- function() {
     if (!workflow_artifact_is_current("flow_input")) {
       return(NULL)
     }
@@ -2905,6 +2923,10 @@ function(input, output, session){
     }
     flow_stats_revision(isolate(flow_source_revision()))
     result
+  }
+
+  flow_stats_result <- reactive({
+    flow_stats_result_state()$result
   })
 
   flow_stats <- reactive({
@@ -2928,6 +2950,13 @@ function(input, output, session){
       "Flow-statistics calculation",
       sprintf("Generated %d Flow-statistic row(s).", row_count)
     )
+    if (identical(flow_stats_request_source(), "imputation")) {
+      showNotification(
+        "Flow imputation and Flow-statistics recalculation completed. Stage 3 can now use the current Flow data.",
+        type = "message",
+        duration = 8
+      )
+    }
   })
   
   
