@@ -442,6 +442,7 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card",
                           card_header("Mapped monitoring sites"),
+                          uiOutput("site_map_status"),
                           leafletOutput("map0", height = 600)
                         )
                       ))
