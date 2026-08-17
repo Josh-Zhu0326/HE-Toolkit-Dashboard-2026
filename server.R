@@ -2305,7 +2305,7 @@ function(input, output, session){
   
   #### render table ----
   output$flow_table <- function() {
-    plot_heatmap(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
+    plot_heatmap(data = flow_data_with_donors(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
       pluck(3) %>%
       kable("html") %>% kable_styling("striped", full_width = F) %>% 
       scroll_box(height = "300px")
@@ -2315,7 +2315,7 @@ function(input, output, session){
   flow_heatmap_plot <- reactive({
     safe_server_plot_value(
       "Flow heatmap",
-      function() build_flow_heatmap_plot(flow_data())
+      function() build_flow_heatmap_plot(flow_data_with_donors())
     )
   })
 
@@ -2326,6 +2326,7 @@ function(input, output, session){
   downloadServer(
     "FlowHeatmap",
     flow_heatmap_plot,
+    download_data = flow_data_with_donors,
     can_download = function() workflow_artifact_is_current("flow_input"),
     context = "Flow heatmap"
   )
@@ -2611,6 +2612,13 @@ function(input, output, session){
     donor_flow_import_data()
   })
 
+  flow_data_with_donors <- reactive({
+    if (isTRUE(import_donor_flow_success())) {
+      return(flow_data_extra())
+    }
+    flow_data()
+  })
+
   observeEvent(input$import_donor_flow, {
     import_donor_flow_success(FALSE)
     donor_flow_import_data(NULL)
@@ -2711,11 +2719,7 @@ function(input, output, session){
   #### run imputation ----
   
   flow_data_forimp <- reactive({
-    if (isTRUE(import_donor_flow_success())) {
-      flow_data_extra()
-    } else {
-      flow_data()
-    }
+    flow_data_with_donors()
   })
 
   observeEvent(input$impute_flow, {
@@ -2793,10 +2797,7 @@ function(input, output, session){
     if (identical(result$status, "success")) {
       return(result$data)
     }
-    if (isTRUE(import_donor_flow_success())) {
-      return(flow_data_extra())
-    }
-    flow_data()
+    flow_data_with_donors()
   })
   
   #### displaying ----
@@ -2837,6 +2838,7 @@ function(input, output, session){
   downloadServer(
     "ImputedFlowHeatmap",
     imputed_flow_heatmap_plot,
+    download_data = flow_data_for_display,
     can_download = function() workflow_artifact_is_current("flow_input"),
     context = "Imputed Flow heatmap"
   )
