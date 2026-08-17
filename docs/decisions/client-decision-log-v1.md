@@ -2,7 +2,7 @@
 
 > Scope: v1 decisions frozen from client feedback available by 13 July 2026.
 >
-> Controlled updates: v1.1 adds the 17 and 21 July 2026 UI direction, terminology, and extension decisions; v1.2 records the 10 August 2026 HEV Flow-display decision; v1.3 records the 15 August 2026 correction to modelling lags without rewriting the historical Week 7 baseline.
+> Controlled updates: v1.1 adds the 17 and 21 July 2026 UI direction, terminology, and extension decisions; v1.2 records the 10 August 2026 HEV Flow-display decision; v1.3 records the 15 August 2026 correction to modelling lags; v1.4 records the client-confirmed local-file routes without rewriting the historical Week 7 baseline.
 
 ## Version History
 
@@ -12,6 +12,7 @@
 | v1.1 | 2026-07-21 | Added the confirmed Option A direction, Task terminology, eight wording replacements, extension priorities, and the ethics-status resolution. |
 | v1.2 | 2026-08-11 | Added the client-confirmed requirement for selectable raw-daily-Flow and calculated-Flow-statistics HEV modes. |
 | v1.3 | 2026-08-16 | Corrected the joined/modelling lags from 0/1 to 0/1/3/6/12. |
+| v1.4 | 2026-08-17 | Confirmed five per-type local CSV routes and external/local/combined source modes in Stage 1. |
 
 ## 1. Decision Rules and Sources
 
@@ -112,7 +113,15 @@ This correction supersedes only the lag set in `DEC-03`. The Q10/Q95 and raw/Z-s
 |--|---|---|---|---|
 | DEC-38 | Stage 3 joining and modelling support lags `0`, `1`, `3`, `6`, and `12`. Joined/processed dataset fields and flow-window provenance must support the same lag set. This replaces the earlier lag-0/1 limit in `DEC-03`. | `CLIENT` | `SRC-09` | Update join controls, server validation, joined-data schemas, workbook validation, provenance, documentation and tests. |
 
-## 6. Deferred and Open Items
+## 6. Controlled Update - 2026-08-17
+
+This update resolves the CSV acceptance question and refines the Stage 1 local-file route. It supplements the workbook path in `DEC-01` rather than removing workbook support.
+
+| ID | Final decision | Basis | Source | Required action |
+|--|---|---|---|---|
+| DEC-39 | Stage 1 must expose five local CSV types in their corresponding Biology, Environmental, Flow, WQ and RHS data views. For each type, users choose external data only, local data instead, or combined external and local data. Combined mode retains both sources and must not silently deduplicate records. A valid local source enters the same downstream data flow as an external import. The separate CSV-validation page is removed; validation is reported at upload. The per-type Environmental CSV follows the client's `import_env()`-shaped interface and therefore uses `NGR_10_FIG`; the controlled workbook schema retains its separately versioned `NGR_PREFIX` field until a workbook migration decision is made. | `CLIENT + INTERNAL` | `SRC-09` | Implement the five contracts, source-mode resolution, per-type templates, upload validation, downstream source routing, provenance/state handling and automated tests. |
+
+## 7. Deferred and Open Items
 
 ### Deferred beyond v1
 

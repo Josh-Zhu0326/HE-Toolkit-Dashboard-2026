@@ -1,4 +1,4 @@
-biol_site_id,date,taxon,abundance
-291,2024-01-01,Baetidae,12
-291,2024-01-01,Chironomidae,30
-292,2024-01-01,Heptageniidae,8
+biol_site_id,SAMPLE_ID,SAMPLE_DATE,WHPT_ASPT,WHPT_N_TAXA,LIFE_FAMILY_INDEX,PSI_FAMILY_SCORE,Month,Year,Season
+291,S001,2024-01-01,5.2,,,,1,2024,Winter
+291,S002,2024-02-01,5.5,,,,2,2024,Winter
+292,S003,2024-03-01,4.9,,,,3,2024,Spring

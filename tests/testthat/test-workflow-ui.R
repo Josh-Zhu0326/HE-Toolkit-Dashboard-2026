@@ -196,7 +196,7 @@ testthat::test_that("workflow header owns branding, utilities, and Stage 2 work 
   testthat::expect_match(header_html, "HE Toolkit Dashboard", fixed = TRUE)
   testthat::expect_match(header_html, "EA_logo_white.png", fixed = TRUE)
   testthat::expect_match(header_html, "Task selector", fixed = TRUE)
-  testthat::expect_match(header_html, "CSV validation", fixed = TRUE)
+  testthat::expect_match(header_html, "Local data import", fixed = TRUE)
   testthat::expect_match(header_html, "Biology processing", fixed = TRUE)
   testthat::expect_match(header_html, "Flow processing", fixed = TRUE)
   testthat::expect_match(
@@ -605,4 +605,18 @@ testthat::test_that("Rendered workflow excludes superseded user-facing terminolo
   )
   testthat::expect_false(grepl("analysis_dataset", html, fixed = TRUE))
   testthat::expect_false(grepl("NRFA fallback", html, fixed = TRUE))
+})
+
+testthat::test_that("local CSV cards expose the three client-confirmed source modes", {
+  html <- render_workflow_html(local_csv_upload_card(
+    "flow",
+    "Daily Flow CSV",
+    c("flow_site_id", "date", "flow")
+  ))
+
+  testthat::expect_match(html, 'id="local_flow_csv"', fixed = TRUE)
+  testthat::expect_match(html, 'id="flow_source_mode"', fixed = TRUE)
+  testthat::expect_match(html, "External data only", fixed = TRUE)
+  testthat::expect_match(html, "Use local data instead", fixed = TRUE)
+  testthat::expect_match(html, "Combine external and local data", fixed = TRUE)
 })

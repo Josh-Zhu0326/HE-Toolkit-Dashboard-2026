@@ -1,3 +1,3 @@
-rhs_survey_id,habitat_score,channel_type
-RHS001,55,natural
-RHS001,58,natural
+rhs_survey_id,HQA,HMSRBB
+RHS001,55,18
+RHS001,58,20

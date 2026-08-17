@@ -419,7 +419,7 @@ testthat::test_that("RAW-18 WQ and RHS shared reactives retain downloadable plot
       wq_site_filter = "__all__",
       wq_plot_date_range = as.Date(c("2024-01-01", "2024-12-31")),
       rhs_plot_type = "Numeric variable by biological site ID",
-      rhs_variable = "habitat_score",
+      rhs_variable = "HQA",
       rhs_group_col = "biol_site_id"
     )
     muffle_interrupted_workflow_promise(session$flushReact())

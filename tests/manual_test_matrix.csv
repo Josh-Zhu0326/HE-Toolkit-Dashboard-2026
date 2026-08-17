@@ -3,13 +3,13 @@ TC-001,Home,High,,Home page loads and states WQ/RHS are supporting mapped datase
 TC-002,Mapping,High,tests/fixtures/mapping.csv,Valid mapping uploads with warning for RHS TBC and no crash
 TC-003,Mapping,High,custom missing-column CSV,Missing required mapping columns show a clear error
 TC-004,Mapping,Medium,custom duplicate biol_site_id CSV,Duplicate biol_site_id shows warning and app remains connected
-TC-005,WQ validation,High,tests/fixtures/wq.csv,WQ CSV validates and previews in File Validation Sandbox without triggering modelling or O:E
-TC-006,RHS validation,High,tests/fixtures/rhs.csv,RHS CSV validates and previews in File Validation Sandbox without triggering modelling or O:E
+TC-005,WQ validation,High,tests/fixtures/wq.csv,WQ CSV validates and previews in Data Import > WQ Data without triggering modelling or O:E
+TC-006,RHS validation,High,tests/fixtures/rhs.csv,RHS CSV validates and previews in Data Import > RHS Data without triggering modelling or O:E
 TC-007,WQ plots,High,tests/fixtures/mapping.csv; tests/fixtures/wq.csv,WQ time series boxplot and mean bar chart render when suitable data exist
 TC-008,WQ downloads,High,mapped WQ data,Mapped WQ CSV and current WQ plot PNG download when data exist
 TC-009,RHS plots,High,tests/fixtures/mapping.csv; tests/fixtures/rhs.csv,RHS numeric categorical and record-count plots render when suitable data exist
 TC-010,RHS downloads,High,mapped RHS data,Mapped RHS CSV and current RHS plot PNG download when data exist
-TC-011,Local invertebrate import,High,tests/fixtures/local_invertebrate.csv,Local invertebrate CSV validates and previews separately from O:E
+TC-011,Local data source modes,High,tests/fixtures/local_invertebrate.csv; tests/fixtures/local_flow.csv; tests/fixtures/wq.csv; tests/fixtures/rhs.csv,Five local CSV types validate and external local or combined source mode controls the active data flow
 TC-012,Local flow import,High,tests/fixtures/local_flow.csv; tests/fixtures/local_flow_extra_columns.csv,"Canonical Local Flow validates and becomes operational; extra columns produce Pass with Warning and are ignored operationally"
 TC-013,Local flow validation,High,custom invalid local Flow CSV,Missing required fields blank site IDs or non-numeric flow values show a clear error
 TC-014,O:E regression,Critical,existing workflow data,Existing O:E workflow renders and does not require WQ/RHS

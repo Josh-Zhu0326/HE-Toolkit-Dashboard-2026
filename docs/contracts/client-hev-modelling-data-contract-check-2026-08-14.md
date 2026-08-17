@@ -10,7 +10,7 @@ This check records what the current repository already supports, what is documen
 
 The repository already records several client-confirmed requirements in the decision log and data contracts, especially `DEC-37`, `DC-12`, `DEC-03`, `DEC-21`, and `RTM-25`.
 
-This implementation pass aligns the first set of client-confirmed settings in the Shiny workflow: HEV now exposes an explicit raw daily Flow versus Flow statistics mode, lag selection is restricted to 0/1, HEV Flow-statistic choices are reduced to raw Q10/Q95, and HEV provenance records the selected Flow mode.
+This implementation pass aligns the first set of client-confirmed settings in the Shiny workflow: HEV now exposes an explicit raw daily Flow versus Flow statistics mode, modelling lag selection is restricted to 0/1/3/6/12, HEV Flow-statistic choices are reduced to raw Q10/Q95, and HEV provenance records the selected Flow mode.
 
 The client attachment `HelperFunction.R` has now been reviewed. Threshold/status boundary values from lines 65-86 have been extracted into a dedicated HEV threshold helper instead of copying the legacy plotting function into the dashboard.
 
@@ -23,7 +23,7 @@ The client attachment `HelperFunction.R` has now been reviewed. Threshold/status
 | HEV Flow-statistics mode | Flow-statistics HEV remains valid, but only when current Flow Statistics exist. | Existing Flow-statistics path remains available and is selected explicitly through the HEV Flow mode control. | Implemented in this pass | Continue checking stale-state behaviour during manual testing. |
 | HEV join settings | For HEV Flow-statistics, use `method = B` and `join_type = add_biol`. | `HEV_data_result()` now uses `method = "B"` with `join_type = "add_biol"`. | Implemented in this pass | Verify with the client's expected HEV output examples. |
 | Modelling join settings | For modelling/joined analysis data, use `method = A` and `join_type = add_flows`. | `join_data_result()` uses `join_type = "add_flows"`; `ui.R` and `normalise_join_settings()` now restrict core join settings to method `A`. | Implemented in this pass | Continue checking downstream model selectors against DEC-21. |
-| Lag values | Lag should be limited to `0` or `1`. | `ui.R` now exposes only 0 and 1. `normalise_join_settings()` also rejects unsupported lag values server-side. | Implemented in this pass | Keep regression tests for UI bypass attempts. |
+| Lag values | The 15 August correction requires `0`, `1`, `3`, `6`, and `12`. | `ui.R` exposes the five values and `normalise_join_settings()` rejects unsupported lag values server-side. | Implemented in this pass | Keep regression tests for UI bypass attempts. |
 | Window width and step | HEV Flow-statistics windows should be 6 months or 1 year, with width and step the same. Modelling windows should allow width 6-36 months and step 1-12 months. | Shared Flow-statistics width now starts at 6 months; step remains 1-12. HEV-specific 6/12 width-step equality is not yet separated from modelling. | Partial | Split HEV and modelling window controls, or validate contextual use before calculation/join. |
 | Q values for HEV | HEV should use raw Q values, not Qz. Dashboard can focus on Q10 and Q95. | HEV selector now exposes only raw Q10 and Q95 for Flow-statistics mode; raw daily mode uses the canonical `flow` field. | Implemented in this pass | Verify with real HEV output expectations. |
 | Qz values for modelling | Modelling should use standardised Q fields where cross-site comparability is needed. | `DEC-21` and `DC-08` say single-site models may use raw Q10/Q95, while multi-site mixed-effects models must use Q10z/Q95z. This is slightly more nuanced than the latest email wording. | Mostly documented | Keep the DEC-21 distinction unless the client explicitly supersedes it. Make UI/model validation explain raw Q versus Qz. |
@@ -35,7 +35,7 @@ The client attachment `HelperFunction.R` has now been reviewed. Threshold/status
 
 The items most relevant to Di/Data Pipeline are:
 
-- Enforcing valid lag values (`0` and `1`) at UI/server validation boundaries. Implemented in this pass.
+- Enforcing valid lag values (`0`, `1`, `3`, `6`, and `12`) at UI/server validation boundaries. Implemented in this pass.
 - Ensuring joined/analysis data exposes Q10/Q95 raw and Qz fields with lag provenance. The 15 August client correction supersedes the earlier lag-0/1 limit: supported modelling lags are now 0, 1, 3, 6 and 12 (`DEC-38`).
 - Confirming raw daily Flow can be passed to HEV without requiring Flow Statistics. Implemented in this pass.
 - Keeping HEV mode provenance clear: mode, source dataset, source revision/fingerprint, mapped site IDs, date range, and selected Flow field/statistic. Implemented in this pass.

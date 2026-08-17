@@ -507,7 +507,11 @@ testthat::test_that("RAW-05 and RAW-06 malformed Local Flow replacement is contr
 testthat::test_that("RAW-05 empty Local Biology replacement invalidates only its current source and retries", {
   empty_biology <- tempfile("empty-local-biology-", fileext = ".csv")
   on.exit(unlink(empty_biology, force = TRUE), add = TRUE)
-  writeLines("biol_site_id,date,taxon,abundance", empty_biology, useBytes = TRUE)
+  writeLines(
+    "biol_site_id,SAMPLE_ID,SAMPLE_DATE,WHPT_ASPT,WHPT_N_TAXA,LIFE_FAMILY_INDEX,PSI_FAMILY_SCORE,Month,Year,Season",
+    empty_biology,
+    useBytes = TRUE
+  )
 
   shiny::testServer(dashboard_server, {
     valid_biology <- testthat::test_path("..", "fixtures", "local_invertebrate.csv")
@@ -515,7 +519,7 @@ testthat::test_that("RAW-05 empty Local Biology replacement invalidates only its
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = "biol_site_id,flow_site_id\n291,27090",
-      local_inv_csv = flow_upload_input(valid_biology),
+      local_biology_csv = flow_upload_input(valid_biology),
       local_flow_csv = flow_upload_input(valid_flow)
     )
     session$flushReact()
@@ -525,25 +529,25 @@ testthat::test_that("RAW-05 empty Local Biology replacement invalidates only its
 
     set_inputs_ignoring_interrupted_promises(
       session,
-      local_inv_csv = flow_upload_input(empty_biology)
+      local_biology_csv = flow_upload_input(empty_biology)
     )
     session$flushReact()
 
-    message <- paste(local_inv_upload()$validation$messages, collapse = " ")
-    testthat::expect_identical(local_inv_upload()$validation$status, "error")
+    message <- paste(local_biology_upload()$validation$messages, collapse = " ")
+    testthat::expect_identical(local_biology_upload()$validation$status, "error")
     testthat::expect_false(artifact_is_current(workflow_artifacts()$biology_input))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
     testthat::expect_match(message, "appears to be empty", fixed = TRUE)
-    testthat::expect_match(message, "upload a CSV containing at least one data row", fixed = TRUE)
+    testthat::expect_match(message, "at least one data row", fixed = TRUE)
 
     set_inputs_ignoring_interrupted_promises(
       session,
-      local_inv_csv = flow_upload_input(valid_biology)
+      local_biology_csv = flow_upload_input(valid_biology)
     )
     session$flushReact()
 
     testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
-    testthat::expect_identical(local_inv_upload()$validation$status, "success")
+    testthat::expect_identical(local_biology_upload()$validation$status, "success")
   })
 })
 

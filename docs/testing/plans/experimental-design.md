@@ -58,16 +58,16 @@ students, spreadsheet-comfortable researchers). Ask them to speak their
 thoughts aloud while completing each task. The facilitator does not help unless
 the participant is fully stuck.
 
-### Task A — Upload data and understand what was removed
-Give the participant an invertebrate CSV that contains a few deliberately bad
-rows (missing site ID, negative abundance, bad date). Ask them to upload it on
-**Data Import → Local File Import** and then explain, in their own words, what
-the exclusion log is telling them.
+### Task A — Upload and validate local Biology data
+Give the participant a Biology CSV containing a missing identifier, an invalid
+date and a non-numeric index value. Ask them to upload it on **Data Import →
+Biology Data**, select **Use local data instead**, and explain the validation
+messages before correcting the file.
 
-*Observe:* Do they notice the exclusion log? Can they say why each row was
-removed without help? Is "excluded_value" / "rule" wording clear?
-*Record:* time to locate the log, number of clarifying questions, points of
-confusion.
+*Observe:* Can they find the local upload, understand which fields failed, and
+correct the file without using R?
+*Record:* time to locate the upload, number of clarifying questions, and points
+of confusion.
 
 ### Task B — Run the flow–ecology model
 From joined data, ask the participant to go to **Analysis → Flow-Ecology

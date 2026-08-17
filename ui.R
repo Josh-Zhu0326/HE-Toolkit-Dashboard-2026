@@ -233,6 +233,7 @@ page_navbar(
       div(
         class = "workflow-stage-workspace",
             navset_card_tab(
+            id = "data_import_tabs",
               
   ## Sidebar ----
             sidebar = sidebar("", width = 330, position = "right",
@@ -293,13 +294,33 @@ page_navbar(
                 div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
                 dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
                 actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
-                actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
+                tags$details(
+                  tags$summary("Standard workbook"),
+                  div(class = "hint-text", "Download or validate the standard multi-sheet workbook."),
+                  downloadButton("download_local_data_template", "Download workbook"),
+                  fileInput("dc11_workbook", "Choose workbook", accept = c(".xlsx", ".xls")),
+                  uiOutput("dc11_workbook_validation_status"),
+                  DT::dataTableOutput("dc11_workbook_validation_issues"),
+                  selectInput(
+                    "dc11_workbook_preview_sheet",
+                    "Preview workbook sheet",
+                    choices = names(dc11_sheet_schemas()),
+                    selected = "site_mapping"
+                  ),
+                  DT::dataTableOutput("dc11_workbook_preview")
+                )
               )
             ),
             
   ## Main body ----
             nav_panel("Biology Data",
                       div(class = "dashboard-page dashboard-page-wide",
+                        local_csv_upload_card(
+                          "biology",
+                          "Local Biology CSV",
+                          local_dataset_contracts()$biology$required
+                        ),
                         card(class = "dashboard-card",
                           card_header("Imported biology data"),
                           p(class = "hint-text", "Review the biology records imported for the mapped biology site IDs."),
@@ -308,6 +329,11 @@ page_navbar(
                       )),
             nav_panel("Environmental Data",
                       div(class = "dashboard-page dashboard-page-wide",
+                        local_csv_upload_card(
+                          "environment",
+                          "Local Environmental CSV",
+                          local_dataset_contracts()$environment$required
+                        ),
                         card(class = "dashboard-card",
                           card_header("Environmental base data"),
                           radioButtons(inputId = "env_data_display", "Display:", choices = c("Data", "PCA")),
@@ -317,6 +343,11 @@ page_navbar(
             ),
             nav_panel("Flow Data",
                       div(class = "dashboard-page dashboard-page-wide",
+                        local_csv_upload_card(
+                          "flow",
+                          "Local Daily Flow CSV",
+                          local_dataset_contracts()$flow$required
+                        ),
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imported flow data"),
                           p(class = "hint-text", "This view refreshes when the main Flow source or additional donor Flow data is imported."),
@@ -339,6 +370,14 @@ page_navbar(
                         p(class = "page-lead", "Mapped WQ data can be reviewed, plotted, and downloaded here. These data remain separate from O:E calculations."),
                         layout_columns(
                           col_widths = c(12, 12),
+                          local_csv_upload_card(
+                            "wq",
+                            "Local Water Quality CSV",
+                            local_dataset_contracts()$wq$required,
+                            input_id = "wq_csv",
+                            status_id = "wq_validation_status",
+                            preview_id = "wq_preview"
+                          ),
                           card(class = "dashboard-card",
                             card_header("Mapped WQ preview"),
                             uiOutput("wq_site_import_status"),
@@ -384,6 +423,14 @@ page_navbar(
                         p(class = "page-lead", "Mapped RHS data can be reviewed, plotted, and downloaded here. Missing or TBC RHS IDs are handled safely."),
                         layout_columns(
                           col_widths = c(12, 12),
+                          local_csv_upload_card(
+                            "rhs",
+                            "Local RHS CSV",
+                            local_dataset_contracts()$rhs$required,
+                            input_id = "rhs_csv",
+                            status_id = "rhs_validation_status",
+                            preview_id = "rhs_preview"
+                          ),
                           card(class = "dashboard-card",
                             card_header("Mapped RHS preview"),
                             uiOutput("rhs_site_import_status"),
@@ -405,35 +452,6 @@ page_navbar(
                             div(class = "download-row",
                               downloadButton("download_rhs_plot", "Download current RHS plot as PNG", class = "wq-rhs-action-button")
                             )
-                          )
-                        )
-                      )
-            ),
-            nav_panel("Local File Import",
-                      div(class = "dashboard-page dashboard-page-wide",
-                        h3(class = "section-title", "Local CSV file import"),
-                        p(class = "page-lead", "Upload local files for validation. A valid Local Flow upload is used as the Flow data source; local invertebrate data remain separate from O:E."),
-                        layout_columns(
-                          col_widths = c(6, 6),
-                          card(class = "dashboard-card",
-                            card_header("Local invertebrate CSV"),
-                            div(class = "hint-text", "Required columns: biol_site_id, date, taxon, abundance."),
-                            fileInput("local_inv_csv", "Choose local invertebrate CSV", accept = c(".csv", "text/csv")),
-                            uiOutput("local_inv_status"),
-                            DT::dataTableOutput("local_inv_preview"),
-                            hr(),
-                            h5("Exclusion log"),
-                            div(class = "hint-text", "Records removed or flagged during filtering, with the reason for each."),
-                            uiOutput("exclusion_log_status"),
-                            DT::dataTableOutput("exclusion_log_table"),
-                            downloadButton("download_exclusion_log", "Download exclusion log as CSV")
-                          ),
-                          card(class = "dashboard-card",
-                            card_header("Local flow CSV"),
-                            div(class = "hint-text", "Required columns: flow_site_id, date, flow. A valid upload is used as the Flow data source."),
-                            fileInput("local_flow_csv", "Choose local flow CSV", accept = c(".csv", "text/csv")),
-                            uiOutput("local_flow_status"),
-                            DT::dataTableOutput("local_flow_preview")
                           )
                         )
                       )
@@ -851,96 +869,6 @@ page_navbar(
 )
 ),
 
-  # WQ/RHS UPLOAD DEMO ----
-    nav_panel("File Validation Sandbox",
-      layout_columns(
-        col_widths = c(12),
-        card(
-          class = "dashboard-card",
-          card_header("Introduction"),
-          p("Use this page to validate local files before moving them into the mapped supporting-data workflow."),
-          p("No RICT calculation, O:E calculation, or production modelling is run from this page.")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("DC-11 workbook checkpoint"),
-          p("Check a multi-sheet Excel workbook against the frozen Data Contract v1 schemas. This reports validation results only and does not change the active dashboard data."),
-          div(class = "hint-text",
-              "Upload the standard DC-11 .xlsx template to validate all workbook sheets together."),
-          fileInput("dc11_workbook", "Choose DC-11 workbook", accept = c(".xlsx", ".xls")),
-          h5("DC-11 workbook status"),
-          uiOutput("dc11_workbook_validation_status"),
-          h5("DC-11 workbook issue report"),
-          dataTableOutput("dc11_workbook_validation_issues"),
-          h5("Workbook sheet preview"),
-          selectInput(
-            "dc11_workbook_preview_sheet",
-            "Preview sheet",
-            choices = names(dc11_sheet_schemas()),
-            selected = "site_mapping"
-          ),
-          div(class = "hint-text", "This preview shows the first rows of the selected workbook sheet. No import, joining, modelling, or HEV generation is run from this checkpoint."),
-          dataTableOutput("dc11_workbook_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("DC-11 single CSV checkpoint"),
-          p("Check a CSV against one frozen Data Contract v1 sheet schema. This reports validation results only and does not change the active dashboard data."),
-          div(class = "hint-text",
-              "Choose the DC-11 sheet type that this CSV represents. Column names and order must match the frozen contract."),
-          selectInput(
-            "dc11_csv_sheet",
-            "DC-11 dataset type",
-            choices = names(dc11_sheet_schemas()),
-            selected = "biology_samples"
-          ),
-          fileInput("dc11_csv", "Choose DC-11 CSV file", accept = c(".csv", "text/csv")),
-          h5("DC-11 checkpoint status"),
-          uiOutput("dc11_validation_status"),
-          h5("DC-11 issue report"),
-          dataTableOutput("dc11_validation_issues"),
-          h5("CSV preview"),
-          div(class = "hint-text", "This preview shows the first rows of the uploaded file. No import, joining, modelling, or HEV generation is run from this checkpoint."),
-          dataTableOutput("dc11_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("Upload WQ CSV"),
-          p("Water Quality data usually contains monitoring site identifiers, sample dates, determinands, measured results, units, and optional qualifiers."),
-          div(class = "hint-text",
-              "Expected columns are flexible for this first demo. Helpful site identifier columns include: biol_site_id, wq_site_id, site_id, monitoring_site_id. Date or measurement columns are also recommended."),
-          fileInput("wq_csv", "Choose WQ CSV file", accept = c(".csv", "text/csv")),
-          h5("WQ validation status"),
-          uiOutput("wq_validation_status"),
-          h5("WQ preview"),
-          div(class = "hint-text", "This preview shows the first rows of your uploaded file. No modelling has been run yet."),
-          dataTableOutput("wq_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("Upload RHS CSV"),
-          p("River Habitat Survey data usually contains survey identifiers plus habitat metrics or descriptors such as HMS, HQA, channel, bank, substrate, vegetation, and flow-type fields."),
-          div(class = "hint-text",
-              "Local RHS CSV files must use rhs_survey_id as the identifier column."),
-          fileInput("rhs_csv", "Choose RHS CSV file", accept = c(".csv", "text/csv")),
-          h5("RHS validation status"),
-          uiOutput("rhs_validation_status"),
-          h5("RHS preview"),
-          div(class = "hint-text", "This preview shows the first rows of your uploaded file. No modelling has been run yet."),
-          dataTableOutput("rhs_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("Notes / Next steps"),
-          tags$ul(
-            tags$li("The DC-11 workbook and CSV checkpoints are strict and report schema/type issues without changing downstream data."),
-            tags$li("The older WQ/RHS previews remain separate and are still for quick supporting-data inspection only."),
-            tags$li("The next step is to connect stable checkpoint results to the production import flow after review.")
-          )
-        )
-      )
-    ),
-    
   # Navbar links ----
   nav_menu(
     title = "Links",

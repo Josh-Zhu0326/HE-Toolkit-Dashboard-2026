@@ -61,8 +61,8 @@ Expected result:
 ## TC-005 WQ CSV File Validation
 
 Steps:
-1. Go to File Validation Sandbox.
-2. Upload `tests/fixtures/wq.csv` in the WQ section.
+1. Go to Data Import > WQ Data.
+2. Upload `tests/fixtures/wq.csv` and select Use local data instead.
 
 Expected result:
 - WQ file validates successfully.
@@ -72,8 +72,8 @@ Expected result:
 ## TC-006 RHS CSV File Validation
 
 Steps:
-1. Go to File Validation Sandbox.
-2. Upload `tests/fixtures/rhs.csv` in the RHS section.
+1. Go to Data Import > RHS Data.
+2. Upload `tests/fixtures/rhs.csv` and select Use local data instead.
 
 Expected result:
 - RHS file validates successfully.
@@ -83,7 +83,7 @@ Expected result:
 ## TC-040 DC-11 Workbook Checkpoint
 
 Steps:
-1. Go to File Validation Sandbox.
+1. Expand Standard workbook in the Data Import sidebar.
 2. Upload a standard DC-11 multi-sheet XLSX workbook in the DC-11 workbook checkpoint section.
 3. Review the workbook validation status and issue report.
 4. Select at least one uploaded workbook sheet in the preview selector.
@@ -98,7 +98,7 @@ Expected result:
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload WQ CSV in File Validation Sandbox, or import WQ using site IDs if network/API access is available.
+2. Upload WQ CSV in Data Import > WQ Data, or import WQ using site IDs if network/API access is available.
 3. Go to Data Import > WQ Data.
 4. Try WQ plot types:
    - Time series
@@ -126,7 +126,7 @@ Expected result:
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload RHS CSV in File Validation Sandbox, or import RHS using site IDs if available.
+2. Upload RHS CSV in Data Import > RHS Data, or import RHS using site IDs if available.
 3. Go to Data Import > RHS Data.
 4. Try RHS plot types:
    - Numeric variable by biological site ID
@@ -153,18 +153,18 @@ Expected result:
 ## TC-011 Local Invertebrate CSV Upload
 
 Steps:
-1. Go to Data Import > Local File Import.
+1. Go to Data Import > Biology Data.
 2. Upload `tests/fixtures/local_invertebrate.csv`.
 
 Expected result:
 - File validates successfully.
 - Preview table shows local invertebrate rows.
-- Local data do not automatically enter O:E.
+- Select Use local data instead and confirm the validated rows become the active Biology source for downstream processing.
 
 ## TC-012 Local Flow CSV Upload
 
 Steps:
-1. Go to Data Import > Local File Import.
+1. Go to Data Import > Flow Data.
 2. Upload `tests/fixtures/local_flow.csv`.
 3. Upload `tests/fixtures/local_flow_extra_columns.csv`.
 
@@ -172,7 +172,7 @@ Expected result:
 - File validates successfully.
 - Preview table shows local flow rows.
 - Required input columns are `flow_site_id`, `date`, and `flow`; `biol_site_id` and `flow_input` are not required.
-- The uploaded data become the operational Flow data source.
+- Use local data instead makes the upload the active Flow source; Combine external and local data retains rows from both sources.
 - The extra-column fixture reports **Pass with Warning**, lists `flow_input`, `biol_site_id`, and `note` as ignored, and exposes only `flow_site_id`, `date`, and `flow` operationally.
 
 ## TC-013 Invalid Local Flow Schema or Values

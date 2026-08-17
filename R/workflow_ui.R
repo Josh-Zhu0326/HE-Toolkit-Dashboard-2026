@@ -344,7 +344,7 @@ workflow_context_bar_ui <- function(
               )
             },
             shiny::actionLink("open_task_selector", "Task selector"),
-            shiny::actionLink("open_csv_validation", "CSV validation"),
+            shiny::actionLink("open_csv_validation", "Local data import"),
             shiny::tags$a(
               "HE Toolkit GitHub",
               href = "https://github.com/APEM-LTD/hetoolkit",
@@ -865,5 +865,43 @@ workflow_shell_ui <- function(
     current_stage,
     registry,
     selected_enrichments
+  )
+}
+
+local_csv_upload_card <- function(dataset_id,
+                                  title,
+                                  required_columns,
+                                  input_id = paste0("local_", dataset_id, "_csv"),
+                                  status_id = paste0("local_", dataset_id, "_status"),
+                                  preview_id = paste0("local_", dataset_id, "_preview")) {
+  bslib::card(
+    class = "dashboard-card",
+    bslib::card_header(title),
+    shiny::div(
+      class = "hint-text",
+      paste0("Required columns: ", paste(required_columns, collapse = ", "), ".")
+    ),
+    shiny::fileInput(
+      input_id,
+      paste("Choose", title),
+      accept = c(".csv", "text/csv")
+    ),
+    shiny::div(
+      class = "download-row",
+      shiny::downloadButton(
+        paste0("download_", dataset_id, "_csv_template"),
+        "Download CSV template"
+      )
+    ),
+    shinyWidgets::radioGroupButtons(
+      inputId = paste0(dataset_id, "_source_mode"),
+      label = "Use data from",
+      choices = local_source_modes(),
+      selected = "external",
+      justified = TRUE,
+      size = "sm"
+    ),
+    shiny::uiOutput(status_id),
+    DT::dataTableOutput(preview_id)
   )
 }
