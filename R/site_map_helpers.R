@@ -103,14 +103,24 @@ site_map_points_from_environment <- function(environment_data) {
   if (is.null(converter)) {
     return(empty_site_map_points())
   }
-  coordinates <- tryCatch(
-    suppressWarnings(as.data.frame(
-      converter(environment_data$NGR_10_FIG, coord_system = "WGS84")
-    )),
-    error = function(error) NULL
+
+  ngr_values <- trimws(as.character(environment_data$NGR_10_FIG))
+  coordinates <- data.frame(
+    lon = rep(NA_real_, length(ngr_values)),
+    lat = rep(NA_real_, length(ngr_values))
   )
-  if (is.null(coordinates) || !all(c("lon", "lat") %in% names(coordinates))) {
-    return(empty_site_map_points())
+  for (index in which(site_map_nonblank(ngr_values))) {
+    converted <- tryCatch(
+      suppressWarnings(as.data.frame(
+        converter(ngr_values[[index]], coord_system = "WGS84")
+      )),
+      error = function(error) NULL
+    )
+    if (!is.null(converted) && nrow(converted) > 0L &&
+        all(c("lon", "lat") %in% names(converted))) {
+      coordinates$lon[[index]] <- suppressWarnings(as.numeric(converted$lon[[1L]]))
+      coordinates$lat[[index]] <- suppressWarnings(as.numeric(converted$lat[[1L]]))
+    }
   }
 
   result <- data.frame(

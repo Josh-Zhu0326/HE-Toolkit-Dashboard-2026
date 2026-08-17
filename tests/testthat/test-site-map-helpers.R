@@ -74,6 +74,21 @@ testthat::test_that("Biology NGR and imported WQ coordinates remain available as
   )
 })
 
+testthat::test_that("an invalid NGR does not remove other valid Biology sites", {
+  environment <- data.frame(
+    biol_site_id = c("B01", "B02", "B03"),
+    NGR_10_FIG = c("SK0000000000", "INVALID", "ST00000000"),
+    stringsAsFactors = FALSE
+  )
+
+  points <- build_site_map_points(environment_data = environment)
+
+  testthat::expect_identical(points$site_id, c("B01", "B03"))
+  testthat::expect_true(all(is.finite(points$lon)))
+  testthat::expect_true(all(is.finite(points$lat)))
+  testthat::expect_true(all(points$coordinate_source == "Environmental NGR"))
+})
+
 testthat::test_that("invalid or incomplete coordinates are omitted safely", {
   mapping <- data.frame(
     biol_site_id = c("B01", "B02"),
