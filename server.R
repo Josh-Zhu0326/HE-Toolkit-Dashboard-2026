@@ -389,25 +389,6 @@ function(input, output, session){
   join_request <- reactiveVal(NULL)
   join_settings_used <- reactiveVal(NULL)
 
-  normalise_join_settings <- function(lags, method) {
-    lags <- sort(unique(as.integer(lags)))
-    invalid_lags <- setdiff(lags, c(0L, 1L))
-    if (length(lags) == 0L || anyNA(lags)) {
-      stop("Select lag 0, lag 1, or both before building the Joined HE Dataset.", call. = FALSE)
-    }
-    if (length(invalid_lags) > 0L) {
-      stop("Only lag 0 and lag 1 are supported for the Dashboard workflow.", call. = FALSE)
-    }
-    method <- as.character(method)[[1L]]
-    if (is.na(method) || !identical(method, "A")) {
-      stop("Core joined/model dataset generation must use join method A.", call. = FALSE)
-    }
-    list(
-      lags = lags,
-      method = method
-    )
-  }
-
   local_flow_is_operational <- function(upload) {
     upload$validation$status %in% c("success", "warning")
   }
@@ -533,7 +514,7 @@ function(input, output, session){
         workflow_block_artifact(
           "joined_core",
           conditionMessage(error),
-          "Select lag 0 or lag 1 and build the Joined HE Dataset again."
+          "Select one or more supported lags and build the Joined HE Dataset again."
         )
         showNotification(conditionMessage(error), type = "error", duration = 10)
         NULL

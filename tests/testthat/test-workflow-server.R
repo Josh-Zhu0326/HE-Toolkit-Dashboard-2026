@@ -372,6 +372,11 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
     testthat::expect_true(artifact_is_current(workflow_artifacts()$joined_core))
     testthat::expect_identical(join_revision(), built_request)
 
+    testthat::expect_identical(
+      normalise_join_settings(c(12, 3, 1, 3, 0, 6), "A")$lags,
+      c(0L, 1L, 3L, 6L, 12L)
+    )
+
     muffle_interrupted_workflow_promise(
       session$setInputs(choose_lags = 1)
     )

@@ -14,7 +14,7 @@ workspace_test_snapshot <- function(
     workspace_name = workspace_name,
     workflow_artifacts = registry,
     workflow_session = list(task_id = task_id, stage_index = stage_index),
-    input_values = list(choose_lags = c(0L, 1L)),
+    input_values = list(choose_lags = supported_join_lags()),
     runtime_state = list(flow_source_revision = 3L),
     datasets = datasets,
     current_panel = "Build HE Dataset",
@@ -47,7 +47,10 @@ testthat::test_that("workspace snapshots preserve state without upload paths", {
 
   testthat::expect_identical(snapshot$schema_version, workspace_schema_version)
   testthat::expect_identical(snapshot$workspace$directory_name, "River-Avon-review")
-  testthat::expect_identical(snapshot$state$input_values$choose_lags, c(0L, 1L))
+  testthat::expect_identical(
+    snapshot$state$input_values$choose_lags,
+    supported_join_lags()
+  )
   testthat::expect_false(any(grepl("file|csv|datapath", names(snapshot$state$input_values))))
   testthat::expect_silent(validate_workspace_snapshot(snapshot))
 

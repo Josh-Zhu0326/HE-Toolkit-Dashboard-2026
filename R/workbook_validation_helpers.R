@@ -37,10 +37,8 @@ dc11_sheet_schemas <- function() {
       "biol_site_id", "sample_id", "date", "flow_site_id", "wq_site_id", "rhs_survey_id",
       "sampling_year",
       "WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE",
-      "Q10_lag0", "Q10z_lag0", "Q10_lag1", "Q10z_lag1",
-      "Q95_lag0", "Q95z_lag0", "Q95_lag1", "Q95z_lag1",
-      "flow_window_start_lag0", "flow_window_end_lag0", "flow_window_duration_lag0",
-      "flow_window_start_lag1", "flow_window_end_lag1", "flow_window_duration_lag1",
+      joined_flow_fields(),
+      joined_flow_window_fields(),
       "wq_window_start", "wq_window_end", "wq_window_duration_years",
       "orthophosphate_mean", "orthophosphate_record_count",
       "ammonia_p90", "ammonia_record_count",
@@ -332,11 +330,16 @@ validate_dc11_sheet_rules <- function(data, sheet_name) {
   }
 
   if (identical(sheet_name, "joined_dataset_optional")) {
+    flow_window_fields <- joined_flow_window_fields()
     issues <- dc11_add_type_issue(
       issues,
       data,
       sheet_name,
-      c("date", "flow_window_start_lag0", "flow_window_end_lag0", "flow_window_start_lag1", "flow_window_end_lag1", "wq_window_start", "wq_window_end"),
+      c(
+        "date",
+        flow_window_fields[grepl("_(start|end)_", flow_window_fields)],
+        "wq_window_start", "wq_window_end"
+      ),
       "date"
     )
     issues <- dc11_add_type_issue(issues, data, sheet_name, "sampling_year", "integer")
@@ -344,7 +347,15 @@ validate_dc11_sheet_rules <- function(data, sheet_name) {
       issues,
       data,
       sheet_name,
-      c("WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE", "Q10_lag0", "Q10z_lag0", "Q10_lag1", "Q10z_lag1", "Q95_lag0", "Q95z_lag0", "Q95_lag1", "Q95z_lag1", "flow_window_duration_lag0", "flow_window_duration_lag1", "wq_window_duration_years", "orthophosphate_mean", "orthophosphate_record_count", "ammonia_p90", "ammonia_record_count", "dissolved_oxygen_p10", "dissolved_oxygen_record_count", "HMSRBB", "HQA"),
+      c(
+        "WHPT_ASPT_OE", "WHPT_NTAXA_OE", "LIFE_F_OE", "PSI_OE",
+        joined_flow_fields(),
+        flow_window_fields[grepl("_duration_", flow_window_fields)],
+        "wq_window_duration_years", "orthophosphate_mean",
+        "orthophosphate_record_count", "ammonia_p90",
+        "ammonia_record_count", "dissolved_oxygen_p10",
+        "dissolved_oxygen_record_count", "HMSRBB", "HQA"
+      ),
       "numeric"
     )
   }

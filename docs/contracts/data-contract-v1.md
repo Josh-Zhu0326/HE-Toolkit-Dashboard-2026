@@ -232,15 +232,28 @@ Q10_lag0
 Q10z_lag0
 Q10_lag1
 Q10z_lag1
+Q10_lag3
+Q10z_lag3
+Q10_lag6
+Q10z_lag6
+Q10_lag12
+Q10z_lag12
 Q95_lag0
 Q95z_lag0
 Q95_lag1
 Q95z_lag1
+Q95_lag3
+Q95z_lag3
+Q95_lag6
+Q95z_lag6
+Q95_lag12
+Q95z_lag12
 ```
 
 **Specification**
 
-- These eight fields are the default v1 joined/modelling flow contract.
+- These twenty fields are the default joined/modelling flow contract.
+- Supported lags are `0`, `1`, `3`, `6`, and `12`.
 - Joined output must also retain the corresponding flow-window/lag provenance.
 - Q50 may remain available for descriptive flow-regime statistics, but it must not enter the default joined fields or model selector.
 - A single-site additive model may use raw Q10/Q95 fields.
@@ -248,7 +261,7 @@ Q95z_lag1
 
 **Traceability**
 
-- Decisions: `DEC-03`, `DEC-21`
+- Decisions: `DEC-03`, `DEC-21`, `DEC-38`
 - Requirements: `RTM-03`, `RTM-21`
 
 ### DC-09: `HMSRBB` as the Sole Internal and Output Field
@@ -388,10 +401,15 @@ Bed.Material.Description, Predominant.Flow.Type, habitat_notes
 biol_site_id, sample_id, date, flow_site_id, wq_site_id, rhs_survey_id,
 sampling_year,
 WHPT_ASPT_OE, WHPT_NTAXA_OE, LIFE_F_OE, PSI_OE,
-Q10_lag0, Q10z_lag0, Q10_lag1, Q10z_lag1,
-Q95_lag0, Q95z_lag0, Q95_lag1, Q95z_lag1,
+Q10_lag0, Q10z_lag0, Q10_lag1, Q10z_lag1, Q10_lag3, Q10z_lag3,
+Q10_lag6, Q10z_lag6, Q10_lag12, Q10z_lag12,
+Q95_lag0, Q95z_lag0, Q95_lag1, Q95z_lag1, Q95_lag3, Q95z_lag3,
+Q95_lag6, Q95z_lag6, Q95_lag12, Q95z_lag12,
 flow_window_start_lag0, flow_window_end_lag0, flow_window_duration_lag0,
 flow_window_start_lag1, flow_window_end_lag1, flow_window_duration_lag1,
+flow_window_start_lag3, flow_window_end_lag3, flow_window_duration_lag3,
+flow_window_start_lag6, flow_window_end_lag6, flow_window_duration_lag6,
+flow_window_start_lag12, flow_window_end_lag12, flow_window_duration_lag12,
 wq_window_start, wq_window_end, wq_window_duration_years,
 orthophosphate_mean, orthophosphate_record_count,
 ammonia_p90, ammonia_record_count,

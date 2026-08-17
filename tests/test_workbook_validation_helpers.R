@@ -2,6 +2,7 @@
 # Run in RStudio: open the project, then Source this file.
 # Expect: "test_workbook_validation_helpers.R: all checks passed"
 
+source(file.path("R", "join_contract_helpers.R"))
 source(file.path("R", "workbook_validation_helpers.R"))
 
 empty_sheet <- function(sheet_name, n = 1L) {

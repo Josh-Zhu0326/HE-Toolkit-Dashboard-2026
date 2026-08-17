@@ -36,7 +36,7 @@ The client attachment `HelperFunction.R` has now been reviewed. Threshold/status
 The items most relevant to Di/Data Pipeline are:
 
 - Enforcing valid lag values (`0` and `1`) at UI/server validation boundaries. Implemented in this pass.
-- Ensuring joined/analysis data exposes the agreed Q10/Q95 raw and Qz fields with lag 0/1 provenance.
+- Ensuring joined/analysis data exposes Q10/Q95 raw and Qz fields with lag provenance. The 15 August client correction supersedes the earlier lag-0/1 limit: supported modelling lags are now 0, 1, 3, 6 and 12 (`DEC-38`).
 - Confirming raw daily Flow can be passed to HEV without requiring Flow Statistics. Implemented in this pass.
 - Keeping HEV mode provenance clear: mode, source dataset, source revision/fingerprint, mapped site IDs, date range, and selected Flow field/statistic. Implemented in this pass.
 - Checking that modelling receives the correct Flow predictors for the selected model path.
