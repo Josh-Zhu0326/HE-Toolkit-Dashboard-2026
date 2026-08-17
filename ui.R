@@ -278,6 +278,17 @@ page_navbar(
                 actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
               ),
               div(class = "sidebar-section control-stack action-stack",
+                h5("Additional donor Flow"),
+                div(class = "hint-text", "Add donor mappings and import any donor Flow sites that are not already present in the main Flow data."),
+                textAreaInput("donor_mapping_paste", "Paste donor mapping here"),
+                tags$strong("Donor mapping"),
+                tableOutput("table2"),
+                textAreaInput("donor_list_paste", "Paste additional flow donor sites here"),
+                tags$strong("Donor list"),
+                tableOutput("table3"),
+                actionButton("import_donor_flow", "Import additional donor flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+              ),
+              div(class = "sidebar-section control-stack action-stack",
                 h5("Optional WQ/RHS inputs"),
                 div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
                 dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
@@ -308,8 +319,17 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imported flow data"),
+                          p(class = "hint-text", "This view refreshes when the main Flow source or additional donor Flow data is imported."),
                           radioButtons(inputId = "flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
-                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap"))
+                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap")),
+                          conditionalPanel(
+                            condition = "input.flow_data_display === 'Heatmap'",
+                            div(
+                              class = "download-row",
+                              downloadSelectUI("FlowHeatmap", choices = c("PDF", "CSV", "PNG")),
+                              downloadButtonUI("FlowHeatmap")
+                            )
+                          )
                         )
                       )
             ),
@@ -483,18 +503,9 @@ page_navbar(
                   h5("Readiness check"),
                   uiOutput("cp_flow")
               ),
-              div(class = "sidebar-section control-stack",
-                h5("Donor flow setup"),
-                textAreaInput("donor_mapping_paste", "Paste donor mapping here"),
-                tags$strong("Donor mapping"),
-                tableOutput("table2"),
-                textAreaInput("donor_list_paste", "Paste additional flow donor sites here"),
-                tags$strong("Donor list"),
-                tableOutput("table3")
-              ),
               div(class = "sidebar-section action-stack",
-                h5("Imputation"),
-                actionButton("import_donor_flow", "Import additional donor flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
+                h5("Flow imputation"),
+                div(class = "hint-text", "Uses the donor mapping and additional donor Flow prepared in Stage 1."),
                 actionButton("impute_flow", "Impute missing flow data", class = "client-action-button", icon = shiny::icon("calculator", verify_fa = FALSE))
               ),
               div(class = "sidebar-section control-stack action-stack",
@@ -516,7 +527,15 @@ page_navbar(
                           card_header("Imputed flow data"),
                           p(class = "hint-text", "This view refreshes after additional donor Flow is imported and after Flow imputation is completed."),
                           radioButtons(inputId = "imp_flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
-                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap_imp"))
+                          div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap_imp")),
+                          conditionalPanel(
+                            condition = "input.imp_flow_data_display === 'Heatmap'",
+                            div(
+                              class = "download-row",
+                              downloadSelectUI("ImputedFlowHeatmap", choices = c("PDF", "CSV", "PNG")),
+                              downloadButtonUI("ImputedFlowHeatmap")
+                            )
+                          )
                         )
                       )
             ),
@@ -633,19 +652,54 @@ page_navbar(
           class = "dashboard-page dashboard-page-wide",
           card(
             class = "dashboard-card",
-            card_header("Exclude or restore a record"),
-            uiOutput("analysis_record_selector"),
+            card_header("Sample selection"),
+            p(
+              class = "hint-text",
+              "Every sample in the Joined HE dataset starts selected. Untick any samples you want to leave out, then choose Apply selection. Excluded samples are dropped from the correlation plots, Historical Coverage and the Stage 5 model, but the Joined HE dataset itself is never changed."
+            ),
+            uiOutput("analysis_selection_summary"),
             div(
               class = "action-stack",
               actionButton(
-                "exclude_analysis_record",
-                "Exclude record",
+                "analysis_select_all_samples",
+                "Select all",
                 class = "client-action-button"
               ),
               actionButton(
-                "restore_analysis_record",
-                "Restore record",
+                "analysis_clear_all_samples",
+                "Clear selection",
                 class = "client-action-button"
+              ),
+              actionButton(
+                "apply_analysis_sample_selection",
+                "Apply selection",
+                class = "client-action-button"
+              )
+            ),
+            DT::dataTableOutput("analysis_sample_table")
+          ),
+          card(
+            class = "dashboard-card",
+            card_header("Exclude or restore a single record"),
+            tags$details(
+              tags$summary("Adjust one record by ID (optional)"),
+              p(
+                class = "hint-text",
+                "Use this to exclude or restore a single record by its identifier without changing the rest of the current sample selection."
+              ),
+              uiOutput("analysis_record_selector"),
+              div(
+                class = "action-stack",
+                actionButton(
+                  "exclude_analysis_record",
+                  "Exclude record",
+                  class = "client-action-button"
+                ),
+                actionButton(
+                  "restore_analysis_record",
+                  "Restore record",
+                  class = "client-action-button"
+                )
               )
             )
           ),

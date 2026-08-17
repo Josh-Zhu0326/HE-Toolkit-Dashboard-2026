@@ -76,6 +76,49 @@ testthat::test_that("chart pages and tables expose one responsive content width"
   testthat::expect_false(grepl('scrollY = "600px"', server_code, fixed = TRUE))
 })
 
+testthat::test_that("Flow heatmaps expose PDF, CSV and PNG download controls", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  server_code <- paste(readLines(file.path(project_root, "server.R"), warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(ui_code, 'downloadSelectUI("FlowHeatmap", choices = c("PDF", "CSV", "PNG"))', fixed = TRUE)
+  testthat::expect_match(ui_code, 'downloadButtonUI("FlowHeatmap")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'downloadSelectUI("ImputedFlowHeatmap", choices = c("PDF", "CSV", "PNG"))', fixed = TRUE)
+  testthat::expect_match(ui_code, 'downloadButtonUI("ImputedFlowHeatmap")', fixed = TRUE)
+
+  selector_html <- render_workflow_html(downloadSelectUI("FlowHeatmap", choices = c("PDF", "CSV", "PNG")))
+  testthat::expect_match(selector_html, "PDF", fixed = TRUE)
+  testthat::expect_match(selector_html, "CSV", fixed = TRUE)
+  testthat::expect_match(selector_html, "PNG", fixed = TRUE)
+  testthat::expect_false(grepl("JPEG", selector_html, fixed = TRUE))
+  testthat::expect_match(
+    server_code,
+    "function() build_flow_heatmap_plot(flow_data_with_donors())",
+    fixed = TRUE
+  )
+  testthat::expect_match(server_code, "download_data = flow_data_with_donors", fixed = TRUE)
+})
+
+testthat::test_that("additional donor Flow inputs are located in Stage 1", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  data_import_start <- regexpr('nav_panel(title = "Data Import"', ui_code, fixed = TRUE)[[1]]
+  process_flow_start <- regexpr('nav_panel("Process Flow"', ui_code, fixed = TRUE)[[1]]
+  stage_three_start <- regexpr("# STAGE 3 ----", ui_code, fixed = TRUE)[[1]]
+  data_import_code <- substr(ui_code, data_import_start, process_flow_start - 1L)
+  process_flow_code <- substr(ui_code, process_flow_start, stage_three_start - 1L)
+
+  testthat::expect_gt(data_import_start, 0L)
+  testthat::expect_gt(process_flow_start, data_import_start)
+  testthat::expect_gt(stage_three_start, process_flow_start)
+  testthat::expect_match(data_import_code, 'textAreaInput("donor_mapping_paste"', fixed = TRUE)
+  testthat::expect_match(data_import_code, 'textAreaInput("donor_list_paste"', fixed = TRUE)
+  testthat::expect_match(data_import_code, 'actionButton("import_donor_flow"', fixed = TRUE)
+  testthat::expect_false(grepl('textAreaInput("donor_mapping_paste"', process_flow_code, fixed = TRUE))
+  testthat::expect_false(grepl('actionButton("import_donor_flow"', process_flow_code, fixed = TRUE))
+  testthat::expect_match(process_flow_code, 'actionButton("impute_flow"', fixed = TRUE)
+})
+
 testthat::test_that("Stage workspaces share the workflow visual system", {
   project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
   ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")

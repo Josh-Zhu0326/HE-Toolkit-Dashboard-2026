@@ -15,6 +15,49 @@ testthat::test_that("Flow heatmap helper returns a drawable plot result", {
   testthat::expect_true(plot_result_is_usable(result$value))
 })
 
+testthat::test_that("Flow heatmap download supports PDF, CSV and PNG", {
+  flow_data <- expand.grid(
+    flow_site_id = c("27090", "27034"),
+    date = seq.Date(as.Date("2024-01-01"), as.Date("2024-06-01"), by = "month"),
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  flow_data$flow <- seq_len(nrow(flow_data))
+  plot_value <- build_flow_heatmap_plot(flow_data)
+  formats <- c(PDF = "pdf", CSV = "csv", PNG = "png")
+  output_paths <- file.path(
+    tempdir(),
+    sprintf("flow-heatmap-%s.%s", tolower(names(formats)), unname(formats))
+  )
+  on.exit(unlink(output_paths, force = TRUE), add = TRUE)
+
+  shiny::testServer(
+    downloadServer,
+    args = list(
+      id = "flow_heatmap_download_test",
+      plot = function() plot_value,
+      download_data = function() flow_data,
+      context = "Flow heatmap"
+    ),
+    {
+      api <- session$getReturned()
+      for (index in seq_along(formats)) {
+        testthat::expect_error(
+          api$write_download(output_paths[[index]], names(formats)[[index]]),
+          NA
+        )
+        testthat::expect_true(file.exists(output_paths[[index]]))
+        testthat::expect_gt(file.info(output_paths[[index]])$size, 0)
+        if (identical(names(formats)[[index]], "CSV")) {
+          exported <- utils::read.csv(output_paths[[index]], stringsAsFactors = FALSE)
+          testthat::expect_identical(names(exported), names(flow_data))
+          testthat::expect_equal(nrow(exported), nrow(flow_data))
+        }
+      }
+    }
+  )
+})
+
 testthat::test_that("RAW-18 plot boundary sanitises errors and rejects unusable results", {
   raw_detail <- "ggplot_build failed for C:/private/dashboard-data.csv"
 

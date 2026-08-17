@@ -1017,22 +1017,35 @@ plot_hev_dash <- function(data,
 downloadButtonUI <- function(id) {
   downloadButton(NS(id, "dl_plot"))
 }
-downloadSelectUI <- function(id) {
-  selectInput(NS(id, "format"), label = "", choices = c("PDF", "JPEG", "PNG"), width = "125px")
+downloadSelectUI <- function(id, choices = c("PDF", "JPEG", "PNG")) {
+  selectInput(NS(id, "format"), label = "", choices = choices, width = "125px")
 }
 downloadServer <- function(id, plot,
+                           download_data = NULL,
                            can_download = function() TRUE,
                            on_download = function(format, file) NULL,
+                           context = "plot",
                            write_plot = function(file, plot) {
                              ggplot2::ggsave(file, plot = plot, width = 10, height = 5)
                            }) {
   moduleServer(id, function(input, output, session) {
     write_download <- function(file, format = input$format) {
       validate(need(isTRUE(can_download()), "Regenerate the current plot before downloading."))
-      result <- safe_file_operation(function() write_plot(file, plot()))
+      format <- toupper(format)
+      if (identical(format, "CSV")) {
+        validate(need(is.function(download_data), "The current data are not available for CSV download."))
+        export_data <- download_data()
+        validate(need(is.data.frame(export_data), "The current data are not available for CSV download."))
+        result <- safe_file_operation(function() {
+          utils::write.csv(export_data, file, row.names = FALSE, na = "")
+        })
+      } else {
+        result <- safe_file_operation(function() write_plot(file, plot()))
+      }
       if (!identical(result$status, "success")) {
         message(sprintf(
-          "RAW-19/21 file-operation diagnostic [HEV plot/%s]: %s",
+          "RAW-19/21 file-operation diagnostic [%s/%s]: %s",
+          context,
           result$failure,
           result$diagnostic
         ))

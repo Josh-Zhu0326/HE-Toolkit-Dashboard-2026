@@ -13,6 +13,9 @@ build_flow_heatmap_plot <- function(data) {
   if ("flow" %in% names(data)) {
     data$flow <- as.numeric(data$flow)
   }
+  if ("date" %in% names(data) && inherits(data$date, c("Date", "POSIXt"))) {
+    data$date <- as.character(data$date)
+  }
   plots <- plot_heatmap_dash(
     data = data,
     x = "date",

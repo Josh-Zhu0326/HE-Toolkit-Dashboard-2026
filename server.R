@@ -393,9 +393,15 @@ function(input, output, session){
     upload$validation$status %in% c("success", "warning")
   }
 
-  invalidate_flow_derived_state <- function(reset_external = FALSE) {
+  invalidate_flow_derived_state <- function(
+      reset_external = FALSE,
+      preserve_flow_input = FALSE,
+      preserved_data_source = NULL,
+      preserved_history_summary = NULL) {
+    previous_flow_input <- isolate(workflow_artifacts()$flow_input)
     mark_hev_result_stale("The Flow source changed after the current HEV plot was generated.")
-    flow_source_revision(isolate(flow_source_revision()) + 1L)
+    next_flow_revision <- isolate(flow_source_revision()) + 1L
+    flow_source_revision(next_flow_revision)
     flow_stats_revision(NULL)
     join_revision(NULL)
     hev_revision(NULL)
@@ -412,6 +418,28 @@ function(input, output, session){
       external_flow_loaded(FALSE)
       external_flow_revision(NULL)
       external_import_requested_revision(NULL)
+    } else if (isTRUE(preserve_flow_input)) {
+      if (isTRUE(isolate(external_flow_loaded()))) {
+        external_flow_revision(next_flow_revision)
+      }
+      preserved_status <- if (previous_flow_input$status %in% c("complete", "warning")) {
+        previous_flow_input$status
+      } else {
+        "complete"
+      }
+      if (is.null(preserved_data_source)) {
+        preserved_data_source <- previous_flow_input$data_source
+      }
+      if (is.null(preserved_history_summary)) {
+        preserved_history_summary <- previous_flow_input$history_summary
+      }
+      workflow_set_artifact(
+        "flow_input",
+        preserved_status,
+        data_source = preserved_data_source,
+        history_summary = preserved_history_summary,
+        invalidate_downstream = TRUE
+      )
     }
 
     for (flag_name in c("flow_data_exist", "flow_stats_exist", "HEV_data_exist")) {
@@ -2258,16 +2286,31 @@ function(input, output, session){
   
   #### render table ----
   output$flow_table <- function() {
-    plot_heatmap(data = flow_data(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>% 
+    plot_heatmap(data = flow_data_with_donors(), x = "date", y = "flow_site_id", fill = "flow", dual = FALSE) %>%
       pluck(3) %>%
       kable("html") %>% kable_styling("striped", full_width = F) %>% 
       scroll_box(height = "300px")
   }
   
   #### render heatmap ----
-  output$flow_fig <- renderPlot({
-    safe_server_plot("Flow heatmap", function() build_flow_heatmap_plot(flow_data()))
+  flow_heatmap_plot <- reactive({
+    safe_server_plot_value(
+      "Flow heatmap",
+      function() build_flow_heatmap_plot(flow_data_with_donors())
+    )
   })
+
+  output$flow_fig <- renderPlot({
+    safe_server_plot_render("Flow heatmap", flow_heatmap_plot())
+  })
+
+  downloadServer(
+    "FlowHeatmap",
+    flow_heatmap_plot,
+    download_data = flow_data_with_donors,
+    can_download = function() workflow_artifact_is_current("flow_input"),
+    context = "Flow heatmap"
+  )
   
   
   ## Map of sites ----
@@ -2550,6 +2593,13 @@ function(input, output, session){
     donor_flow_import_data()
   })
 
+  flow_data_with_donors <- reactive({
+    if (isTRUE(import_donor_flow_success())) {
+      return(flow_data_extra())
+    }
+    flow_data()
+  })
+
   observeEvent(input$import_donor_flow, {
     import_donor_flow_success(FALSE)
     donor_flow_import_data(NULL)
@@ -2605,6 +2655,14 @@ function(input, output, session){
       status = "success",
       messages = sprintf("Imported additional Flow data for %d donor site(s).", length(unique(import_result$data$flow_site_id)))
     ))
+    invalidate_flow_derived_state(
+      preserve_flow_input = TRUE,
+      preserved_data_source = "Flow source with additional donor data",
+      preserved_history_summary = sprintf(
+        "Imported additional Flow data for %d donor site(s); downstream Flow outputs require regeneration.",
+        length(unique(import_result$data$flow_site_id))
+      )
+    )
     showNotification(
       paste(
         "Additional donor Flow data successfully imported.",
@@ -2642,11 +2700,7 @@ function(input, output, session){
   #### run imputation ----
   
   flow_data_forimp <- reactive({
-    if (isTRUE(import_donor_flow_success())) {
-      flow_data_extra()
-    } else {
-      flow_data()
-    }
+    flow_data_with_donors()
   })
 
   observeEvent(input$impute_flow, {
@@ -2703,6 +2757,14 @@ function(input, output, session){
       messages = "Flow imputation completed successfully.",
       data = imputation$data
     ))
+    invalidate_flow_derived_state(
+      preserve_flow_input = TRUE,
+      preserved_data_source = "Imputed Flow data",
+      preserved_history_summary = sprintf(
+        "Completed Flow imputation for %d Flow record(s); downstream Flow outputs require regeneration.",
+        nrow(imputation$data)
+      )
+    )
   })
 
   flow_data_imputed <- reactive({
@@ -2716,10 +2778,7 @@ function(input, output, session){
     if (identical(result$status, "success")) {
       return(result$data)
     }
-    if (isTRUE(import_donor_flow_success())) {
-      return(flow_data_extra())
-    }
-    flow_data()
+    flow_data_with_donors()
   })
   
   #### displaying ----
@@ -2746,12 +2805,24 @@ function(input, output, session){
   }
   
   ##### render heatmap ----
-  output$flow_fig_imp <- renderPlot({
-    safe_server_plot(
+  imputed_flow_heatmap_plot <- reactive({
+    safe_server_plot_value(
       "Imputed Flow heatmap",
       function() build_flow_heatmap_plot(flow_data_for_display())
     )
   })
+
+  output$flow_fig_imp <- renderPlot({
+    safe_server_plot_render("Imputed Flow heatmap", imputed_flow_heatmap_plot())
+  })
+
+  downloadServer(
+    "ImputedFlowHeatmap",
+    imputed_flow_heatmap_plot,
+    download_data = flow_data_for_display,
+    can_download = function() workflow_artifact_is_current("flow_input"),
+    context = "Imputed Flow heatmap"
+  )
   
   
   ## Calculating flow stats ----
@@ -3254,6 +3325,171 @@ function(input, output, session){
     analysis_exclusion_log()
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
 
+  # WK6-06: table-based sample selection. Every sample starts selected; the user
+  # unticks the samples to exclude and applies. This writes the same
+  # analysis_filter_selection() that drives the correlation plots, Historical
+  # Coverage (WK6-07) and the Stage 5 model, so all of those refresh together.
+  analysis_sample_table_data <- reactive({
+    data <- tryCatch(
+      current_joined_source()$analysis_dataset,
+      error = function(error) {
+        if (inherits(error, "shiny.silent.error")) {
+          return(NULL)
+        }
+        NULL
+      }
+    )
+    if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
+      return(NULL)
+    }
+    prepared <- tryCatch(
+      prepare_analysis_filter_data(data),
+      error = function(error) NULL
+    )
+    if (is.null(prepared)) {
+      return(NULL)
+    }
+
+    site_col <- intersect(c("biol_site_id", "site_id"), names(prepared))
+    display <- data.frame(
+      `Sample ID` = as.character(prepared$sample_id),
+      check.names = FALSE,
+      stringsAsFactors = FALSE
+    )
+    if (length(site_col) > 0L) {
+      display[["Site"]] <- as.character(prepared[[site_col[[1L]]]])
+    }
+    for (extra in c("Year", "Season", "SAMPLE_DATE", "date")) {
+      if (extra %in% names(prepared) && !extra %in% names(display)) {
+        display[[extra]] <- as.character(prepared[[extra]])
+      }
+    }
+    display$record_id <- as.character(prepared$record_id)
+    display
+  })
+
+  output$analysis_selection_summary <- renderUI({
+    tbl <- analysis_sample_table_data()
+    if (is.null(tbl) || nrow(tbl) == 0L) {
+      return(div(
+        class = "hint-text",
+        "Build or load a Joined HE dataset to choose samples."
+      ))
+    }
+    total <- nrow(tbl)
+    excluded <- length(active_excluded_ids(analysis_filter_selection()))
+    kept <- total - excluded
+    div(
+      class = "upload-status",
+      sprintf("Selected samples: %d / %d (%d excluded).", kept, total, excluded)
+    )
+  })
+
+  output$analysis_sample_table <- DT::renderDataTable({
+    tbl <- analysis_sample_table_data()
+    validate(need(
+      !is.null(tbl) && nrow(tbl) > 0L,
+      "Build or load a Joined HE dataset before selecting samples."
+    ))
+    display <- tbl[, setdiff(names(tbl), "record_id"), drop = FALSE]
+    excluded <- isolate(active_excluded_ids(analysis_filter_selection()))
+    kept_rows <- which(!tbl$record_id %in% excluded)
+    DT::datatable(
+      display,
+      rownames = FALSE,
+      selection = list(mode = "multiple", selected = kept_rows),
+      options = list(scrollX = TRUE, pageLength = 10, ordering = FALSE)
+    )
+  }, server = FALSE)
+
+  analysis_sample_table_proxy <- DT::dataTableProxy("analysis_sample_table")
+
+  # Keep the table's ticked rows in sync with the committed selection, so a
+  # single-record exclude/restore (or Apply) is reflected in the checkboxes
+  # instead of leaving the table showing a stale selection.
+  observeEvent(analysis_filter_selection(), {
+    tbl <- isolate(analysis_sample_table_data())
+    if (is.null(tbl) || nrow(tbl) == 0L) {
+      return(invisible(NULL))
+    }
+    excluded <- active_excluded_ids(analysis_filter_selection())
+    kept_rows <- which(!tbl$record_id %in% excluded)
+    DT::selectRows(analysis_sample_table_proxy, kept_rows)
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$analysis_select_all_samples, {
+    tbl <- isolate(analysis_sample_table_data())
+    req(!is.null(tbl), nrow(tbl) > 0L)
+    DT::selectRows(analysis_sample_table_proxy, seq_len(nrow(tbl)))
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$analysis_clear_all_samples, {
+    DT::selectRows(analysis_sample_table_proxy, NULL)
+  }, ignoreInit = TRUE)
+
+  observeEvent(input$apply_analysis_sample_selection, {
+    tbl <- isolate(analysis_sample_table_data())
+    req(!is.null(tbl), nrow(tbl) > 0L)
+    joined <- isolate(current_joined_source()$analysis_dataset)
+    selected_rows <- isolate(input$analysis_sample_table_rows_selected)
+    all_ids <- tbl$record_id
+    kept_ids <- if (is.null(selected_rows)) {
+      character()
+    } else {
+      all_ids[selected_rows]
+    }
+    # Keep the existing exclude/restore history and only append events for
+    # records whose status actually changes (see update_selection_from_table).
+    next_selection <- update_selection_from_table(
+      isolate(analysis_filter_selection()),
+      all_ids = all_ids,
+      kept_ids = kept_ids,
+      context_fn = function(rid) analysis_record_context(joined, rid)
+    )
+
+    filtered <- apply_filter_selection(joined, next_selection)
+    analysis_filter_selection(next_selection)
+
+    workflow_complete_artifact(
+      "filter_selection",
+      "User analysis selection",
+      sprintf(
+        "Applied the sample-selection table. Selection version %d excludes %d of %d records.",
+        filtered$filter_version,
+        filtered$n_excluded,
+        filtered$n_source
+      )
+    )
+    workflow_complete_artifact(
+      "exclusion_log",
+      "Exclusion and restore log",
+      sprintf("Recorded %d analysis-selection action(s).", filtered$filter_version)
+    )
+    workflow_complete_artifact(
+      "analysis_dataset",
+      "Current analysis selection",
+      sprintf(
+        "Current analysis dataset contains %d of %d records.",
+        filtered$n_kept,
+        filtered$n_source
+      )
+    )
+
+    basic_model_result(new_analysis_model_ui_result(
+      "The analysis selection changed. Run the model again."
+    ))
+    mark_hev_result_stale("The analysis selection changed.")
+
+    showNotification(
+      sprintf(
+        "Applied sample selection: %d kept, %d excluded.",
+        filtered$n_kept,
+        filtered$n_excluded
+      ),
+      type = "message"
+    )
+  }, ignoreInit = TRUE)
+
   commit_analysis_selection <- function(next_selection, action_label) {
     joined <- isolate(current_joined_source()$analysis_dataset)
     current_selection <- isolate(analysis_filter_selection())
@@ -3547,9 +3783,24 @@ function(input, output, session){
   #### coverage hull ----
   
   output$flow_hull <- renderPlot({
+    # WK6-07: Historical Coverage tracks the current Stage 4 sample selection.
+    # Everything, including reading the coverage data, runs inside
+    # safe_server_plot so a missing/unmatched identifier becomes a controlled
+    # user message instead of a raw Shiny error.
     safe_server_plot("Analysis Flow coverage", function() {
-      plot_rngflows(data = current_coverage_data(), flow_stats = c("Q95z_lag0", "Q10z_lag0"),
+      coverage <- current_coverage_data()
+      excluded <- length(active_excluded_ids(analysis_filter_selection()))
+      subtitle <- if (excluded > 0L) {
+        sprintf(
+          "Updated for the current Stage 4 selection: %d excluded sample(s) removed.",
+          excluded
+        )
+      } else {
+        "Showing all samples in the current Joined HE dataset (no Stage 4 exclusions)."
+      }
+      plot_rngflows(data = coverage, flow_stats = c("Q95z_lag0", "Q10z_lag0"),
                     biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
+        labs(subtitle = subtitle) +
         theme(text = element_text(size = 16))
     })
   })
