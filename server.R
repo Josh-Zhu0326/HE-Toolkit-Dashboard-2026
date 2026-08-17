@@ -2350,23 +2350,96 @@ function(input, output, session){
   
   
   ## Map of sites ----
-  
+
+  current_site_map_input <- function(collector) {
+    tryCatch(
+      collector(),
+      error = function(error) NULL,
+      shiny.silent.error = function(error) NULL
+    )
+  }
+
   map_data <- reactive({
-    req(input$import_env)
-    
-    temp.eastnorths <- osg_parse(env_data()$NGR_10_FIG, coord_system = "WGS84") %>% as.data.frame()
-    
-    cbind(env_data(), temp.eastnorths) %>%
-      dplyr::select(AGENCY_AREA, WATER_BODY, CATCHMENT, biol_site_id, lat, lon)
-    
+    build_site_map_points(
+      mapping = current_site_map_input(metadata),
+      environment_data = current_site_map_input(env_data),
+      wq_data = current_site_map_input(wq_site_import_data)
+    )
   })
-  
+
+  output$site_map_status <- renderUI({
+    points <- map_data()
+    if (nrow(points) == 0L) {
+      return(format_validation_message(list(
+        status = "info",
+        messages = "No mapped monitoring-site coordinates are available yet."
+      )))
+    }
+    counts <- table(factor(points$site_type, levels = c("Biology", "Flow", "WQ")))
+    format_validation_message(list(
+      status = "info",
+      messages = sprintf(
+        "Showing %d Biology, %d Flow and %d WQ monitoring site(s).",
+        counts[["Biology"]],
+        counts[["Flow"]],
+        counts[["WQ"]]
+      )
+    ))
+  })
+
   output$map0 <- renderLeaflet({
-    leaflet() %>% 
-      addTiles() %>% 
-      addCircleMarkers(data = map_data(), ~unique(lon), ~unique(lat), 
-                       layerId = ~unique(biol_site_id), popup = ~paste(unique(biol_site_id), "<br>", 
-                                                                       WATER_BODY))
+    points <- map_data()
+    map <- leaflet() |>
+      addTiles()
+    if (nrow(points) == 0L) {
+      return(map |>
+        setView(lng = -2.5, lat = 54.5, zoom = 5))
+    }
+
+    colours <- c(Biology = "#237A4B", Flow = "#2474A6", WQ = "#C77700")
+    for (site_type in names(colours)) {
+      layer <- points[points$site_type == site_type, , drop = FALSE]
+      if (nrow(layer) == 0L) {
+        next
+      }
+      layer$popup <- paste0(
+        "<strong>", htmltools::htmlEscape(site_type), " site</strong><br>",
+        htmltools::htmlEscape(layer$site_id), "<br>",
+        "Coordinates: ", htmltools::htmlEscape(layer$coordinate_source)
+      )
+      map <- map |>
+        addCircleMarkers(
+          data = layer,
+          lng = ~lon,
+          lat = ~lat,
+          layerId = ~paste(site_type, site_id, sep = ":"),
+          group = site_type,
+          popup = ~popup,
+          radius = 7,
+          color = "#FFFFFF",
+          weight = 1.5,
+          fillColor = colours[[site_type]],
+          fillOpacity = 0.9
+        )
+    }
+    map |>
+      addLayersControl(
+        overlayGroups = intersect(c("Biology", "Flow", "WQ"), unique(points$site_type)),
+        options = layersControlOptions(collapsed = FALSE)
+      ) |>
+      addLegend(
+        position = "bottomright",
+        colors = unname(colours[names(colours) %in% points$site_type]),
+        labels = names(colours)[names(colours) %in% points$site_type],
+        title = "Monitoring sites",
+        opacity = 0.9
+      ) |>
+      fitBounds(
+        lng1 = min(points$lon),
+        lat1 = min(points$lat),
+        lng2 = max(points$lon),
+        lat2 = max(points$lat)
+      )
   })
   
   
