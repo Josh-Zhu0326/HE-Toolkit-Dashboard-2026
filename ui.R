@@ -115,6 +115,10 @@ tagList(
         border-left-color: #d9534f;
         background: #fff1f1;
       }
+      .upload-status-local-invalid {
+        border-left-color: #ff9933;
+        background: #fff8ee;
+      }
       .upload-status-info {
         border-left-color: #5c6770;
         background: #f4f6f7;

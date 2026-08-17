@@ -39,7 +39,7 @@ testthat::test_that("valid Local Flow is operational and bypasses the external i
   })
 })
 
-testthat::test_that("extra Local Flow columns never enter the operational source", {
+testthat::test_that("extra Local Flow columns block the operational source", {
   importer_calls <- 0L
   rlang::local_bindings(
     import_dashboard_flow = function(...) {
@@ -57,9 +57,13 @@ testthat::test_that("extra Local Flow columns never enter the operational source
     )
     session$flushReact()
 
-    testthat::expect_identical(local_flow_upload()$validation$status, "warning")
-    testthat::expect_identical(names(flow_data()), c("flow_site_id", "date", "flow"))
-    testthat::expect_identical(flow_data()$flow, 21.5)
+    testthat::expect_identical(local_flow_upload()$validation$status, "error")
+    testthat::expect_match(
+      local_flow_upload()$validation$messages,
+      "Unexpected column(s)",
+      fixed = TRUE
+    )
+    testthat::expect_error(flow_data(), class = "shiny.silent.error")
     testthat::expect_identical(importer_calls, 0L)
   })
 })
@@ -288,7 +292,8 @@ testthat::test_that("replacing Local Flow invalidates Flow statistics and join s
     testthat::expect_false(artifact_is_current(workflow_artifacts()$joined_core))
     testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
     testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
-    testthat::expect_identical(flow_data()$flow, 21.5)
+    testthat::expect_identical(local_flow_upload()$validation$status, "error")
+    testthat::expect_error(flow_data(), class = "shiny.silent.error")
     testthat::expect_error(flow_stats(), class = "shiny.silent.error")
     testthat::expect_false(grepl("Flow statistics calculated", paste(as.character(output$cp_flow), collapse = ""), fixed = TRUE))
     testthat::expect_match(paste(as.character(output$cp_hev), collapse = ""), "Flow stats not yet calculated", fixed = TRUE)
@@ -562,18 +567,25 @@ testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but su
     muffle_interrupted_workflow_promise(session$flushReact())
     testthat::expect_identical(wq_upload()$validation$status, "info")
     testthat::expect_identical(rhs_upload()$validation$status, "info")
-    workflow_complete_artifact("joined_core", "test", "Unrelated core join fixture.")
-
     valid_wq <- testthat::test_path("..", "fixtures", "wq.csv")
     valid_rhs <- testthat::test_path("..", "fixtures", "rhs.csv")
     set_inputs_ignoring_interrupted_promises(
       session,
+      meta_paste = paste(
+        "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id",
+        "291,27090,SW-A4070115,RHS001",
+        "292,27091,SW-A4070116,RHS002",
+        sep = "\n"
+      ),
+      wq_source_mode = "local",
+      rhs_source_mode = "local",
       wq_csv = flow_upload_input(valid_wq),
       rhs_csv = flow_upload_input(valid_rhs)
     )
     session$flushReact()
     testthat::expect_true(artifact_is_current(workflow_artifacts()$wq_input))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
+    workflow_complete_artifact("joined_core", "test", "Unrelated core join fixture.")
     workflow_complete_artifact("joined_enriched", "test", "Optional enrichment fixture.")
 
     set_inputs_ignoring_interrupted_promises(

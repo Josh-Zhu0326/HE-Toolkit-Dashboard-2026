@@ -619,4 +619,14 @@ testthat::test_that("local CSV cards expose the three client-confirmed source mo
   testthat::expect_match(html, "External data only", fixed = TRUE)
   testthat::expect_match(html, "Use local data instead", fixed = TRUE)
   testthat::expect_match(html, "Combine external and local data", fixed = TRUE)
+  testthat::expect_match(html, "Download example CSV", fixed = TRUE)
+})
+
+testthat::test_that("invalid local CSV feedback uses the client-requested orange style", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  server_code <- paste(readLines(file.path(project_root, "server.R"), warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(ui_code, ".upload-status-local-invalid", fixed = TRUE)
+  testthat::expect_match(server_code, "local_upload = TRUE", fixed = TRUE)
 })

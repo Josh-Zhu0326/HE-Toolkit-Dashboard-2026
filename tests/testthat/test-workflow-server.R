@@ -476,39 +476,41 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
       list(
         data.frame(
           flow_site_id = "F1",
-          start_date = as.Date(c("2020-01-01", "2021-01-01", "2022-01-01")),
-          Q95_lag0 = c(1.2, 1.1, 1.0),
-          Q10_lag0 = c(8.1, 8.2, 8.3),
-          Q95z_lag0 = c(-1, 0, 1)
+          win_no = 1:4,
+          start_date = as.Date(c("2020-01-01", "2021-01-01", "2022-01-01", "2023-01-01")),
+          end_date = as.Date(c("2020-12-31", "2021-12-31", "2022-12-31", "2023-12-31")),
+          Q95 = c(1.2, 1.1, 1.0, 0.9),
+          Q10 = c(8.1, 8.2, 8.3, 8.4),
+          Q95z = c(-1, 0.5, -0.25, 1),
+          Q10z = c(1, 0.25, -0.5, -1)
         ),
         data.frame(flow_site_id = "F1", Q95 = 1.1, Q10 = 8.2, Q95z = 0)
       )
     },
-    join_he = function(..., join_type) {
+    join_he = function(..., join_type, lags = 0L) {
       join_calls <<- join_calls + 1L
-      if (identical(join_type, "add_flows")) {
-        return(data.frame(
-          biol_site_id = "B1",
-          sample_id = paste0("S", 1:4),
-          Year = 2020:2023,
-          Q95_lag0 = c(1.2, 1.1, 1.0, 0.9),
-          Q10_lag0 = c(8.1, 8.2, 8.3, 8.4),
-          Q95z_lag0 = c(-1, 0.5, -0.25, 1),
-          LIFE_F_OE = c(0.83, 1.06, 0.97, 1.31)
-        ))
-      }
-      data.frame(
+      result <- data.frame(
         biol_site_id = "B1",
+        flow_site_id = "F1",
         sample_id = paste0("S", 1:4),
-        date = as.Date(c("2020-05-01", "2021-05-01", "2022-05-01", "2023-05-01")),
         Year = 2020:2023,
-        Season = "Spring",
-        win_no_lag0 = 1:4,
-        Q95_lag0 = c(1.2, 1.1, 1.0, 0.9),
-        Q10_lag0 = c(8.1, 8.2, 8.3, 8.4),
-        Q95z_lag0 = c(-1, 0.5, -0.25, 1),
         LIFE_F_OE = c(0.83, 1.06, 0.97, 1.31)
       )
+      if (identical(join_type, "add_biol")) {
+        result$date <- as.Date(c("2020-05-01", "2021-05-01", "2022-05-01", "2023-05-01"))
+        result$Season <- "Spring"
+      }
+      for (lag in as.integer(lags)) {
+        suffix <- paste0("_lag", lag)
+        lagged_window <- 1:4 - lag
+        lagged_window[lagged_window < 1L] <- NA_integer_
+        result[[paste0("win_no", suffix)]] <- lagged_window
+        result[[paste0("Q95", suffix)]] <- c(1.2, 1.1, 1.0, 0.9)
+        result[[paste0("Q10", suffix)]] <- c(8.1, 8.2, 8.3, 8.4)
+        result[[paste0("Q95z", suffix)]] <- c(-1, 0.5, -0.25, 1)
+        result[[paste0("Q10z", suffix)]] <- c(1, 0.25, -0.5, -1)
+      }
+      result
     },
     plot_sitepca_dash = function(...) {
       ggplot2::ggplot(data.frame(x = 1, y = 1), ggplot2::aes(x, y))

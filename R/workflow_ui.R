@@ -890,7 +890,7 @@ local_csv_upload_card <- function(dataset_id,
       class = "download-row",
       shiny::downloadButton(
         paste0("download_", dataset_id, "_csv_template"),
-        "Download CSV template"
+        "Download example CSV"
       )
     ),
     shinyWidgets::radioGroupButtons(

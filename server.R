@@ -796,134 +796,6 @@ function(input, output, session){
     )
   })
 
-  # WQ/RHS UPLOAD DEMO ----
-  read_uploaded_csv_safely <- function(upload, label) {
-    if (is.null(upload)) {
-      return(list(
-        data = NULL,
-        status = "info",
-        messages = paste0("No ", label, " file uploaded yet.")
-      ))
-    }
-
-    result <- read_dashboard_csv(upload$datapath, paste0("Your ", label, " file"))
-    if (!identical(result$status, "success")) {
-      return(result)
-    }
-
-    list(data = result$data, status = "ok", messages = character(0))
-  }
-
-  validate_wq_upload <- function(df) {
-    if (is.null(df)) {
-      return(list(status = "info", messages = "No WQ file uploaded yet."))
-    }
-
-    if (nrow(df) == 0 || ncol(df) == 0) {
-      return(list(
-        status = "error",
-        messages = "Your WQ file appears to be empty. Please upload a CSV file with at least one data row."
-      ))
-    }
-
-    canonical <- normalise_wq_preview_records(df)
-    required <- c("wq_site_id", "date_time", "det_id", "result")
-    missing <- setdiff(required, names(canonical))
-    if (length(missing) > 0L) {
-      return(list(
-        status = "error",
-        messages = paste0(
-          "Your WQ file is missing required field(s): ",
-          paste(missing, collapse = ", "),
-          ". Use the standard WQ long-data fields before uploading again."
-        )
-      ))
-    }
-
-    invalid_det_id <- is.na(canonical$det_id) | !grepl("^[0-9]{4}$", canonical$det_id)
-    if (any(invalid_det_id)) {
-      return(list(
-        status = "error",
-        messages = "The WQ det_id field contains missing or invalid values. Use four-digit determinand IDs such as 0180 or 0111."
-      ))
-    }
-    parsed_dates <- wq_rhs_parse_date(canonical$date_time)
-    if (any(is.na(parsed_dates))) {
-      return(list(
-        status = "error",
-        messages = "The WQ date_time field contains missing or invalid dates. Use complete observation dates before uploading again."
-      ))
-    }
-
-    list(
-      status = "success",
-      messages = c(
-        "Your WQ file was validated against the standard site, date, determinand and result fields.",
-        "This preview shows the first rows of your uploaded file. No modelling has been run yet."
-      )
-    )
-  }
-
-  validate_rhs_upload <- function(df) {
-    if (is.null(df)) {
-      return(list(status = "info", messages = "No RHS file uploaded yet."))
-    }
-
-    if (nrow(df) == 0 || ncol(df) == 0) {
-      return(list(
-        status = "error",
-        messages = "Your RHS file appears to be empty. Please upload a CSV file with at least one data row."
-      ))
-    }
-
-    names_lower <- tolower(names(df))
-    messages <- "Your RHS file was uploaded successfully."
-    status <- "success"
-
-    id_cols <- "rhs_survey_id"
-    if (!any(id_cols %in% names_lower)) {
-      return(list(
-        status = "error",
-        messages = paste(
-          "Your RHS file is missing the required rhs_survey_id column.",
-          "Add rhs_survey_id, then upload the file again."
-        )
-      ))
-    }
-
-    rhs_metric_like <- stringr::str_detect(
-      names_lower,
-      "rhs|hms|hqa|score|class|metric|descriptor|habitat|channel|bank|substrate|vegetation|flow|poach|berm|bridge|ford"
-    )
-    non_identifier_cols <- setdiff(names_lower, id_cols)
-
-    if (!any(rhs_metric_like) && length(non_identifier_cols) == 0) {
-      status <- "warning"
-      messages <- c(
-        messages,
-        "Your RHS file does not clearly contain an RHS metric or descriptor column. Please add habitat metrics or descriptors such as HMS, HQA, channel, bank, substrate, or vegetation fields."
-      )
-    }
-
-    messages <- c(
-      messages,
-      "This preview shows the first rows of your uploaded file. No modelling has been run yet."
-    )
-
-    list(status = status, messages = messages)
-  }
-
-  dc11_csv_upload <- reactive({
-    read_result <- read_uploaded_csv_safely(input$dc11_csv, "DC-11")
-    validation <- if (identical(read_result$status, "ok")) {
-      validate_dc11_dataset(read_result$data, input$dc11_csv_sheet)
-    } else {
-      list(status = read_result$status, messages = read_result$messages, issues = dc11_empty_issues())
-    }
-
-    list(data = read_result$data, validation = validation)
-  })
-
   dc11_workbook_upload <- reactive({
     upload <- input$dc11_workbook
     if (is.null(upload)) {
@@ -974,11 +846,7 @@ function(input, output, session){
       output[[paste0("download_", current_type, "_csv_template")]] <- downloadHandler(
         filename = function() paste0("HE_Toolkit_", current_type, "_template.csv"),
         content = function(file) {
-          columns <- local_dataset_contracts()[[current_type]]$required
-          template <- as.data.frame(
-            stats::setNames(replicate(length(columns), character(), simplify = FALSE), columns),
-            stringsAsFactors = FALSE
-          )
+          template <- local_dataset_template_data(current_type)
           readr::write_csv(template, file)
         },
         contentType = "text/csv"
@@ -986,13 +854,17 @@ function(input, output, session){
     })
   }
 
-  format_validation_message <- function(result) {
+  format_validation_message <- function(result, local_upload = FALSE) {
     status <- result$status
     if (isTRUE(status == "ok")) {
       status <- "success"
     }
 
-    class_name <- paste("upload-status", paste0("upload-status-", status))
+    classes <- c("upload-status", paste0("upload-status-", status))
+    if (isTRUE(local_upload) && identical(status, "error")) {
+      classes <- c(classes, "upload-status-local-invalid")
+    }
+    class_name <- paste(classes, collapse = " ")
     tags$div(
       class = class_name,
       tags$ul(lapply(result$messages, tags$li))
@@ -1042,10 +914,11 @@ function(input, output, session){
   observeEvent(wq_upload(), {
     upload <- wq_upload()
     mode <- normalise_local_source_mode(input$wq_source_mode, validated_local_upload_data(upload))
-    req(identical(mode, "local"))
-    req(!is.null(upload$data), nrow(upload$data) > 0L)
-    req(upload$validation$status %in% c("success", "warning"))
-    if (exists("wq_site_import_data", envir = server_context, inherits = FALSE)) {
+    req(source_mode_uses_local(mode))
+    req(!identical(upload$validation$status, "info"))
+    if (upload$validation$status %in% c("success", "warning") &&
+        identical(mode, "local") &&
+        exists("wq_site_import_data", envir = server_context, inherits = FALSE)) {
       get("wq_site_import_data", envir = server_context)(NULL)
     }
     if (exists("reset_wq_contract_summary", envir = server_context, inherits = FALSE)) {
@@ -1053,45 +926,14 @@ function(input, output, session){
         "The local WQ upload changed. Rebuild the WQ contract summary from the current mapped records."
       )
     }
-    workflow_set_artifact(
-      "wq_input",
-      if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local WQ file",
-      history_summary = "Validated local WQ upload.",
-      invalidate_downstream = TRUE
-    )
-  })
-
-  observeEvent(rhs_upload(), {
-    upload <- rhs_upload()
-    mode <- normalise_local_source_mode(input$rhs_source_mode, validated_local_upload_data(upload))
-    req(identical(mode, "local"))
-    req(!is.null(upload$data), nrow(upload$data) > 0L)
-    req(upload$validation$status %in% c("success", "warning"))
-    workflow_set_artifact(
-      "rhs_input",
-      if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local RHS file",
-      history_summary = "Validated local RHS upload.",
-      invalidate_downstream = TRUE
-    )
   })
 
   output$wq_validation_status <- renderUI({
-    format_validation_message(wq_upload()$validation)
+    format_validation_message(wq_upload()$validation, local_upload = TRUE)
   })
 
   output$rhs_validation_status <- renderUI({
-    format_validation_message(rhs_upload()$validation)
-  })
-
-  output$dc11_validation_status <- renderUI({
-    result <- dc11_csv_upload()$validation
-    messages <- c(
-      result$messages,
-      "This checkpoint reports validation only. It has not changed the active import, join, model, or HEV data."
-    )
-    format_validation_message(list(status = result$status, messages = messages))
+    format_validation_message(rhs_upload()$validation, local_upload = TRUE)
   })
 
   output$dc11_workbook_validation_status <- renderUI({
@@ -1152,25 +994,6 @@ function(input, output, session){
     sheet_name <- input$dc11_workbook_preview_sheet
     req(sheet_name %in% names(sheets))
     head(sheets[[sheet_name]], 10)
-  }, options = list(scrollX = TRUE, pageLength = 10))
-
-  output$dc11_validation_issues <- DT::renderDataTable({
-    issues <- dc11_csv_upload()$validation$issues
-    if (is.null(issues) || nrow(issues) == 0) {
-      return(data.frame(
-        sheet = input$dc11_csv_sheet,
-        severity = "success",
-        code = "passed",
-        message = "No DC-11 issues found.",
-        stringsAsFactors = FALSE
-      ))
-    }
-    issues
-  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
-
-  output$dc11_preview <- DT::renderDataTable({
-    req(dc11_csv_upload()$data)
-    head(dc11_csv_upload()$data, 10)
   }, options = list(scrollX = TRUE, pageLength = 10))
 
   output$wq_preview <- DT::renderDataTable({
@@ -1830,68 +1653,160 @@ function(input, output, session){
     NULL
   }
 
-  mapped_wq_plot_data <- reactive({
-    local_upload <- wq_upload()
-    mode <- normalise_local_source_mode(input$wq_source_mode, validated_local_upload_data(local_upload))
-    local_data <- if (local_upload$validation$status %in% c("success", "warning")) {
-      map_local_supporting_data(
-        normalise_wq_preview_records(local_upload$data),
-        "wq"
-      )
+  supporting_source_resolution <- function(local_upload, mode, dataset_type,
+                                            mapping_type, normalise_local,
+                                            external_data) {
+    raw_local <- if (local_upload$validation$status %in% c("success", "warning")) {
+      normalise_local(local_upload$data)
     } else {
       NULL
     }
+    local_data <- if (source_data_available(raw_local)) {
+      map_local_supporting_data(raw_local, mapping_type)
+    } else {
+      NULL
+    }
+    site_id <- if (identical(mapping_type, "wq")) "wq_site_id" else "rhs_survey_id"
+    mapped_site_ids <- if (source_data_available(local_data) &&
+                           all(c("biol_site_id", site_id) %in% names(local_data))) {
+      unique(as.character(local_data[[site_id]])[local_nonblank(local_data$biol_site_id)])
+    } else {
+      character()
+    }
+    local_match <- if (source_data_available(raw_local) && site_id %in% names(raw_local)) {
+      as.character(raw_local[[site_id]]) %in% mapped_site_ids
+    } else {
+      logical()
+    }
+    local_input_rows <- if (source_data_available(raw_local)) nrow(raw_local) else 0L
+    local_matched_rows <- sum(local_match)
+    local_unmatched_rows <- local_input_rows - local_matched_rows
+
+    if (source_mode_uses_local(mode) && local_input_rows > 0L &&
+        local_unmatched_rows > 0L) {
+      return(list(
+        status = "blocked",
+        messages = sprintf(
+          "%s local mapping matched %d of %d record(s); %d record(s) require a valid biol_site_id to %s site mapping.",
+          dataset_type,
+          local_matched_rows,
+          local_input_rows,
+          local_unmatched_rows,
+          toupper(mapping_type)
+        ),
+        data = NULL,
+        provenance = list(
+          mode = mode,
+          external_rows = if (source_data_available(external_data)) nrow(external_data) else 0L,
+          local_rows = local_input_rows,
+          local_matched_rows = local_matched_rows,
+          local_unmatched_rows = local_unmatched_rows,
+          output_rows = 0L
+        )
+      ))
+    }
+    resolved <- resolve_local_data_source(external_data, local_data, mode, dataset_type)
+    resolved$provenance$local_input_rows <- local_input_rows
+    resolved$provenance$local_matched_rows <- local_matched_rows
+    resolved$provenance$local_unmatched_rows <- local_unmatched_rows
+    if (identical(resolved$status, "success")) {
+      resolved$data <- set_source_resolution_provenance(resolved$data, resolved$provenance)
+    }
+    resolved
+  }
+
+  wq_source_resolution <- reactive({
+    local_upload <- wq_upload()
+    mode <- normalise_local_source_mode(input$wq_source_mode, validated_local_upload_data(local_upload))
     external_data <- if (source_mode_uses_external(mode)) {
       wq_site_import_data()
     } else {
       NULL
     }
-    resolved <- resolve_local_data_source(external_data, local_data, mode, "WQ")
-    validate(need(identical(resolved$status, "success"), paste(resolved$messages, collapse = " ")))
-    normalise_wq_preview_records(resolved$data)
+    supporting_source_resolution(
+      local_upload = local_upload,
+      mode = mode,
+      dataset_type = "WQ",
+      mapping_type = "wq",
+      normalise_local = normalise_wq_preview_records,
+      external_data = external_data
+    )
   })
 
-  mapped_rhs_plot_data <- reactive({
+  mapped_wq_plot_data <- reactive({
+    resolved <- wq_source_resolution()
+    validate(need(identical(resolved$status, "success"), paste(resolved$messages, collapse = " ")))
+    set_source_resolution_provenance(
+      normalise_wq_preview_records(resolved$data),
+      resolved$provenance
+    )
+  })
+
+  rhs_source_resolution <- reactive({
     local_upload <- rhs_upload()
     mode <- normalise_local_source_mode(input$rhs_source_mode, validated_local_upload_data(local_upload))
-    local_data <- if (local_upload$validation$status %in% c("success", "warning")) {
-      normalised <- tryCatch(
-        normalise_rhs_records(local_upload$data),
-        error = function(e) local_upload$data
-      )
-      map_local_supporting_data(normalised, "rhs")
-    } else {
-      NULL
-    }
     external_data <- if (source_mode_uses_external(mode)) {
       rhs_site_import_data()
     } else {
       NULL
     }
-    resolved <- resolve_local_data_source(external_data, local_data, mode, "RHS")
+    supporting_source_resolution(
+      local_upload = local_upload,
+      mode = mode,
+      dataset_type = "RHS",
+      mapping_type = "rhs",
+      normalise_local = function(data) {
+        tryCatch(normalise_rhs_records(data), error = function(e) data)
+      },
+      external_data = external_data
+    )
+  })
+
+  mapped_rhs_plot_data <- reactive({
+    resolved <- rhs_source_resolution()
     validate(need(identical(resolved$status, "success"), paste(resolved$messages, collapse = " ")))
     resolved$data
   })
 
-  observeEvent(mapped_wq_plot_data(), {
-    data <- mapped_wq_plot_data()
-    req(source_data_available(data))
-    mode <- normalise_local_source_mode(input$wq_source_mode, validated_local_upload_data(wq_upload()))
+  apply_supporting_source_resolution_state <- function(resolution, upload, artifact_id,
+                                                       dataset_type, mode_input) {
+    resolved <- resolution()
+    upload_result <- upload()
+    local_data <- validated_local_upload_data(upload_result)
+    attempted <- !identical(upload_result$validation$status, "info") ||
+      resolved$provenance$external_rows > 0L
+    if (!attempted) {
+      return(invisible(NULL))
+    }
+    mode <- normalise_local_source_mode(mode_input(), local_data)
+    if (!identical(resolved$status, "success")) {
+      workflow_set_artifact(
+        artifact_id,
+        "blocked",
+        blocking_reason = paste(resolved$messages, collapse = " "),
+        next_action = "Provide every required source and a valid site mapping.",
+        invalidate_downstream = TRUE
+      )
+      return(invisible(NULL))
+    }
     workflow_complete_artifact(
-      "wq_input",
-      paste("WQ", mode, "source"),
-      sprintf("Resolved %d mapped WQ record(s).", nrow(data))
+      artifact_id,
+      paste(dataset_type, mode, "source"),
+      summarise_source_resolution(resolved$provenance, dataset_type)
+    )
+  }
+
+  observeEvent(wq_source_resolution(), {
+    apply_supporting_source_resolution_state(
+      wq_source_resolution, wq_upload, "wq_input", "WQ",
+      function() input$wq_source_mode
     )
   })
 
-  observeEvent(mapped_rhs_plot_data(), {
-    data <- mapped_rhs_plot_data()
-    req(source_data_available(data))
-    mode <- normalise_local_source_mode(input$rhs_source_mode, validated_local_upload_data(rhs_upload()))
-    workflow_complete_artifact(
-      "rhs_input",
-      paste("RHS", mode, "source"),
-      sprintf("Resolved %d mapped RHS record(s).", nrow(data))
+  observeEvent(rhs_source_resolution(), {
+    apply_supporting_source_resolution_state(
+      rhs_source_resolution, rhs_upload, "rhs_input", "RHS",
+      function() input$rhs_source_mode
     )
   })
 
@@ -2020,50 +1935,6 @@ function(input, output, session){
     read_local_contract_upload(input$local_flow_csv, "flow", "Local Flow")
   })
 
-  observeEvent(local_biology_upload(), {
-    upload <- local_biology_upload()
-    mode <- normalise_local_source_mode(input$biology_source_mode, validated_local_upload_data(upload))
-    req(identical(mode, "local"))
-    req(!is.null(upload$data), nrow(upload$data) > 0L)
-    req(upload$validation$status %in% c("success", "warning"))
-    workflow_set_artifact(
-      "biology_input",
-      if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local Biology file",
-      history_summary = "Validated local Biology upload.",
-      invalidate_downstream = TRUE
-    )
-  })
-
-  observeEvent(local_environment_upload(), {
-    upload <- local_environment_upload()
-    mode <- normalise_local_source_mode(input$environment_source_mode, validated_local_upload_data(upload))
-    req(identical(mode, "local"))
-    req(!is.null(upload$data), nrow(upload$data) > 0L)
-    req(upload$validation$status %in% c("success", "warning"))
-    workflow_set_artifact(
-      "environment_input",
-      if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local Environmental file",
-      history_summary = "Validated local Environmental upload.",
-      invalidate_downstream = TRUE
-    )
-  })
-
-  observeEvent(local_flow_upload(), {
-    upload <- local_flow_upload()
-    mode <- normalise_local_source_mode(input$flow_source_mode, validated_local_upload_data(upload))
-    req(identical(mode, "local"))
-    req(local_flow_is_operational(upload), !is.null(upload$data), nrow(upload$data) > 0L)
-    workflow_set_artifact(
-      "flow_input",
-      if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local Flow file",
-      history_summary = "Validated local Flow upload.",
-      invalidate_downstream = TRUE
-    )
-  })
-
   observeEvent(input$local_flow_csv, {
     invalidate_flow_derived_state(reset_external = FALSE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
@@ -2170,15 +2041,15 @@ function(input, output, session){
   }, ignoreInit = FALSE, priority = 100)
 
   output$local_biology_status <- renderUI({
-    format_validation_message(local_biology_upload()$validation)
+    format_validation_message(local_biology_upload()$validation, local_upload = TRUE)
   })
 
   output$local_environment_status <- renderUI({
-    format_validation_message(local_environment_upload()$validation)
+    format_validation_message(local_environment_upload()$validation, local_upload = TRUE)
   })
 
   output$local_flow_status <- renderUI({
-    format_validation_message(local_flow_upload()$validation)
+    format_validation_message(local_flow_upload()$validation, local_upload = TRUE)
   })
 
   output$local_biology_preview <- DT::renderDataTable({
@@ -2278,7 +2149,7 @@ function(input, output, session){
     workflow_complete_artifact(
       "biology_input",
       paste("Biology", mode, "source"),
-      sprintf("Resolved %d Biology record(s).", nrow(imported))
+      summarise_source_resolution(source_resolution_provenance(imported), "Biology")
     )
   })
   
@@ -2371,7 +2242,7 @@ function(input, output, session){
     workflow_complete_artifact(
       "environment_input",
       paste("Environmental", mode, "source"),
-      sprintf("Resolved %d environmental record(s).", nrow(imported))
+      summarise_source_resolution(source_resolution_provenance(imported), "Environmental")
     )
   })
   
@@ -2502,7 +2373,7 @@ function(input, output, session){
     workflow_complete_artifact(
       "flow_input",
       paste("Flow", mode, "source"),
-      sprintf("Resolved %d Flow record(s).", nrow(data))
+      summarise_source_resolution(source_resolution_provenance(data), "Flow")
     )
   })
   
@@ -3240,6 +3111,7 @@ function(input, output, session){
     
     result <- join_he(biol_data = biol_all(), flow_stats = flowstats_1, mapping = mapping,
                       lags = request$settings$lags, method = request$settings$method, join_type = "add_flows")
+    result <- normalise_joined_flow_contract(result, flowstats_1, request$settings$lags)
     req(nrow(result) > 0L)
     join_revision(request)
     result
@@ -3916,6 +3788,7 @@ function(input, output, session){
     
     result <- join_he(biol_data = biol_data1, flow_stats = flowstats_1, mapping = mapping,
                       lags = request$settings$lags, method = request$settings$method, join_type = "add_biol")
+    result <- normalise_joined_flow_contract(result, flowstats_1, request$settings$lags)
     result
     
   })

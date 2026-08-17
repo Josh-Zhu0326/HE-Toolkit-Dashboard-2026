@@ -417,6 +417,8 @@ dissolved_oxygen_p10, dissolved_oxygen_record_count,
 HMSRBB, HQA, matching_notes
 ```
 
+- Each `flow_window_duration_lagX` value is the inclusive number of calendar days from the corresponding start date through the end date. A window with unavailable start or end provenance has an unavailable duration.
+
 - `dissolved_oxygen_p10` and its count column may be reserved in the schema, but they must remain `not_ready` and must not contain guessed values until `OPEN-02` is closed.
 - `sampling_year_centered` is not stored in `joined_core` or `joined_enriched`. It is derived from the current `analysis_dataset` at modelling time using DEC-09, so filtering may change the centring reference without modifying either joined layer. The centred value, reference midpoint, valid-year range, and fitted formula must be retained in model provenance and model downloads.
 - `field_dictionary` and `validation_rules` are metadata sheets and do not participate in observation row-binding; their internal order is managed by their corresponding versioned table structures.
