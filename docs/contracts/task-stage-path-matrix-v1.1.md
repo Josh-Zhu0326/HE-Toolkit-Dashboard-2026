@@ -1,6 +1,8 @@
 # Task-Stage Path Matrix — v1.1
 
-> Original baseline: [Goal-Stage Path Matrix v1](goal-stage-path-matrix-v1.md), preserved unchanged
+> Historical-baseline notice: this file preserves the frozen v1.1 paths. New work is governed by the [v2.0 matrix](task-stage-path-matrix-v2.0.md). Do not rewrite the historical rules below to make them appear retrospectively current.
+
+> Original baseline: [Goal-Stage Path Matrix v1.0](goal-stage-path-matrix-v1.0.md), preserved unchanged
 > Controlled update date: 21 July 2026
 > Status: Changes requested
 > Owner: Lin (UX/Workflow)
@@ -85,10 +87,10 @@ Internal artifact names remain stable implementation terms; the UI uses the corr
 | Concern | Authority |
 |---|---|
 | Client wording, scope, and extension decisions | [Client Decision Log](../decisions/client-decision-log-v1.md) |
-| Data layers, validation, duplicate handling, and source history | [Data Contract](data-contract-v1.md); the referenced v1.1 amendment is not present as a standalone repository file |
+| Data layers, validation, duplicate handling, and source history | [Data Contract v1.0](data-contract-v1.0.md) |
 | Artifact dependencies, runtime states, and invalidation | [Dependency/State Matrix v1.1](dependency-state-matrix-v1.1.md) |
-| Model eligibility and failure behaviour | [Modelling Contract](modelling-contract-v1.md) |
-| Requirements, ownership, and test evidence | [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md) |
+| Model eligibility and failure behaviour | [Modelling Contract v1.0](modelling-contract-v1.0.md) |
+| Requirements, ownership, and test evidence | [Requirement Traceability Matrix v1.0](requirement-traceability-matrix-v1.0.md) |
 
 Where another contract conflicts with this Task path after 21 July, record the conflict and resolve it through controlled change; do not silently maintain two path definitions.
 

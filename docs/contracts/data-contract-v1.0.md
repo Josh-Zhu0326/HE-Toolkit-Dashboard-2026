@@ -6,17 +6,19 @@
 >
 > Status: Frozen v1 with controlled v1.1 HEV addendum
 >
+> Historical-baseline notice: this file preserves the frozen v1/v1.1 contract. New work affected by `DEC-39`–`DEC-44` and `DEC-46` is governed by the [frozen v2.0 contract](data-contract-v2.0.md) for its stated scope. Do not edit the historical rules below to make them appear retrospectively current.
+>
 > Owner: Di (Data Pipeline)
 >
 > Reviewer: Benyu (QA/Reproducibility)
 > Decision source: [Client Decision Log](../decisions/client-decision-log-v1.md)
-> Traceability source: [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
+> Traceability source: [Requirement Traceability Matrix v1.0](requirement-traceability-matrix-v1.0.md)
 
 ## 1. Purpose and Scope
 
 This document is the system-level data contract for Dashboard v1. It aligns the core data semantics used by the template, validation, import, joining, filtering, modelling, and downloads. Its purpose is to eliminate conflicts among the legacy template, legacy helpers, UI guidance, and the latest client decisions.
 
-This document freezes only system-level invariants that an individual module must not change independently. The complete field dictionary, units, types, allowed ranges, mixed-model data thresholds, and detailed UI wording will be frozen separately in the data dictionary, validation specification, and the [modelling contract](modelling-contract-v1.md).
+This document freezes only system-level invariants that an individual module must not change independently. The complete field dictionary, units, types, allowed ranges, mixed-model data thresholds, and detailed UI wording will be frozen separately in the data dictionary, validation specification, and the [modelling contract](modelling-contract-v1.0.md).
 
 ## 2. Global Execution Rules
 
@@ -494,10 +496,10 @@ This document may move from a review baseline to `Frozen v1` only when all of th
 - Complete authoritative units, allowed values, and conditional-validation metadata for environmental fields and other non-WQ measurement fields.
 - The exact `det_id`, canonical name, and unit for dissolved-oxygen P10, managed by `OPEN-02`.
 - Whether CSV fallback enters formal v1 acceptance.
-- Minimum site/sample thresholds and singular-fit/non-convergence behaviour for mixed-effects models, currently tracked in the [modelling-contract review baseline](modelling-contract-v1.md).
+- Minimum site/sample thresholds and singular-fit/non-convergence behaviour for mixed-effects models, currently tracked in the [modelling-contract review baseline](modelling-contract-v1.0.md).
 - Detailed warning/error wording, UI layout, and checkpoint styling.
 
-These items must be frozen in the applicable data dictionary, validation specification, `OPEN-02`, `OPEN-03`, `OPEN-06`, or [modelling contract](modelling-contract-v1.md). Implementers must not decide them implicitly in code.
+These items must be frozen in the applicable data dictionary, validation specification, `OPEN-02`, `OPEN-03`, `OPEN-06`, or [modelling contract](modelling-contract-v1.0.md). Implementers must not decide them implicitly in code.
 
 ## 7. Traceability Summary
 

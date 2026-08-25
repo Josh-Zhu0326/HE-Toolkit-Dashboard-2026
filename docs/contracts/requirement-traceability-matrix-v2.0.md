@@ -1,0 +1,101 @@
+# Requirement Traceability Matrix — v2.0
+
+> Baseline date: 25 August 2026  
+> Status: **Controlled v2.0 baseline**  
+> Historical baseline: [RTM](requirement-traceability-matrix-v1.0.md)  
+> Decision authority: [Client Decision Log v1.3](../decisions/client-decision-log-v1.md)  
+> Contracts: [Data Contract v2.0](data-contract-v2.0.md) and [Modelling Contract v2.0](modelling-contract-v2.0.md)  
+> Owner: Lin (Modelling/Evaluation); reviewer: Zhaohang (Documentation/Client)
+
+## 1. Usage rules
+
+- Every active requirement traces to a `DEC-*` entry and objective acceptance evidence.
+- Status is `Not started`, `Partial`, `Blocked`, or `Verified`; planned evidence is not passed evidence.
+- `Verified` requires reproducible automated or controlled manual evidence and a retained PR/commit or test record.
+- Superseded rows remain in Section 3 for history and are excluded from the status summary.
+- Owners and reviewers remain distinct; implementation must not resolve an open scientific or data-policy item implicitly.
+
+## 2. Current matrix
+
+| RTM ID | Decision | Stage / scope | Current requirement | Acceptance criteria | Evidence / remaining gap | Owner | Reviewer | Status |
+|---|---|---|---|---|---|---|---|---|
+| `RTM-01` | `DEC-40`, `DEC-44` | Stage 1 — Local import | Use one separate CSV for each applicable Biology, site-environmental, daily-Flow, WQ, and RHS input; XLSX is not required for v2.0 acceptance. | Each type has its own example/template and independent validation; missing non-applicable or optional WQ/RHS files do not block the Task; errors identify the file and field. | Five templates, schema fixtures, upload tests, and Task-path tests planned. | Di | Benyu | Not started |
+| `RTM-02` | `DEC-02` | Stages 1–2 — Biology | Require usable values in at least one supported biological index. | A file with one supported index passes; a file with none is blocked and lists accepted fields. | Existing v1 acceptance retained; schema tests planned. | Di | Benyu | Not started |
+| `RTM-03` | `DEC-39`, `DEC-46` | Stages 2–3–5 — Flow fields | Support Q10/Q95 raw and Z-score fields for requested lags `0,1,3,6,12`; Q50 is outside the default joined/model set. | Requested lag fields and window provenance are produced; unsupported lags are rejected; Q95 model eligibility follows `RTM-21`. | Existing code covers only some lag-0/1 fields; full-lag fixtures planned. | Di | Benyu | Partial |
+| `RTM-04` | `DEC-04` | Stage 1 — WQ schema | Exclude `area` from schema, analysis, modelling, and outputs. | Extra `area` is reported as unsupported and never used. | Existing importer omits `area`; regression test planned. | Di | Benyu | Partial |
+| `RTM-05` | `DEC-05`, `DEC-24`, `DEC-42` | Stage 2 — WQ summary | Build WQ summaries for the inclusive `Y-2` through `Y` window; the earliest selectable start is `2000-01-01`. | Invalid/earlier boundaries block; excluded earlier records are counted; orthophosphate mean and ammonia P90 match reference results; DO remains blocked by `OPEN-02`. | Boundary and determinand fixtures planned. | Di | Benyu | Not started |
+| `RTM-06` | `DEC-06`, `DEC-24` | Stages 2–3 — WQ cleaning | Use `value / 2` for below-detection observations and preserve original value, unit, qualifier, and reason. | Transformed and ordinary fixtures match independent calculations and retain provenance. | Tests planned. | Di | Benyu | Not started |
+| `RTM-07` | `DEC-07` | Stage 4 — Refinement | Filtering changes only `analysis_dataset` and `exclusion_log`; upstream datasets remain unchanged. | Row/content checks prove upstream immutability; exclusions and restoration are traceable and mark models stale. | Tests planned. | Lin | Di | Not started |
+| `RTM-08A` | `DEC-45` | Stage 5 — Single-site model | Use `mgcv::gam()` with no site-level term for one valid Biology site. | Only the single-site GAM path is offered; the result satisfies the modelling v2.0 output/provenance contract. | Existing `lm()` evidence does not verify the new GAM path; tests planned. | Lin | Di | Not started |
+| `RTM-08B` | `DEC-45` | Stage 5 — Multiple-site model | Use `mgcv::gam()` with only a reviewed site-level structure; never silently fall back to a pooled or single-site model. | Formula, exclusions, state, diagnostics, and provenance are returned; failed/ineligible fits remain explicit. | `OPEN-08` blocks verified formulas, thresholds, and scientific reference tests. | Lin | Di | Blocked |
+| `RTM-09` | `DEC-09`, `DEC-45` | Stage 5 — Builder | Enforce the five-step builder: one receptor; up to two Flow, one WQ, and one RHS predictor; optional year/season; up to two supported interactions. | UI/server limits match; unsupported terms are rejected; selected year is midpoint-centred and recorded. | Current basic model provides only partial predecessor evidence; builder tests planned. | Lin | Di | Partial |
+| `RTM-10` | `DEC-45` | Stage 5 — Multiple-site structure | Permit only reviewed site-intercept, year-by-site, or selected-Flow-by-site structures expressed as valid `mgcv` terms. | Only approved structures appear in UI and formula construction; other structures are rejected. | Exact terms and scientific criteria remain under `OPEN-08`. | Lin | Di | Blocked |
+| `RTM-11` | `DEC-11` | Stages 1–3 — RHS | Use `rhs_survey_id` as the sole internal RHS identifier; allow `Survey.ID` only as an explicit ingestion-boundary rename. | Legacy/dual identifier cases are rejected as contracted; internal data and outputs retain only `rhs_survey_id`. | Helper and unit-test evidence exists; end-to-end provenance remains pending. | Di | Benyu | Partial |
+| `RTM-12` | `DEC-12` | Stages 1–2 — Flow source | Try HDE first and use NRFA only for missing coverage or failure, recording reason and actual source. | HDE success, NRFA fallback, and double failure produce deterministic states and provenance. | Source support exists; automatic fallback evidence remains incomplete. | Di | Benyu | Partial |
+| `RTM-13` | `DEC-13` | QA — WQ performance | Maintain deterministic 5/10/20/49-site fixtures; 49 sites are stress/performance only. | Fixed seed reproduces each tier and stress results do not control ordinary usability acceptance. | Historical 49-site timing exists; fixed fixtures pending. | Benyu | Bo | Partial |
+| `RTM-15` | `DEC-15`, `DEC-40` | Stage 1 — Daily Flow CSV | Local daily Flow contains only `flow_site_id`, `date`, and `flow`; `flow_input` is not required in this file. | The three-field file passes and missing/unsafe required fields block only that file with actionable feedback. | Template exists; current fixture/helper still needs alignment. | Di | Benyu | Partial |
+| `RTM-16` | `DEC-16` | Stages 1–2 — O:E | Users do not upload O:E; the Dashboard calculates it from validated Biology/environmental inputs. | Templates expose no O:E input; uploaded O:E is unsupported and cannot replace calculated output. | Existing RICT/O:E path is partial evidence; regression tests pending. | Di | Benyu | Partial |
+| `RTM-17` | `DEC-17`, `DEC-40` | Stage 1 — Environmental input | Local CSV uses `NGR_10_FIG`; the inherited HE Toolkit/Explorer interface may require `NGR_PREFIX`. Treat them as boundary-specific fields and do not silently alias them. | Each ingestion path validates its contracted field; any explicit adapter records the mapping; alkalinity proxy rules remain enforced. | Boundary-specific compatibility test and adapter decision remain pending. | Di | Benyu | Partial |
+| `RTM-18` | `DEC-18`, `DEC-24`, `DEC-43` | Stage 1 — WQ/RHS schema | WQ requires four-character `det_id`; WQ and RHS inputs do not require coordinates. | ID padding/conflicts are tested; standard WQ/RHS outputs contain no required coordinate fields. | Current import/mapping is partial; v2.0 schema tests pending. | Di | Benyu | Not started |
+| `RTM-19` | `DEC-19` | Stage 3 — Build HE Dataset | Build `joined_core` before optional `joined_enriched`; enrichment failure must not invalidate the core. | Core state/content survives enrichment failure and each revision is traceable. | A predecessor join exists; independent state tests pending. | Di | Benyu | Partial |
+| `RTM-20` | `DEC-20` | Stages 1–3–5 — RHS field | Apply one-way `HMS.Score` to `HMSRBB` compatibility and retain only `HMSRBB` internally. | Legacy-only, canonical-only, matching dual, and conflicting dual cases follow the decision; outputs contain no legacy alias. | Tests planned. | Di | Benyu | Not started |
+| `RTM-21` | `DEC-46` | Stage 5 — Q95 eligibility | `Q95z` is the only eligible Q95 predictor for both model paths; Raw Q95 is data/display/provenance only. | Both selectors expose only Q95z lag fields for Q95; bypass submissions using Raw Q95 are rejected and recorded. | Some Q95z use exists; consistent path and lag tests pending. | Lin | Di | Partial |
+| `RTM-22` | `DEC-43` | Stage 1 — Map | Map Biology sites only; non-Biology inputs do not require coordinates. | Flow/WQ/RHS coordinate absence does not block; extra coordinates are ignored with information; Biology popups show the contracted fields. | Biology-coordinate authority remains under `OPEN-15`; map/schema tests pending. | Di | Benyu | Not started |
+| `RTM-23` | `DEC-23`, `DEC-33` | Stages 2–4 — Duplicate handling | Same-site/same-day Biology, Flow, and WQ duplicates require an explicit eligible retain/average/remove decision; Biology records sharing only a month-year remain flagged without automatic alteration. | Detection never silently changes rows; unresolved same-day duplicates block the affected action; every eligible resolution records method and counts. | Detailed averaging/selection rules for complex cases remain open; tests planned. | Di | Benyu | Not started |
+| `RTM-24` | `DEC-24` | Stages 1–3 — WQ registry | Preserve contracted `0180`/`0111` semantics, exclude `0119` as an ammonia alias, and normalise supported units with provenance. | Registry, alias, conflict, unit, and provenance fixtures pass; missing-source-unit policy remains deferred. | Tests planned. | Di | Benyu | Not started |
+| `RTM-25` | `DEC-37` | Stage 4 — HEV | Offer explicit raw-daily Flow and calculated Flow-statistics HEV modes without silent substitution. | Each mode has independent prerequisites, stale-state behaviour, plot construction, download, and provenance. | Current UI supports only statistics; v2.0 tests pending. | Di | Benyu | Not started |
+| `RTM-26` | `DEC-38` | Tasks 1–5 — Navigation | Enforce Task paths: `R,R,-,-,-`; `R,R,-,-,-`; `R,R,R,-,-`; `R,R,R,R,-`; `R,R,R,R,R`. | Every `-` Stage is greyed and inaccessible; Task 1 offers only Biology and environmental import. | Frozen path baseline: [Task-Stage Matrix v2.0](task-stage-path-matrix-v2.0.md); configuration, route, and bypass tests remain planned. | Lin | Bo | Not started |
+| `RTM-27` | `DEC-41` | Stages 1–3 — Sources | Support independent Local and Explorer source modes, explicit switching, scoped invalidation, and immutable source provenance. | Either source works alone; switching retains the alternative, changes only affected descendants, and Flow statistics consume the selected Flow source. | Existing source paths are partial; `combined` mode is deferred under `OPEN-13`. | Di | Benyu | Partial |
+| `RTM-28` | `DEC-42` | Stage 2 — WQ/RHS presentation | Put WQ plots above the summary with table/plot toggle; require determinand; use `result`, `date_time`, and `wq_site_id`; remove bar/generic selectors and RHS preview plots. | UI exposes only the contracted views/fields and no RHS preview; invalid/missing determinand blocks the request. | UI and interaction tests planned. | Lin | Bo | Not started |
+| `RTM-29` | `DEC-44` | Stage 1 — Upload feedback | Put local upload in applicable Task routes, show the relevant template first, and give orange upload-time feedback without making structurally unsafe data usable. | Required-header, duplicate-header, unreadable, and unsafe-type failures block; safe extras are informational; full severity expansion waits for `OPEN-14`. | Component and accessibility tests planned. | Lin | Benyu | Not started |
+| `RTM-30` | `DEC-47` | Stage 5 — Model lifecycle | Preserve candidate models, compare with `summary()`/`AIC()`, let the user select a preferred model, and run full plots/diagnostics only afterward. | Candidate history is immutable; comparison discloses sample basis; preferred-only diagnostics call the contracted tools; tables show three significant figures. | Model-state, comparison, diagnostics-gate, and export tests planned. | Lin | Di | Not started |
+| `RTM-31` | `DEC-48` | Stage 4 — PCA | For one-site input, show `PCA cannot be run with data from only one site`. | One-site case displays the exact message without attempting PCA; eligible multi-site behaviour is unchanged. | Regression test planned. | Lin | Benyu | Not started |
+| `RTM-32` | `DEC-48` | Stage 4 — Flow heatmap | Correct the Flow heatmap defect. | A fixed fixture renders the expected values, ordering, labels, and no runtime error; visual evidence is retained. | Defect reproduction and regression fixture planned. | Lin | Benyu | Not started |
+| `RTM-33` | `DEC-48` | Cross-stage operations | Show meaningful progress when operation progress is measurable. | Defined long operations report monotonic, task-relevant progress and finish in success/failure state; indeterminate feedback remains only where measurement is unavailable. | Progress-state tests planned. | Bo | Benyu | Not started |
+| `RTM-34` | `DEC-48` | Cross-stage presentation | Optimise full-screen workspace use and improve table, figure, and menu presentation. | Agreed viewport checks show no critical clipping/overlap and controlled visual evidence covers representative tables, figures, and menus. | Visual/browser acceptance baseline planned. | Lin | Bo | Not started |
+| `RTM-35` | `DEC-26` | Tasks 1–5 — Primary workflow | Use Option A as the single guided five-stage workflow and preserve reusable completed outputs when switching Tasks. | No competing primary navigation appears; shared configuration drives Task/stage guidance; compatible completed outputs survive Task changes. | Workflow shell exists; integrated state-preservation evidence remains incomplete. | Bo | Lin | Partial |
+| `RTM-36` | `DEC-27`, `DEC-28`, `DEC-35` | Cross-stage terminology/configuration | Use the controlled wording register and canonical `task_id` values; never show `Goal` or maintain `goal_id` as an active alias. | Visible-wording checks cover all eight replacements; configuration exposes the five ordered `task_id` values and no active alias. | Some Task wording/configuration exists; complete visible-text and compatibility tests pending. | Lin | Bo | Partial |
+| `RTM-37` | `DEC-29` | Stages 1–2 — Flow guidance | Explain NRFA in plain language as an alternative when HDE data are unavailable; do not show unexplained `NRFA fallback` wording. | User-facing states name the source and reason plainly while internal provenance retains structured source/fallback fields. | Wording and provenance presentation tests planned. | Lin | Di | Not started |
+| `RTM-38` | `DEC-30` | Stage 1 — Local-import scope | Provide contracted local file import without building a general dataset-management workspace or image-data path. | Supported local inputs are available on applicable Tasks; add/edit/rename/delete whole-dataset tooling and image ingestion are absent from acceptance scope. | Local-import implementation remains incomplete. | Di | Benyu | Not started |
+| `RTM-39` | `DEC-31` | Stages 3–5 — Session continuity | Provide processed-dataset download checkpoints and later-session upload for Tasks 4 and 5. | Downloaded checkpoints carry schema/version/provenance and can restore an eligible later-session workflow without pretending stale results are current. | Checkpoint round-trip fixtures and tests planned. | Bo | Benyu | Not started |
+| `RTM-40` | `DEC-32` | Tasks 4–5 — Iteration/history | Support non-destructive exclusion/restoration, HEV regeneration, model refitting, and auditable data/model history. | Changes invalidate only dependent artifacts; restored records rebuild current data; earlier valid plots/models remain identifiable rather than silently overwritten. | Filtering/model predecessor logic is partial; end-to-end state-history tests pending. | Lin | Di | Partial |
+
+## 3. Superseded and deferred boundaries
+
+| Historical item | Current treatment |
+|---|---|
+| `DEC-01`, `DEC-25`; `RTM-01` v1 XLSX-primary rule | Replaced by the v2.0 CSV rule in `DEC-40`/`RTM-01`; XLSX ordering is historical compatibility only. |
+| `DEC-03`; `RTM-03` v1 lag-0/1 rule | Replaced by `DEC-39`/`RTM-03` and the Q95 eligibility boundary in `DEC-46`/`RTM-21`. |
+| `DEC-08`, `DEC-10`; `RTM-08A`, `RTM-08B`, `RTM-10` v1 `lm()`/mixed-effects rules | Replaced by the GAM rules in `DEC-45` with the same RTM IDs. |
+| `DEC-14`; `RTM-14` v1 XLSX row-bind rule | Outside current acceptance; one CSV per type is primary and cross-source combination waits for record identity keys. |
+| `DEC-21`; `RTM-21` v1 path-specific Raw Q95 rule | Replaced by Q95z-only eligibility in `DEC-46`. |
+| `DEC-22`; `RTM-22` v1 four-coordinate-pair rule | Replaced by Biology-only mapping in `DEC-43`. |
+| `DEC-34` optional additions | GAM, Biology-only mapping, and HEV modes follow their promoted decisions; remaining guide/report/window items stay separately deferred. |
+| `DEC-36` optional Task 3 trailing stages | Replaced by the strict paths in `DEC-38`/`RTM-26`. |
+
+Deferred topics do not create acceptance criteria in this version: combined Local/Explorer conflict resolution and five identity keys (`OPEN-13`), the complete CSV warning/blocker matrix (`OPEN-14`), Biology-coordinate authority (`OPEN-15`), missing WQ source units, and Biology date/Year/Month/Season reconciliation.
+
+## 4. Open-item tracking
+
+| Open ID | Required decision | Interim boundary | Status |
+|---|---|---|---|
+| `OPEN-02` | Select the dissolved-oxygen P10 determinand. | Do not guess or interchange `9901` and `9924`; the DO branch remains blocked. | Blocked |
+| `OPEN-08` | Freeze GAM families, basis/smoothing settings, valid site-level terms, sufficiency, diagnostics, and scientific tolerances. | Do not infer production formulas or thresholds; affected paths remain blocked or explicitly experimental. | Blocked |
+| `OPEN-13` | Define five record identity/comparison keys. | Do not enable `combined` mode or automatic conflict classification. | Deferred |
+| `OPEN-14` | Define the complete CSV warning/blocker matrix. | Retain only the frozen structural safety boundary in `RTM-29`. | Deferred |
+| `OPEN-15` | Define the authoritative Biology-coordinate source. | Retain the existing Biology-location path; do not infer a new source. | Deferred |
+
+Resolved: `OPEN-03` by `DEC-40`, `OPEN-06` by `DEC-45`/`OPEN-08`, and `OPEN-12` by `DEC-46`.
+
+## 5. Status summary
+
+| Status | Count | Meaning |
+|---|---:|---|
+| `Verified` | 0 | No v2.0 row yet has complete implementation and retained acceptance evidence. |
+| `Partial` | 15 | Some predecessor implementation/evidence exists but does not satisfy the complete v2.0 criterion. |
+| `Blocked` | 2 | `RTM-08B` and `RTM-10` depend on `OPEN-08`. |
+| `Not started` | 23 | No matching v2.0 acceptance evidence is currently recorded. |
+
+## 6. Review gate
+
+This matrix is ready to freeze only when every active decision through `DEC-48` is covered directly or through a recorded supersession, every acceptance criterion is objectively testable, every `Partial` row states its remaining gap, open scientific decisions are not hidden in code, and all status counts match retained evidence.

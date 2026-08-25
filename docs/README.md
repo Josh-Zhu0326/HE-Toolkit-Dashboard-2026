@@ -20,9 +20,13 @@ retained inside the documents and in Git history.
 ## Useful Entry Points
 
 - [Client decision log](decisions/client-decision-log-v1.md)
-- [Data contract](contracts/data-contract-v1.md)
-- [Requirement traceability matrix](contracts/requirement-traceability-matrix-v1.md)
-- [Current dependency/state matrix](contracts/dependency-state-matrix-v1.1.md)
+- [Frozen data contract v2.0](contracts/data-contract-v2.0.md) ([historical baseline](contracts/data-contract-v1.0.md))
+- [Frozen modelling requirements v2.0](contracts/modelling-contract-v2.0.md) ([historical baseline](contracts/modelling-contract-v1.0.md))
+- [Requirement traceability matrix v2.0](contracts/requirement-traceability-matrix-v2.0.md) ([historical baseline](contracts/requirement-traceability-matrix-v1.0.md))
+- [Frozen Task-Stage paths v2.0](contracts/task-stage-path-matrix-v2.0.md) ([v1.1 historical baseline](contracts/task-stage-path-matrix-v1.1.md))
+- [Current dependency/state matrix v2.0](contracts/dependency-state-matrix-v2.0.md) ([v1.1 historical baseline](contracts/dependency-state-matrix-v1.1.md))
+- [UI-to-Shiny mapping v2.0](design/workflows/ui-to-shiny-mapping-v2.0.md) ([v1.1 historical baseline](design/workflows/ui-to-shiny-mapping-v1.1.md))
+- [Error and guidance catalogue v2.0](requirements/error-and-guidance-message-catalogue-v2.0.md) ([Week 8 historical baseline](requirements/WK8-09_Complete_Error_List.md))
 - [Gate D technical readiness](project/readiness/gate-d-technical-readiness.md)
 - [Browser verification report](testing/reports/browser-2026-08-09/RAW-01-25_Final_Browser_Manual_Verification_Report.md)
 
