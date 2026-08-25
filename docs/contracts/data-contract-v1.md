@@ -2,9 +2,9 @@
 
 > Baseline date: 13 July 2026
 >
-> Controlled update: 11 August 2026
+> Controlled update: 25 August 2026
 >
-> Status: Frozen v1 with controlled v1.1 HEV addendum
+> Status: Changes requested after `SRC-09`/`SRC-10`
 >
 > Owner: Di (Data Pipeline)
 >
@@ -223,7 +223,7 @@ timestamp
 - Decision: `DEC-07`
 - Requirement: `RTM-07`
 
-### DC-08: Default Joined/Modelling Flow Fields
+### DC-08: Joined Flow Fields and Model Eligibility
 
 **Canonical fields**
 
@@ -232,23 +232,38 @@ Q10_lag0
 Q10z_lag0
 Q10_lag1
 Q10z_lag1
+Q10_lag3
+Q10z_lag3
+Q10_lag6
+Q10z_lag6
+Q10_lag12
+Q10z_lag12
 Q95_lag0
 Q95z_lag0
 Q95_lag1
 Q95z_lag1
+Q95_lag3
+Q95z_lag3
+Q95_lag6
+Q95z_lag6
+Q95_lag12
+Q95z_lag12
 ```
 
 **Specification**
 
-- These eight fields are the default v1 joined/modelling flow contract.
-- Joined output must also retain the corresponding flow-window/lag provenance.
+- These twenty fields are the canonical v1 joined Flow contract.
+- Joined output must retain start, end, and inclusive-duration Flow-window
+  provenance for every supported lag. Unselected lag fields remain typed `NA`.
 - Q50 may remain available for descriptive flow-regime statistics, but it must not enter the default joined fields or model selector.
-- A single-site additive model may use raw Q10/Q95 fields.
-- Flow predictors in a multi-site mixed-effects model may use only Q10z/Q95z fields. Server-side validation must reject raw cross-site flow predictors submitted by bypassing the UI.
+- Q10z/Q95z fields may be selected in both model paths.
+- A single-site additive model may additionally use raw Q95 fields.
+- A multi-site mixed-effects model must reject every raw Flow predictor.
+- The latest confirmation does not add raw Q10 to the model selector.
 
 **Traceability**
 
-- Decisions: `DEC-03`, `DEC-21`
+- Decisions: `DEC-38`, `DEC-40` (superseding the conflicting parts of `DEC-03` and `DEC-21`)
 - Requirements: `RTM-03`, `RTM-21`
 
 ### DC-09: `HMSRBB` as the Sole Internal and Output Field
@@ -308,31 +323,38 @@ Q95z_lag1
 
 **Dashboard preview controls**
 
+- WQ queries and local preview filtering must not accept a date before `2000-01-01`.
 - WQ preview plots expose only contracted determinand, WQ site, and observation-date filters.
-- The plotted value comes from the canonical result/analysis-value field, and grouping uses the mapped biology site where available.
+- The plotted value and x-axis are fixed to the canonical result/analysis-value
+  field and `date_time`; grouping uses `wq_site_id`.
+- The only preview plot types are time series and boxplot. A bar chart and
+  arbitrary numeric/x-axis selectors are not part of the contract.
 - Coordinate fields and unrelated numeric columns must not be offered as WQ variables or grouping controls.
 
 **Traceability**
 
-- Decisions: `DEC-05`, `DEC-06`, `DEC-24`
-- Requirements: `RTM-05`, `RTM-06`, `RTM-18`, `RTM-24`
+- Decisions: `DEC-05`, `DEC-06`, `DEC-24`, `DEC-44`
+- Requirements: `RTM-05`, `RTM-06`, `RTM-18`, `RTM-24`, `RTM-28`
 
-### DC-11: XLSX v1 Canonical Sheet/Column Order
+### DC-11: Internal Historical XLSX Migration Schema
 
 **Ownership and version rules**
 
-- XLSX sheet names, column names, and column order are a `TEAM-V1` data contract and do not require client confirmation field by field.
-- The importer must validate names and order against the schema version. The difference report must list missing, unexpected, and out-of-order fields.
-- A legacy workbook may enter an explicit migration/compatibility path, but it must not change the v1 canonical order.
-- The following is the frozen v1 order. Rows from the same sheet may be bound only when names and order match exactly.
+- XLSX is an internal historical/migration schema only. It is not a
+  user-facing template, upload route, checkpoint, or competing validation page.
+- Sheet names, column names, and column order remain versioned so existing
+  checkpoint files can be validated deterministically.
+- The validator must list missing, unexpected, and out-of-order fields.
+- Maintainers may use a legacy workbook in an explicit offline
+  migration/compatibility path, but it must not change the v1 canonical order
+  or appear in the Dashboard.
+- The formal user-facing templates are the five CSV contracts in `DC-13`.
 
 **`site_mapping`**
 
 ```text
 biol_site_id, biol_easting, biol_northing,
-flow_site_id, flow_easting, flow_northing, flow_input,
-wq_site_id, wq_easting, wq_northing,
-rhs_survey_id, rhs_easting, rhs_northing
+flow_site_id, flow_input, wq_site_id, rhs_survey_id
 ```
 
 **`biology_samples`**
@@ -389,9 +411,16 @@ biol_site_id, sample_id, date, flow_site_id, wq_site_id, rhs_survey_id,
 sampling_year,
 WHPT_ASPT_OE, WHPT_NTAXA_OE, LIFE_F_OE, PSI_OE,
 Q10_lag0, Q10z_lag0, Q10_lag1, Q10z_lag1,
+Q10_lag3, Q10z_lag3, Q10_lag6, Q10z_lag6,
+Q10_lag12, Q10z_lag12,
 Q95_lag0, Q95z_lag0, Q95_lag1, Q95z_lag1,
+Q95_lag3, Q95z_lag3, Q95_lag6, Q95z_lag6,
+Q95_lag12, Q95z_lag12,
 flow_window_start_lag0, flow_window_end_lag0, flow_window_duration_lag0,
 flow_window_start_lag1, flow_window_end_lag1, flow_window_duration_lag1,
+flow_window_start_lag3, flow_window_end_lag3, flow_window_duration_lag3,
+flow_window_start_lag6, flow_window_end_lag6, flow_window_duration_lag6,
+flow_window_start_lag12, flow_window_end_lag12, flow_window_duration_lag12,
 wq_window_start, wq_window_end, wq_window_duration_years,
 orthophosphate_mean, orthophosphate_record_count,
 ammonia_p90, ammonia_record_count,
@@ -405,7 +434,7 @@ HMSRBB, HQA, matching_notes
 
 **Traceability**
 
-- Decisions: `DEC-01`, `DEC-09`, `DEC-14`, `DEC-15`, `DEC-18`, `DEC-22`, `DEC-25`
+- Decisions: `DEC-09`, `DEC-14`, `DEC-15`, `DEC-18`, `DEC-38`, `DEC-39`, `DEC-42`
 - Requirements: `RTM-01`, `RTM-09`, `RTM-14`, `RTM-15`, `RTM-18`, `RTM-22`
 
 ### DC-12: HEV Flow Data Modes
@@ -440,6 +469,136 @@ Each HEV request must use one explicitly selected Flow-data mode:
 
 - Decision: `DEC-37`
 - Requirement: `RTM-25`
+
+### DC-13: Five Formal Local CSV Routes
+
+**Canonical dataset types**
+
+The formal local-upload route consists of exactly five separate CSV types:
+
+1. Biology
+2. Environmental/Site
+3. Daily Flow
+4. Water Quality
+5. RHS
+
+Each CSV type has one versioned source schema. Upload-time validation must
+report missing, unexpected, duplicated, and out-of-order fields before the file
+can become an active source. Each data view provides its own downloadable CSV
+example.
+
+**Biology CSV**
+
+```text
+biol_site_id, SAMPLE_ID, SAMPLE_DATE, WHPT_ASPT, WHPT_N_TAXA,
+LIFE_FAMILY_INDEX, PSI_FAMILY_SCORE, Month, Year, Season
+```
+
+**Environmental/Site CSV**
+
+```text
+biol_site_id, NGR_10_FIG, ALTITUDE, SLOPE, DIST_FROM_SOURCE,
+DISCHARGE, WIDTH, DEPTH, BOULDERS_COBBLES, PEBBLES_GRAVEL,
+SAND, SILT_CLAY, ALKALINITY, CONDUCTIVITY,
+MIN_SAMPLE_DATE, MAX_SAMPLE_DATE, COUNT_OF_SAMPLES
+```
+
+`TOTAL_HARDNESS` and `CALCIUM` were previously confirmed as alkalinity-proxy
+inputs but are absent from the latest required-column list. Until `OPEN-12` is
+closed, the downloadable CSV may include them as documented optional columns
+immediately after `CONDUCTIVITY`; their absence is normalised to typed `NA` and
+must not fail the required-column check.
+
+`NGR_10_FIG` is the sole user-facing grid-reference field. After validating a
+UK grid reference, the ingestion adapter derives the exact internal
+`NGR_PREFIX` field required at the package-facing boundary. Users must not be
+required to upload both fields, and `NGR_prefix` is never generated as an
+alias. An absent or unparseable `NGR_10_FIG` blocks this conversion.
+
+**Daily Flow CSV**
+
+```text
+flow_site_id, date, flow
+```
+
+**WQ CSV**
+
+```text
+wq_site_id, date_time, det_id, qualifier, result
+```
+
+**RHS CSV**
+
+```text
+rhs_survey_id, HQA, HMSRBB
+```
+
+The local-file adapter performs one explicit source-to-canonical conversion at
+ingestion. Package-shaped source names such as `SAMPLE_ID`, `SAMPLE_DATE`,
+`WHPT_N_TAXA`, `LIFE_FAMILY_INDEX`, `PSI_FAMILY_SCORE`, `Month`, and `Year` do
+not persist as internal aliases after conversion. Scientific field rules remain
+those defined by `DC-01`, `DC-02`, `DC-09`, and `DC-10`.
+
+Existing XLSX parsing code may remain for internal historical migration only.
+The Dashboard must not expose a multi-sheet workbook template, upload control,
+checkpoint, or standalone validation route.
+
+**Traceability**
+
+- Decisions: `DEC-39`, `DEC-48`
+- Requirements: `RTM-01`, `RTM-17`
+
+### DC-14: Combined-Source Conflict Boundary
+
+When a dataset type combines local and Data Explorer records:
+
+- Neither source has implicit precedence.
+- Source identity is retained on every candidate record.
+- Conflicting candidates are shown to the user and block downstream use until
+  an explicit source choice is recorded.
+- Exact duplicates are retained and flagged; they are not silently deleted.
+- Applying a choice records the comparison key, candidate sources, selected
+  source, timestamp, and resulting row counts.
+- A combined-source operation must not mutate either original source dataset.
+
+The default comparison keys are:
+
+| Dataset | Comparison key |
+|---|---|
+| Biology | `biol_site_id` + `SAMPLE_ID` |
+| Environmental/Site | `biol_site_id` |
+| Daily Flow | `flow_site_id` + `date` |
+| WQ | `wq_site_id` + `date_time` + `det_id` |
+| RHS | `rhs_survey_id` |
+
+Records with the same comparison key and identical canonical payload are exact
+duplicates. Records with the same key and any different canonical payload are
+conflicts. Missing or duplicated key values block automatic comparison and
+produce a field-level message.
+
+Until a later controlled decision defines exact-duplicate aggregation or
+removal, retaining both source records is the only permitted default.
+
+**Traceability**
+
+- Decision: `DEC-41`
+- Requirement: `RTM-26`
+
+### DC-15: Biology-Only Map Coordinates
+
+The user-facing site map displays Biology sites only. The mapping contract may
+store `biol_easting` and `biol_northing`; Flow, WQ, and RHS easting/northing
+fields are prohibited in new user templates and standardised downloads.
+
+The identifier bridge remains explicit: `biol_site_id` maps to
+`flow_site_id`, `wq_site_id`, and `rhs_survey_id`. Equal identifier text must
+not create an implicit relationship, and removing non-Biology coordinates must
+not weaken identifier validation.
+
+**Traceability**
+
+- Decisions: `DEC-42`, `DEC-46`
+- Requirements: `RTM-18`, `RTM-22`, `RTM-29`
 
 ## 4. Data Flow and Immutable Boundaries
 
@@ -483,7 +642,7 @@ validated and processed biology/environment/flow
 
 This document may move from a review baseline to `Frozen v1` only when all of the following are true:
 
-1. Every contract from `DC-01` through `DC-12` has corresponding `DEC-*` and `RTM-*` references.
+1. Every contract from `DC-01` through `DC-15` has corresponding `DEC-*` and `RTM-*` references.
 2. Every canonical field has exactly one meaning and one standard name in this document.
 3. Input, internal data, downloads, and model selectors contain no conflicting legacy contract such as `rhs_site_id`, local `flow_input`, default Q50, or output `HMS.Score`.
 4. Automated or reproducible manual tests can verify the sources, mutability, and stale boundaries of `joined_core`, `joined_enriched`, and `analysis_dataset`.
@@ -493,11 +652,13 @@ This document may move from a review baseline to `Frozen v1` only when all of th
 
 - Complete authoritative units, allowed values, and conditional-validation metadata for environmental fields and other non-WQ measurement fields.
 - The exact `det_id`, canonical name, and unit for dissolved-oxygen P10, managed by `OPEN-02`.
-- Whether CSV fallback enters formal v1 acceptance.
-- Minimum site/sample thresholds and singular-fit/non-convergence behaviour for mixed-effects models, currently tracked in the [modelling-contract review baseline](modelling-contract-v1.md).
-- Detailed warning/error wording, UI layout, and checkpoint styling.
+- Detailed warning/error wording and UI layout beyond the orange blocking
+  validation semantics frozen by `DEC-45`.
 
-These items must be frozen in the applicable data dictionary, validation specification, `OPEN-02`, `OPEN-03`, `OPEN-06`, or [modelling contract](modelling-contract-v1.md). Implementers must not decide them implicitly in code.
+These items must be frozen in the applicable data dictionary, validation
+specification, `OPEN-02`, `OPEN-08`, `OPEN-12`, `OPEN-13`, or
+[modelling contract](modelling-contract-v1.md). Implementers must not decide
+them implicitly in code.
 
 ## 7. Traceability Summary
 
@@ -510,8 +671,11 @@ These items must be frozen in the applicable data dictionary, validation specifi
 | `DC-05` | WQ/RHS are optional enrichment only | `DEC-19` | `RTM-19` |
 | `DC-06` | `joined_core → joined_enriched → analysis_dataset` data-layer boundary | `DEC-07`, `DEC-19` | `RTM-07`, `RTM-19` |
 | `DC-07` | Filtering rebuilds only `analysis_dataset` | `DEC-07` | `RTM-07` |
-| `DC-08` | Eight raw/Z-score Q10/Q95 lag fields | `DEC-03`, `DEC-21` | `RTM-03`, `RTM-21` |
+| `DC-08` | Twenty raw/Z-score Q10/Q95 fields across lags 0/1/3/6/12, with model-path eligibility | `DEC-38`, `DEC-40` | `RTM-03`, `RTM-21` |
 | `DC-09` | Internal data and outputs use only `HMSRBB` | `DEC-20` | `RTM-20` |
-| `DC-10` | WQ determinand, four-character ID, unit aliases, detection limit, and summary contract | `DEC-05`, `DEC-06`, `DEC-24` | `RTM-05`, `RTM-06`, `RTM-18`, `RTM-24` |
-| `DC-11` | XLSX v1 canonical sheet/column order | `DEC-01`, `DEC-09`, `DEC-14`, `DEC-15`, `DEC-18`, `DEC-22`, `DEC-25` | `RTM-01`, `RTM-09`, `RTM-14`, `RTM-15`, `RTM-18`, `RTM-22` |
+| `DC-10` | WQ determinand, four-character ID, unit aliases, detection limit, summary, and preview controls | `DEC-05`, `DEC-06`, `DEC-24`, `DEC-44` | `RTM-05`, `RTM-06`, `RTM-18`, `RTM-24`, `RTM-28` |
+| `DC-11` | Internal historical XLSX migration schema; not user-facing | `DEC-38`, `DEC-39`, `DEC-42`, `DEC-45` | `RTM-01`, `RTM-03`, `RTM-18`, `RTM-22`, `RTM-31` |
 | `DC-12` | HEV explicitly selects raw daily Flow or calculated Flow statistics without silent substitution | `DEC-37` | `RTM-25` |
+| `DC-13` | Five separate CSV types form the formal local-upload route, with user `NGR_10_FIG` converted internally | `DEC-39`, `DEC-48` | `RTM-01`, `RTM-17` |
+| `DC-14` | Combined sources require explicit conflict resolution and prohibit silent record loss | `DEC-41` | `RTM-26` |
+| `DC-15` | Only Biology coordinates appear in the user-facing map and its popup uses available Biology metadata | `DEC-42`, `DEC-46` | `RTM-18`, `RTM-22`, `RTM-29` |

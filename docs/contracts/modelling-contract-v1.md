@@ -1,21 +1,29 @@
-# Modelling Contract — v1 (Frozen)
+# Modelling Contract — v1 (Frozen `lm`/`lmer` Baseline)
 
 > Date: 14 July 2026 (baseline); frozen 30 July 2026  
-> Status: **Frozen v1** — all `MC-O01`–`MC-O11` decided (see Section 3)  
+> Status: **Frozen implementation baseline, not final model-engine acceptance** — all `MC-O01`–`MC-O11` are decided, but `OPEN-08` must reconcile this baseline with the later client `mgcv::gam()` guidance before final Stage 5 verification
 > Owner / decider: Yutong (Modelling/Evaluation), delegated by the team  
 > Reviewer: Di (Data Pipeline, data feasibility); Lin (Modelling)  
-> Decisions: `DEC-08`, `DEC-09`, `DEC-10`, `DEC-21`  
+> Decisions: `DEC-08`, `DEC-09`, `DEC-10`, `DEC-21`, `DEC-40`
 > Requirements: `RTM-08A`, `RTM-08B`, `RTM-09`, `RTM-10`, `RTM-21`  
 > Closes: `OPEN-06`  
 > Sources: [Client Decision Log](../decisions/client-decision-log-v1.md) and [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
 
 ## 1. Purpose and Current State
 
-This document defines the frozen v1 rules for Dashboard modelling. It records both the confirmed rules and the thresholds and failure policies that were still open in the review baseline, all of which are now decided in Section 3.
+This document defines the frozen `lm`/`lmer` implementation baseline for
+Dashboard modelling. It records confirmed thresholds and failure policies that
+remain useful if that engine is retained. The later client guidance in
+`SRC-09` proposes `mgcv::gam()` for both model paths, including smooths,
+interactions, random-effect representations, iterative comparison, and GAM
+diagnostics. Therefore this document must not be treated as the final client
+model-engine contract until `OPEN-08` is closed.
 
 The single-site additive `lm()` path is implemented and verified. The multi-site mixed-effects path is now enabled and must be implemented and verified against the frozen rules below; until its automated tests pass in a clean environment, individual multi-site results must report their state honestly (`success`, `warning`, `failed`, or `blocked`) and must never be replaced by a pooled `lm()`.
 
-This freeze closes `OPEN-06`. Any later change to a frozen value requires a change request and a contract revision.
+This freeze closes `OPEN-06` for the `lm`/`lmer` baseline. It does not close
+`OPEN-08`. Any retained or translated threshold requires traceable review in
+the final model-engine contract.
 
 ## 2. Confirmed Rules
 
@@ -29,8 +37,10 @@ This freeze closes `OPEN-06`. Any later change to a frozen value requires a chan
 ### MC-R02 — Predictor eligibility and limits
 
 - V1 allows at most two flow predictors, one WQ predictor, and one RHS predictor.
-- A single-site additive model may use raw Q10/Q95 lag fields.
-- A candidate multi-site mixed-effects model may use only Q10z/Q95z lag fields for flow predictors.
+- Both paths may use Q10z/Q95z lag fields for lags 0, 1, 3, 6, and 12.
+- A single-site model may additionally use raw Q95 lag fields. The latest
+  confirmation does not permit raw Q10 in the model selector.
+- A candidate multi-site model must reject every raw Flow predictor.
 - UI filtering and server-side validation must enforce the same eligibility rules.
 
 ### MC-R03 — Sampling year
@@ -106,7 +116,7 @@ sample-size items. Any change requires a change request.
 | `MC-O02` | Total complete cases must be at least **10 × the number of fixed-effect parameters**, with an absolute floor of **20**. Otherwise `blocked`. | Frozen |
 | `MC-O03` | Each site needs at least **3 complete observations** to enter the mixed fit. Sites below this are excluded from the fit and their count is reported. | Frozen |
 | `MC-O04` | A random slope `(sampling_year_centered \| biol_site_id)` is allowed only when a majority of eligible sites have **≥ 3 distinct valid years** and non-zero within-site variation in the term; otherwise only a random intercept `(1 \| biol_site_id)` is used. | Frozen |
-| `MC-O05` | Multi-site flow predictors use the Z-score `Q10z/Q95z` fields (DEC-21). Other numeric predictors (e.g. WQ) are standardised to mean 0 / SD 1 over the analysis dataset; `sampling_year` is centred (DEC-09); categorical RHS predictors are not scaled. Scaling is recorded in provenance. | Frozen |
+| `MC-O05` | Both paths may use Z-score `Q10z/Q95z` fields; single-site may additionally use raw Q95, while multi-site rejects all raw Flow predictors (`DEC-40`, superseding the conflicting part of `DEC-21`). Other numeric predictors (e.g. WQ) are standardised to mean 0 / SD 1 over the analysis dataset; `sampling_year` is centred (`DEC-09`); categorical RHS predictors are not scaled. Scaling is recorded in provenance. | Frozen |
 | `MC-O06` | Complete-case analysis (listwise deletion). Any `NA`/`Inf` in a model variable drops that row; the excluded count is reported. If more than **20%** of rows are dropped, a `warning` is raised. | Frozen |
 | `MC-O07` | Collinearity: fixed-effect **VIF > 10 blocks** the fit; VIF **5–10 warns**; pairwise absolute correlation **> 0.9 warns**. | Frozen |
 | `MC-O08` | Non-convergence → `failed` with a clear message. Singular fit or near-zero random-effect variance → `warning` recommending a random-intercept-only or single-site analysis. A pooled `lm()` fallback is never used. | Frozen |

@@ -1,7 +1,7 @@
 # Task-Stage Path Matrix — v1.1
 
 > Original baseline: [Goal-Stage Path Matrix v1](goal-stage-path-matrix-v1.md), preserved unchanged
-> Controlled update date: 21 July 2026
+> Controlled update date: 25 August 2026
 > Status: Changes requested
 > Owner: Lin (UX/Workflow)
 > Reviewer: Bo (Architecture/State)
@@ -31,8 +31,10 @@ Detailed validation, duplicate handling, data-layer semantics, stale propagation
 ### Legend
 
 - `R`: required.
-- `O`: optional.
 - `-`: not used by the selected Task.
+
+The confirmed client paths do not use optional later Stages. A Stage is either
+required for the selected Task or disabled.
 
 A validated processed-dataset upload may satisfy eligible Stage 2–3 prerequisites for Tasks 4 and 5. This is a prerequisite-satisfaction route, not another Stage, path symbol, or workflow state.
 
@@ -40,10 +42,10 @@ A validated processed-dataset upload may satisfy eligible Stage 2–3 prerequisi
 
 | Task | Internal `task_id` | S1 | S2 | S3 | S4 | S5 | Primary output |
 |---|---|:---:|:---:|:---:|:---:|:---:|---|
-| Assess ecological condition | `ecological_condition` | R | R | - | O | O | Expected values and O:E ratios |
-| Summarise the flow regime | `flow_regime` | R | R | - | O | O | Flow statistics and coverage summary |
-| Combine biology, flow and environmental data | `build_he_dataset` | R | R | R | O | O | Joined HE dataset |
-| Generate HEV plots | `generate_hev` | R | R | R | R | O | HEV plots, data and data history |
+| Assess ecological condition | `ecological_condition` | R | R | - | - | - | Expected values and O:E ratios |
+| Summarise the flow regime | `flow_regime` | R | R | - | - | - | Flow statistics and coverage summary |
+| Combine biology, flow and environmental data | `build_he_dataset` | R | R | R | - | - | Joined HE dataset |
+| Generate HEV plots | `generate_hev` | R | R | R | R | - | HEV plots, data and data history |
 | Undertake HE modelling | `he_modelling` | R | R | R | R | R | Current model, diagnostics and data history |
 
 This table is the path authority. Task cards, Stage guidance, required/optional markers, progress summaries, and Start/Resume behaviour must derive from the same configuration.
@@ -70,6 +72,7 @@ Internal artifact names remain stable implementation terms; the UI uses the corr
 6. Unselected WQ/RHS enrichment does not block a valid core route.
 7. Same-day duplicate decisions, invalidation boundaries, HEV rules, and model eligibility follow their authoritative contracts.
 8. Visible wording uses `Task`, `Joined HE dataset`, `Data source`, and `Data history`; it does not expose `Versioned analysis_dataset` or unexplained `NRFA fallback` wording.
+9. Task 1 exposes only Biology and Environmental/Site import controls.
 
 ## 6. Navigation Rules
 
@@ -90,7 +93,7 @@ Internal artifact names remain stable implementation terms; the UI uses the corr
 | Model eligibility and failure behaviour | [Modelling Contract](modelling-contract-v1.md) |
 | Requirements, ownership, and test evidence | [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md) |
 
-Where another contract conflicts with this Task path after 21 July, record the conflict and resolve it through controlled change; do not silently maintain two path definitions.
+Where another contract conflicts with this Task path after 25 August, record the conflict and resolve it through controlled change; do not silently maintain two path definitions.
 
 ## 8. Freeze Criteria
 
@@ -104,12 +107,13 @@ Version 1.1 may be marked **Frozen** only when:
 6. Any unresolved scientific path remains honestly blocked or `not_ready`.
 7. Owner and reviewer complete the record below.
 
-## 9. Remediation Evidence
+## 9. Historical Remediation Evidence
 
-Recorded on 22 July 2026:
+Recorded on 22 July 2026, before `DEC-43`. This evidence verifies the earlier
+configuration and implementation mechanics only; it does not verify the
+newly confirmed disabled-Stage paths or Task 1 import restriction.
 
 - `DEC-35` records the canonical `task_id` field, values, order, and change-control rule.
-- `DEC-36` resolves Task 3 completion at its Stage 3 processed-dataset checkpoint and makes Stage 4 optional for that Task.
 - `tests/testthat/test-workflow-config.R` asserts the exact five Stage IDs, complete 5×5 Task paths, ordered Task IDs, full completion/reuse/next-Task contracts, and absence of an active `goal_id` field.
 - `validate_he_workflow_config()` rejects missing required fields, unknown or unmapped artifacts, Required artifacts outside `R` Stages, later-Stage dependencies, invalid Stage paths, and unknown next Tasks.
 - `workflow_resume_stage()` derives Start/Resume from runtime artifact status; pure-state and server tests cover new, reusable-output, complete, blocked, failed, and stale cases.
@@ -125,11 +129,17 @@ Recorded on 22 July 2026:
 - An active-code scan of `R/`, `server.R`, and `ui.R` finds no `goal_id` reference.
 - `git diff --check` passes for the affected configuration, UI, test, decision-log, and matrix files.
 
+New acceptance evidence must prove the `DEC-43` matrix in Section 3, disabled
+direct navigation, correct Start/Resume behaviour, and Task 1's Biology and
+Environmental/Site-only import surface. Until then, `RTM-27` remains Partial.
+
 ## 10. Review Record
 
 | Role | Name | Review date | Decision / accepted limitation |
 |---|---|---|---|
-| Owner — UX/Workflow | Lin | `2026-07-21` | Approved |
-| Reviewer — Architecture/State | Bo | `2026-07-22` | Approved |
+| Owner — UX/Workflow | Lin | `2026-07-21` | Historical pre-`DEC-43` approval |
+| Reviewer — Architecture/State | Bo | `2026-07-22` | Historical pre-`DEC-43` approval |
+| Owner — UX/Workflow | Lin | Pending | Review the `DEC-43` paths and Task 1 import restriction |
+| Reviewer — Architecture/State | Bo | Pending | Review configuration/state implications and new tests |
 
-Status: **FROZEN**
+Status: **CHANGES REQUESTED**
