@@ -190,10 +190,11 @@ analysis_model_variable_choices <- function(data, site_col = "biol_site_id") {
   }
   site_count <- length(sites)
 
+  supported_lag_pattern <- paste(SUPPORTED_FLOW_LAGS, collapse = "|")
   flow_pattern <- if (site_count >= 2L) {
-    "^Q(10|95)z_lag[01]$"
+    paste0("^Q(10|95)z_lag(", supported_lag_pattern, ")$")
   } else {
-    "^Q(10|95)z?_lag[01]$"
+    paste0("^Q(10|95)z?_lag(", supported_lag_pattern, ")$")
   }
   flow <- numeric_columns[grepl(flow_pattern, numeric_columns, ignore.case = TRUE)]
 
