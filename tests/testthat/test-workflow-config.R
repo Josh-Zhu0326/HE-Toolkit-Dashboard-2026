@@ -45,6 +45,26 @@ testthat::test_that("canonical Task IDs are frozen in configured order", {
   )
 })
 
+testthat::test_that("Task policy derives stage permissions from stage_path", {
+  configured_policy <- stats::setNames(
+    lapply(he_workflow_tasks, function(task) {
+      task["import_types"]
+    }),
+    he_workflow_task_ids()
+  )
+
+  testthat::expect_identical(
+    configured_policy$ecological_condition$import_types,
+    c("biology", "environment")
+  )
+  testthat::expect_identical(configured_policy$flow_regime$import_types, "flow")
+  testthat::expect_true(task_stage_is_enabled("generate_hev", 4L))
+  testthat::expect_false(task_stage_is_enabled("generate_hev", 5L))
+  testthat::expect_identical(task_last_enabled_stage("generate_hev"), 4L)
+  testthat::expect_true(task_import_is_enabled("flow_regime", "flow"))
+  testthat::expect_false(task_import_is_enabled("flow_regime", "biology"))
+})
+
 testthat::test_that("canonical Stage IDs and all five Task paths are frozen exactly", {
   testthat::expect_identical(
     he_workflow_stage_ids(),
@@ -62,10 +82,10 @@ testthat::test_that("canonical Stage IDs and all five Task paths are frozen exac
     he_workflow_task_ids()
   )
   expected_paths <- list(
-    ecological_condition = c("R", "R", "-", "O", "O"),
-    flow_regime = c("R", "R", "-", "O", "O"),
-    build_he_dataset = c("R", "R", "R", "O", "O"),
-    generate_hev = c("R", "R", "R", "R", "O"),
+    ecological_condition = c("R", "R", "-", "-", "-"),
+    flow_regime = c("R", "R", "-", "-", "-"),
+    build_he_dataset = c("R", "R", "R", "-", "-"),
+    generate_hev = c("R", "R", "R", "R", "-"),
     he_modelling = c("R", "R", "R", "R", "R")
   )
 
@@ -107,7 +127,6 @@ testthat::test_that("completion and reuse contracts are frozen exactly", {
       reusable_artifacts = c(
         "joined_core",
         "joined_enriched",
-        "analysis_dataset",
         "processed_dataset_checkpoint"
       ),
       valid_next_tasks = c("generate_hev", "he_modelling")
@@ -140,15 +159,17 @@ testthat::test_that("completion and reuse contracts are frozen exactly", {
 testthat::test_that("every Task path uses the shared five-stage contract", {
   for (task in he_workflow_tasks) {
     testthat::expect_length(task$stage_path, 5L)
-    testthat::expect_true(all(task$stage_path %in% c("R", "O", "-")))
+    testthat::expect_true(all(task$stage_path %in% c("R", "-")))
     testthat::expect_setequal(
       required_stage_ids(task),
       he_workflow_stage_ids()[task$stage_path == "R"]
     )
-    testthat::expect_setequal(
-      optional_stage_ids(task),
-      he_workflow_stage_ids()[task$stage_path == "O"]
-    )
+    derived_stage_numbers <- which(vapply(
+      seq_along(task$stage_path),
+      function(stage_index) task_stage_is_enabled(task, stage_index),
+      logical(1)
+    ))
+    testthat::expect_identical(derived_stage_numbers, which(task$stage_path == "R"))
   }
 })
 
@@ -184,11 +205,11 @@ testthat::test_that("client-confirmed Task wording is represented exactly", {
   )
 })
 
-testthat::test_that("confirmed Task 4 and Task 5 workflow contracts remain unchanged", {
+testthat::test_that("Task 4 and Task 5 use the strict v2 Stage paths", {
   hev_task <- get_he_workflow_task("generate_hev")
   model_task <- get_he_workflow_task("he_modelling")
 
-  testthat::expect_identical(hev_task$stage_path, c("R", "R", "R", "R", "O"))
+  testthat::expect_identical(hev_task$stage_path, c("R", "R", "R", "R", "-"))
   testthat::expect_identical(model_task$stage_path, c("R", "R", "R", "R", "R"))
   testthat::expect_identical(hev_task$completion_artifact, "hev_result")
   testthat::expect_identical(model_task$completion_artifact, "model_result")
@@ -251,7 +272,7 @@ testthat::test_that("config validation rejects artifacts without a Stage mapping
 testthat::test_that("config validation rejects required artifacts outside required Stages", {
   invalid_cases <- list(
     unused_stage = "joined_core",
-    optional_stage = "analysis_dataset"
+    disabled_stage = "analysis_dataset"
   )
 
   for (artifact_id in invalid_cases) {
@@ -271,6 +292,40 @@ testthat::test_that("config validation rejects required artifacts outside requir
       info = artifact_id
     )
   }
+})
+
+testthat::test_that("config validation rejects superseded optional Stage symbols", {
+  invalid_tasks <- he_workflow_tasks
+  invalid_tasks[[1]]$stage_path[[4L]] <- "O"
+
+  testthat::expect_error(
+    validate_he_workflow_config(tasks = invalid_tasks),
+    "Task ecological_condition has an invalid five-stage path.",
+    fixed = TRUE
+  )
+})
+
+testthat::test_that("config validation rejects non-contiguous Stage paths", {
+  invalid_stages <- he_workflow_tasks
+  invalid_stages[[1]]$stage_path <- c("R", "-", "R", "-", "-")
+  testthat::expect_error(
+    validate_he_workflow_config(tasks = invalid_stages),
+    "must require a contiguous Stage path starting at Stage 1",
+    fixed = TRUE
+  )
+})
+
+testthat::test_that("config validation rejects reusable artifacts from disabled Stages", {
+  invalid_reuse <- he_workflow_tasks
+  invalid_reuse[[3]]$reusable_artifacts <- c(
+    invalid_reuse[[3]]$reusable_artifacts,
+    "analysis_dataset"
+  )
+  testthat::expect_error(
+    validate_he_workflow_config(tasks = invalid_reuse),
+    "reusable artifact(s) mapped to a disabled Stage: analysis_dataset",
+    fixed = TRUE
+  )
 })
 
 testthat::test_that("config validation rejects dependencies on later Stages", {

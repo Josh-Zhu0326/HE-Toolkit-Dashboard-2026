@@ -9,6 +9,60 @@ function(input, output, session){
     task_id = NULL,
     stage_index = 1L
   )
+  previous_task_stage <- reactiveVal(NULL)
+
+  active_task_policy <- function() {
+    task_id <- isolate(workflow_session$task_id)
+    if (is.null(task_id)) NULL else get_he_workflow_task(task_id)
+  }
+
+  require_task_stage <- function(stage_index) {
+    task <- active_task_policy()
+    if (is.null(task) || task_stage_is_enabled(task, stage_index)) {
+      return(TRUE)
+    }
+    showNotification(
+      "This stage is not required for the selected Task.",
+      type = "warning",
+      duration = 6
+    )
+    FALSE
+  }
+
+  require_import_type <- function(import_type) {
+    task <- active_task_policy()
+    if (is.null(task) || task_import_is_enabled(task, import_type)) {
+      return(TRUE)
+    }
+    showNotification(
+      sprintf("%s data are not required for the selected Task.", import_type),
+      type = "warning",
+      duration = 6
+    )
+    FALSE
+  }
+
+  require_task_artifact <- function(artifact_id) {
+    task <- active_task_policy()
+    if (is.null(task)) return(TRUE)
+    task_targets <- unique(c(
+      task$required_artifacts,
+      task$reusable_artifacts,
+      task$completion_artifact
+    ))
+    relevant <- artifact_id %in% task_targets || any(vapply(
+      task_targets,
+      function(target_id) artifact_id %in% workflow_artifact_ancestors(target_id),
+      logical(1)
+    ))
+    if (relevant) return(TRUE)
+    showNotification(
+      "This operation is not required for the selected Task.",
+      type = "warning",
+      duration = 6
+    )
+    FALSE
+  }
   workspace_auth_provider <- workspace_auth_provider_for_session(session)
   workspace_context <- workspace_auth_context(workspace_auth_provider, session)
   workspace_storage <- workspace_storage_for_session(session)
@@ -106,6 +160,19 @@ function(input, output, session){
     workflow_task_selector_ui(registry = workflow_artifacts())
   })
 
+  observe({
+    task_id <- workflow_session$task_id
+    import_types <- if (is.null(task_id)) {
+      character()
+    } else {
+      get_he_workflow_task(task_id)$import_types
+    }
+    session$sendCustomMessage(
+      "workflow-task-policy",
+      list(import_types = unname(import_types))
+    )
+  })
+
   # Always derive Resume from artifact state; do not hard-code a starting Stage.
   lapply(he_workflow_task_ids(), function(task_id) {
     local({
@@ -113,25 +180,44 @@ function(input, output, session){
       observeEvent(input[[paste0("select_task__", current_task_id)]], {
         task <- get_he_workflow_task(current_task_id)
         resume_stage <- workflow_resume_stage(task, workflow_artifacts())
+        source_stage <- if (is.null(workflow_session$task_id)) {
+          previous_task_stage()
+        } else {
+          isolate(workflow_session$stage_index)
+        }
+        selected_stage <- min(resume_stage, task_last_enabled_stage(task))
+        if (!is.null(source_stage) &&
+            !task_stage_is_enabled(task, source_stage)) {
+          selected_stage <- task_last_enabled_stage(task)
+          showNotification(
+            sprintf(
+              "%s ends after Stage %d. You have been returned to the last applicable stage.",
+              task$task_label,
+              selected_stage
+            ),
+            type = "message",
+            duration = 8
+          )
+        }
         workflow_session$task_id <- current_task_id
-        workflow_session$stage_index <- resume_stage
+        workflow_session$stage_index <- selected_stage
+        previous_task_stage(NULL)
         updateNavbarPage(
           session,
           "main_nav",
-          selected = workflow_nav_target(current_task_id, resume_stage)
+          selected = workflow_nav_target(current_task_id, selected_stage)
         )
       }, ignoreInit = TRUE)
     })
   })
 
-  # Keep unused "-" Stages inaccessible in both the UI and server.
+  # Keep every Task-disabled Stage inaccessible in both the UI and server.
   lapply(seq_along(he_workflow_stages), function(stage_index) {
     local({
       current_stage_index <- stage_index
       observeEvent(input[[paste0("workflow_stage_", current_stage_index)]], {
         req(workflow_session$task_id)
-        task <- get_he_workflow_task(workflow_session$task_id)
-        if (!identical(task$stage_path[[current_stage_index]], "-")) {
+        if (require_task_stage(current_stage_index)) {
           workflow_session$stage_index <- current_stage_index
           updateNavbarPage(
             session,
@@ -144,12 +230,14 @@ function(input, output, session){
   })
 
   observeEvent(input$change_task, {
+    previous_task_stage(isolate(workflow_session$stage_index))
     workflow_session$task_id <- NULL
     workflow_session$stage_index <- 1L
     updateNavbarPage(session, "main_nav", selected = "Home")
   }, ignoreInit = TRUE)
 
   observeEvent(input$open_task_selector, {
+    previous_task_stage(isolate(workflow_session$stage_index))
     workflow_session$task_id <- NULL
     workflow_session$stage_index <- 1L
     updateNavbarPage(session, "main_nav", selected = "Home")
@@ -158,12 +246,14 @@ function(input, output, session){
   observeEvent(input$workflow_stage_view_biology, {
     req(workflow_session$task_id)
     req(identical(workflow_session$stage_index, 2L))
+    if (!require_import_type("biology")) return()
     updateNavbarPage(session, "main_nav", selected = "Process Biology")
   }, ignoreInit = TRUE)
 
   observeEvent(input$workflow_stage_view_flow, {
     req(workflow_session$task_id)
     req(identical(workflow_session$stage_index, 2L))
+    if (!require_import_type("flow")) return()
     updateNavbarPage(session, "main_nav", selected = "Process Flow")
   }, ignoreInit = TRUE)
 
@@ -479,6 +569,7 @@ function(input, output, session){
   }
 
   observeEvent(input$import_inv, {
+    if (!require_task_stage(1L) || !require_import_type("biology")) return()
     biology_import_request(NULL)
     if (!workflow_artifact_is_current("site_mapping")) {
       workflow_block_artifact(
@@ -492,6 +583,7 @@ function(input, output, session){
     workflow_begin_artifact("biology_input", "Complete the Biology import.")
   }, ignoreInit = FALSE, priority = 50)
   observeEvent(input$import_env, {
+    if (!require_task_stage(1L) || !require_import_type("environment")) return()
     environment_import_request(NULL)
     if (!workflow_artifact_is_current("site_mapping")) {
       workflow_block_artifact(
@@ -505,6 +597,8 @@ function(input, output, session){
     workflow_begin_artifact("environment_input", "Complete the environmental-data import.")
   }, ignoreInit = FALSE, priority = 50)
   observeEvent(input$run_rict, {
+    if (!require_task_stage(2L) ||
+        !require_import_type("environment")) return()
     rict_request(NULL)
     if (!workflow_artifact_is_current("environment_input")) {
       workflow_block_artifact(
@@ -518,6 +612,9 @@ function(input, output, session){
     workflow_begin_artifact("processed_environment", "Complete RICT prediction processing.")
   }, ignoreInit = TRUE, priority = 100)
   observeEvent(input$calc_OE, {
+    if (!require_task_stage(2L) ||
+        !require_import_type("biology") ||
+        !require_import_type("environment")) return()
     oe_request(NULL)
     if (!workflow_artifact_is_current("biology_input")) {
       workflow_block_artifact(
@@ -539,6 +636,9 @@ function(input, output, session){
     workflow_begin_artifact("oe_result", "Complete the O:E calculation.")
   }, ignoreInit = TRUE, priority = 100)
   request_flow_statistics <- function(source = "manual") {
+    if (!require_task_stage(2L) || !require_import_type("flow")) {
+      return(FALSE)
+    }
     if (!workflow_artifact_is_current("flow_input")) {
       workflow_set_artifact(
         "flow_statistics",
@@ -568,6 +668,7 @@ function(input, output, session){
   # Snapshot controls at click time so lazy output consumers cannot run a new
   # join later with settings the user did not explicitly submit.
   observeEvent(input$join_he, {
+    if (!require_task_stage(3L)) return()
     req(!is.null(input$choose_lags), !is.null(input$choose_join_method))
     mark_hev_result_stale("The Joined HE Dataset is being rebuilt.")
     join_request(NULL)
@@ -614,6 +715,7 @@ function(input, output, session){
     workflow_begin_artifact("joined_core", "Complete the biology–Flow join.")
   }, ignoreInit = TRUE, priority = 110)
   observeEvent(input$renderHEV, {
+    if (!require_task_stage(4L) || !require_task_artifact("hev_result")) return()
     dependency <- hev_dependency_check()
     hev_plot_dependency_status(dependency)
     flow_mode <- normalise_hev_flow_mode(input$hev_flow_data_mode)
@@ -1415,6 +1517,7 @@ function(input, output, session){
   }, ignoreInit = TRUE)
 
   observeEvent(input$import_wq_site_ids, {
+    if (!require_task_stage(1L) || !require_import_type("wq")) return()
     reset_wq_contract_summary(
       "The WQ import source changed. Rebuild the WQ contract summary after the import completes."
     )
@@ -1526,6 +1629,7 @@ function(input, output, session){
   })
 
   observeEvent(input$import_rhs_site_ids, {
+    if (!require_task_stage(1L) || !require_import_type("rhs")) return()
     parsed <- parse_site_metadata(input$meta_paste)
     if (!is.null(parsed$error)) {
       rhs_site_import_data(NULL)
@@ -1674,6 +1778,7 @@ function(input, output, session){
   )
 
   observeEvent(input$build_wq_contract_summary, {
+    if (!require_import_type("wq")) return()
     wq_data <- mapped_wq_plot_data()
     biology_data <- tryCatch(
       isolate(biol_all()),
@@ -1950,6 +2055,7 @@ function(input, output, session){
   })
 
   observeEvent(local_inv_upload(), {
+    if (!require_task_stage(1L) || !require_import_type("biology")) return()
     upload <- local_inv_upload()
     req(!is.null(upload$data), nrow(upload$data) > 0L)
     req(upload$validation$status %in% c("success", "warning"))
@@ -1963,6 +2069,7 @@ function(input, output, session){
   })
 
   observeEvent(local_flow_upload(), {
+    if (!require_task_stage(1L) || !require_import_type("flow")) return()
     upload <- local_flow_upload()
     req(local_flow_is_operational(upload), !is.null(upload$data), nrow(upload$data) > 0L)
     workflow_set_artifact(
@@ -1975,10 +2082,12 @@ function(input, output, session){
   })
 
   observeEvent(input$local_flow_csv, {
+    if (!require_task_stage(1L) || !require_import_type("flow")) return()
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$local_inv_csv, {
+    if (!require_task_stage(1L) || !require_import_type("biology")) return()
     workflow_reset_artifact(
       "biology_input",
       "The Local Biology source changed.",
@@ -2009,6 +2118,7 @@ function(input, output, session){
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$import_flow, {
+    if (!require_task_stage(1L) || !require_import_type("flow")) return()
     if (!local_flow_is_operational(local_flow_upload())) {
       invalidate_flow_derived_state(reset_external = TRUE)
       if (!workflow_artifact_is_current("site_mapping")) {
@@ -2712,6 +2822,7 @@ function(input, output, session){
   })
 
   observeEvent(input$import_donor_flow, {
+    if (!require_task_stage(1L) || !require_import_type("flow")) return()
     import_donor_flow_success(FALSE)
     donor_flow_import_data(NULL)
     parsed <- donor_list_result()
@@ -2815,6 +2926,7 @@ function(input, output, session){
   })
 
   observeEvent(input$impute_flow, {
+    if (!require_task_stage(2L) || !require_import_type("flow")) return()
     parsed <- donor_mapping_result()
     if (!is.null(parsed$error)) {
       flow_imputation_result(list(status = "error", messages = parsed$error, data = NULL))
@@ -3175,6 +3287,7 @@ function(input, output, session){
   }
 
   observeEvent(input$build_joined_enriched, {
+    if (!require_task_stage(3L)) return()
     core <- isolate(join_data())
     req(!is.null(core), nrow(core) > 0L)
     selected <- isolate(selected_enrichments())
@@ -3349,6 +3462,7 @@ function(input, output, session){
   }
 
   observeEvent(input$load_processed_dataset_checkpoint, {
+    if (!require_task_stage(3L)) return()
     uploaded <- isolate(input$processed_dataset_checkpoint_file)
     if (is.null(uploaded) || is.null(uploaded$datapath)) {
       message <- "Choose a processed dataset checkpoint before loading."
@@ -3541,16 +3655,19 @@ function(input, output, session){
   }, ignoreInit = TRUE)
 
   observeEvent(input$analysis_select_all_samples, {
+    if (!require_task_stage(4L)) return()
     tbl <- isolate(analysis_sample_table_data())
     req(!is.null(tbl), nrow(tbl) > 0L)
     DT::selectRows(analysis_sample_table_proxy, seq_len(nrow(tbl)))
   }, ignoreInit = TRUE)
 
   observeEvent(input$analysis_clear_all_samples, {
+    if (!require_task_stage(4L)) return()
     DT::selectRows(analysis_sample_table_proxy, NULL)
   }, ignoreInit = TRUE)
 
   observeEvent(input$apply_analysis_sample_selection, {
+    if (!require_task_stage(4L)) return()
     tbl <- isolate(analysis_sample_table_data())
     req(!is.null(tbl), nrow(tbl) > 0L)
     joined <- isolate(current_joined_source()$analysis_dataset)
@@ -3676,6 +3793,7 @@ function(input, output, session){
   }
 
   observeEvent(input$exclude_analysis_record, {
+    if (!require_task_stage(4L)) return()
     record_id <- trimws(input$analysis_record_id)
     req(nzchar(record_id))
     context <- analysis_record_context(
@@ -3695,6 +3813,7 @@ function(input, output, session){
   }, ignoreInit = TRUE)
 
   observeEvent(input$restore_analysis_record, {
+    if (!require_task_stage(4L)) return()
     record_id <- trimws(input$analysis_record_id)
     req(nzchar(record_id))
     next_selection <- restore_record(
@@ -3978,6 +4097,7 @@ function(input, output, session){
   basic_model_result <- reactiveVal(new_analysis_model_ui_result())
 
   observeEvent(input$run_basic_model, {
+    if (!require_task_stage(5L) || !require_task_artifact("model_result")) return()
     workflow_begin_artifact("model_spec", "Validate the selected model specification.")
     workflow_begin_artifact("model_result", "Complete model fitting and diagnostics.")
     data <- tryCatch(

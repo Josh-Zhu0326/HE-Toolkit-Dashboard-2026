@@ -137,12 +137,13 @@ workflow_style_tags <- function() {
     .workflow-stagebar .btn:hover:not(:disabled) { color:var(--wf-green-dark); background:#f8faf8; }
     .workflow-stagebar .btn.is-current { color:var(--wf-green-dark); border-bottom-color:var(--wf-green); background:var(--wf-green-soft); }
     .workflow-stagebar .btn.is-required .workflow-stage-name { color:var(--wf-ink); }
-    .workflow-stagebar .btn:disabled { cursor:not-allowed; opacity:.55; }
+    .workflow-stagebar .btn:disabled { cursor:not-allowed; color:#7b857f; background:var(--wf-grey-soft); opacity:.72; }
+    .workflow-stagebar .btn:disabled .workflow-stage-name,
+    .workflow-stagebar .btn:disabled .workflow-stage-mark { color:#68736c; }
     .workflow-stage-number { display:block; font-size:.69rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
     .workflow-stage-name { display:block; margin-top:3px; font-size:.81rem; font-weight:650; line-height:1.25; }
     .workflow-stage-mark { display:block; margin-top:5px; color:#8a948e; font-size:.69rem; font-weight:700; }
     .workflow-stagebar .is-required .workflow-stage-mark { color:var(--wf-green); }
-    .workflow-stagebar .is-optional .workflow-stage-mark { color:var(--wf-blue); }
     .workflow-stage-subnav { padding:8px clamp(16px,4vw,44px); display:flex; justify-content:center; gap:8px; border-bottom:1px solid var(--wf-line); background:#f8faf8; }
     .workflow-stage-subnav .btn { min-height:34px; padding:5px 12px; border:1px solid var(--wf-line); border-radius:6px; color:var(--wf-green-dark); background:#fff; box-shadow:none; }
     .workflow-stage-subnav .btn.is-current { border-color:var(--wf-green); background:var(--wf-green-soft); font-weight:700; }
@@ -286,6 +287,80 @@ workflow_style_tags <- function() {
     @media (prefers-reduced-motion:reduce) {
       .workflow-task-card { transition-duration:.01ms!important; transform:none!important; }
     }
+  "))
+}
+
+workflow_task_policy_script <- function() {
+  shiny::tags$script(shiny::HTML("
+    (function() {
+      function policyAllows(element, allowed) {
+        var types = (element.getAttribute('data-task-imports') || '')
+          .split(',')
+          .map(function(value) { return value.trim(); })
+          .filter(Boolean);
+        return types.some(function(type) { return allowed.indexOf(type) !== -1; });
+      }
+
+      function setRelatedTabVisibility(marker, visible) {
+        if (marker.getAttribute('data-task-import-panel') !== 'true') return;
+        var pane = marker.closest('.tab-pane');
+        if (!pane || !pane.id) return;
+        pane.hidden = !visible;
+        var escapedId = window.CSS && CSS.escape ? CSS.escape(pane.id) : pane.id;
+        document.querySelectorAll(
+          '[href=\"#' + escapedId + '\"], [data-bs-target=\"#' + escapedId + '\"]'
+        ).forEach(function(link) {
+          var item = link.closest('.nav-item') || link;
+          item.hidden = !visible;
+          link.setAttribute('aria-hidden', visible ? 'false' : 'true');
+          link.setAttribute('tabindex', visible ? '0' : '-1');
+        });
+      }
+
+      function activateVisibleTabs() {
+        document.querySelectorAll('.tab-content').forEach(function(tabContent) {
+          var active = tabContent.querySelector(':scope > .tab-pane.active');
+          if (!active || !active.hidden) return;
+          var next = Array.from(tabContent.querySelectorAll(':scope > .tab-pane'))
+            .find(function(pane) { return !pane.hidden; });
+          if (!next || !next.id) return;
+          var escapedId = window.CSS && CSS.escape ? CSS.escape(next.id) : next.id;
+          var link = document.querySelector(
+            '[href=\"#' + escapedId + '\"], [data-bs-target=\"#' + escapedId + '\"]'
+          );
+          if (link) link.click();
+        });
+      }
+
+      function activateFirstAllowedImportPanel() {
+        var marker = Array.from(document.querySelectorAll(
+          '[data-task-import-panel=\"true\"]'
+        )).find(function(element) { return !element.hidden; });
+        if (!marker) return;
+        var pane = marker.closest('.tab-pane');
+        if (!pane || !pane.id) return;
+        var escapedId = window.CSS && CSS.escape ? CSS.escape(pane.id) : pane.id;
+        var link = document.querySelector(
+          '[href=\"#' + escapedId + '\"], [data-bs-target=\"#' + escapedId + '\"]'
+        );
+        if (link) link.click();
+      }
+
+      Shiny.addCustomMessageHandler('workflow-task-policy', function(policy) {
+        var configured = policy ? policy.import_types : null;
+        var allowed = Array.isArray(configured)
+          ? configured
+          : (typeof configured === 'string' ? [configured] : []);
+        document.querySelectorAll('[data-task-imports]').forEach(function(element) {
+          var visible = policyAllows(element, allowed);
+          element.hidden = !visible;
+          element.setAttribute('aria-hidden', visible ? 'false' : 'true');
+          setRelatedTabVisibility(element, visible);
+        });
+        activateVisibleTabs();
+        if (allowed.length > 0) activateFirstAllowedImportPanel();
+      });
+    })();
   "))
 }
 
@@ -475,11 +550,16 @@ workflow_stage_nav_ui <- function(task = NULL, current_stage = NULL) {
       lapply(seq_along(he_workflow_stages), function(index) {
         stage <- he_workflow_stages[[index]]
         mark <- task$stage_path[[index]]
-        mark_text <- switch(mark, R = "Required", O = "Optional", `-` = "Not used")
+        enabled <- task_stage_is_enabled(task, index)
+        mark_text <- if (enabled) {
+          "Required"
+        } else {
+          "Not required for this Task"
+        }
         class_name <- paste(
           if (identical(index, current_stage)) "is-current" else "",
           if (identical(mark, "R")) "is-required" else "",
-          if (identical(mark, "O")) "is-optional" else ""
+          if (!enabled) "is-disabled" else ""
         )
         button <- shiny::actionButton(
           paste0("workflow_stage_", index),
@@ -490,8 +570,13 @@ workflow_stage_nav_ui <- function(task = NULL, current_stage = NULL) {
           ),
           class = class_name
         )
-        if (identical(mark, "-")) {
-          button <- htmltools::tagAppendAttributes(button, disabled = "disabled")
+        if (!enabled) {
+          button <- htmltools::tagAppendAttributes(
+            button,
+            disabled = "disabled",
+            `aria-disabled` = "true",
+            title = "Not required for this Task"
+          )
         }
         if (identical(index, current_stage)) {
           button <- htmltools::tagAppendAttributes(button, `aria-current` = "step")
@@ -539,11 +624,7 @@ workflow_required_steps_ui <- function(task, stage_index, registry) {
 
     return(shiny::p(
       class = "workflow-panel-empty",
-      if (identical(stage_mark, "O")) {
-        "This Stage is optional for the selected Task and has no separate required output."
-      } else {
-        "This Stage is not used by the selected Task."
-      }
+      "This Stage is not used by the selected Task."
     ))
   }
 
@@ -637,11 +718,7 @@ workflow_checkpoint_ui <- function(task, stage_index, registry) {
       } else {
         shiny::p(
           class = "workflow-checkpoint-empty",
-          if (identical(task$stage_path[[stage_index]], "O")) {
-            "No separate required artifact is recorded for this optional Stage."
-          } else {
-            "This Stage is not used by the selected Task."
-          }
+          "This Stage is not used by the selected Task."
         )
       }
     } else {

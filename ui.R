@@ -5,6 +5,7 @@ tagList(
   tags$head(
     # Load workflow styles once here; keep workflow markup in workflow_ui.R.
     workflow_style_tags(),
+    workflow_task_policy_script(),
     tags$style(type='text/css', ".irs-grid-text { font-size: 10pt; }"),
     tags$style(HTML("
       .hint-text {
@@ -271,13 +272,22 @@ page_navbar(
               ),
               div(class = "sidebar-section control-stack action-stack",
                 h5("Core HE imports"),
-                dateRangeInput("date_range_biol", "Biology sample dates", start="1990-01-01", end=as.character(Sys.Date())),
-                dateRangeInput("date_range_flow", "Flow data dates", start="1990-01-01", end=as.character(Sys.Date())),
-                actionButton("import_inv", "Import biology data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
-                actionButton("import_env", "Import environmental data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
-                actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                div(
+                  `data-task-imports` = "biology",
+                  dateRangeInput("date_range_biol", "Biology sample dates", start="1990-01-01", end=as.character(Sys.Date())),
+                  actionButton("import_inv", "Import biology data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                ),
+                div(
+                  `data-task-imports` = "environment",
+                  actionButton("import_env", "Import environmental data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                ),
+                div(
+                  `data-task-imports` = "flow",
+                  dateRangeInput("date_range_flow", "Flow data dates", start="1990-01-01", end=as.character(Sys.Date())),
+                  actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                )
               ),
-              div(class = "sidebar-section control-stack action-stack",
+              div(class = "sidebar-section control-stack action-stack", `data-task-imports` = "flow",
                 h5("Additional donor Flow"),
                 div(class = "hint-text", "Add donor mappings and import any donor Flow sites that are not already present in the main Flow data."),
                 textAreaInput("donor_mapping_paste", "Paste donor mapping here"),
@@ -288,18 +298,24 @@ page_navbar(
                 tableOutput("table3"),
                 actionButton("import_donor_flow", "Import additional donor flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
               ),
-              div(class = "sidebar-section control-stack action-stack",
+              div(class = "sidebar-section control-stack action-stack", `data-task-imports` = "wq,rhs",
                 h5("Optional WQ/RHS inputs"),
                 div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
-                dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
-                actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE)),
-                actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                div(
+                  `data-task-imports` = "wq",
+                  dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
+                  actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                ),
+                div(
+                  `data-task-imports` = "rhs",
+                  actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                )
               )
             ),
             
   ## Main body ----
             nav_panel("Biology Data",
-                      div(class = "dashboard-page dashboard-page-wide",
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "biology", `data-task-import-panel` = "true",
                         card(class = "dashboard-card",
                           card_header("Imported biology data"),
                           p(class = "hint-text", "Review the biology records imported for the mapped biology site IDs."),
@@ -307,7 +323,7 @@ page_navbar(
                         )
                       )),
             nav_panel("Environmental Data",
-                      div(class = "dashboard-page dashboard-page-wide",
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "environment", `data-task-import-panel` = "true",
                         card(class = "dashboard-card",
                           card_header("Environmental base data"),
                           radioButtons(inputId = "env_data_display", "Display:", choices = c("Data", "PCA")),
@@ -316,7 +332,7 @@ page_navbar(
                       )
             ),
             nav_panel("Flow Data",
-                      div(class = "dashboard-page dashboard-page-wide",
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "flow", `data-task-import-panel` = "true",
                         card(class = "dashboard-card wide-plot-card",
                           card_header("Imported flow data"),
                           p(class = "hint-text", "This view refreshes when the main Flow source or additional donor Flow data is imported."),
@@ -334,7 +350,7 @@ page_navbar(
                       )
             ),
             nav_panel("WQ Data",
-                      div(class = "dashboard-page dashboard-page-wide",
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "wq", `data-task-import-panel` = "true",
                         h3(class = "section-title", "Water Quality supporting data"),
                         p(class = "page-lead", "Mapped WQ data can be reviewed, plotted, and downloaded here. These data remain separate from O:E calculations."),
                         layout_columns(
@@ -379,7 +395,7 @@ page_navbar(
                       )
             ),
             nav_panel("RHS Data",
-                      div(class = "dashboard-page dashboard-page-wide",
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "rhs", `data-task-import-panel` = "true",
                         h3(class = "section-title", "River Habitat Survey supporting data"),
                         p(class = "page-lead", "Mapped RHS data can be reviewed, plotted, and downloaded here. Missing or TBC RHS IDs are handled safely."),
                         layout_columns(
@@ -410,12 +426,12 @@ page_navbar(
                       )
             ),
             nav_panel("Local File Import",
-                      div(class = "dashboard-page dashboard-page-wide",
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "biology,flow", `data-task-import-panel` = "true",
                         h3(class = "section-title", "Local CSV file import"),
                         p(class = "page-lead", "Upload local files for validation. A valid Local Flow upload is used as the Flow data source; local invertebrate data remain separate from O:E."),
                         layout_columns(
                           col_widths = c(6, 6),
-                          card(class = "dashboard-card",
+                          card(class = "dashboard-card", `data-task-imports` = "biology",
                             card_header("Local invertebrate CSV"),
                             div(class = "hint-text", "Required columns: biol_site_id, date, taxon, abundance."),
                             fileInput("local_inv_csv", "Choose local invertebrate CSV", accept = c(".csv", "text/csv")),
@@ -428,7 +444,7 @@ page_navbar(
                             DT::dataTableOutput("exclusion_log_table"),
                             downloadButton("download_exclusion_log", "Download exclusion log as CSV")
                           ),
-                          card(class = "dashboard-card",
+                          card(class = "dashboard-card", `data-task-imports` = "flow",
                             card_header("Local flow CSV"),
                             div(class = "hint-text", "Required columns: flow_site_id, date, flow. A valid upload is used as the Flow data source."),
                             fileInput("local_flow_csv", "Choose local flow CSV", accept = c(".csv", "text/csv")),
