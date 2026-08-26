@@ -442,6 +442,178 @@ g_legend <- function(a_gplot){
 
 ## Overwrite plot_hev function ----
 
+hev_axis_transform <- function(flow_values, biology_values) {
+  if (!is.numeric(flow_values) || !is.numeric(biology_values)) {
+    stop("Flow and biology values must be numeric.", call. = FALSE)
+  }
+
+  finite_flow <- flow_values[is.finite(flow_values)]
+  finite_biology <- biology_values[is.finite(biology_values)]
+  if (length(finite_flow) == 0L || length(finite_biology) == 0L) {
+    stop("Flow and biology values must contain finite observations.", call. = FALSE)
+  }
+
+  flow_range <- range(finite_flow)
+  biology_range <- range(finite_biology)
+  flow_width <- diff(flow_range)
+  biology_width <- diff(biology_range)
+  if (!is.finite(flow_width) || flow_width <= 0) {
+    stop("Selected Flow values must contain more than one distinct finite value.", call. = FALSE)
+  }
+  if (!is.finite(biology_width) || biology_width <= 0) {
+    stop("The selected biology metric must contain more than one distinct finite value.", call. = FALSE)
+  }
+
+  ratio <- unname(flow_width / biology_width)
+  offset <- unname(flow_range[[1L]] - biology_range[[1L]] * ratio)
+
+  list(
+    flow_range = unname(flow_range),
+    biology_range = unname(biology_range),
+    ratio = ratio,
+    offset = offset,
+    forward = function(value) value * ratio + offset,
+    inverse = function(value) (value - offset) / ratio
+  )
+}
+
+hev_metric_plot_theme <- function() {
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(
+      color = "black",
+      size = 10,
+      face = "bold",
+      hjust = 0.5
+    ),
+    legend.title = ggplot2::element_blank(),
+    legend.text = ggplot2::element_text(size = 10),
+    axis.text.x = ggplot2::element_text(size = 10),
+    axis.text.y = ggplot2::element_text(size = 10),
+    axis.title.x = ggplot2::element_text(size = 12),
+    axis.title.y.left = ggplot2::element_text(size = 12),
+    axis.title.y.right = ggplot2::element_text(size = 12)
+  )
+}
+
+build_hev_metric_plot <- function(data,
+                                  date_col,
+                                  flow_metrics,
+                                  biology_metric,
+                                  colour_col = NULL,
+                                  show_status = FALSE,
+                                  river_type = "non_chalk") {
+  required_columns <- unique(c(date_col, flow_metrics, biology_metric, colour_col))
+  missing_columns <- setdiff(required_columns, names(data))
+  if (length(missing_columns) > 0L) {
+    stop(
+      sprintf(
+        "HEV plot data are missing required column(s): %s.",
+        paste(missing_columns, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  if (!all(vapply(data[flow_metrics], is.numeric, logical(1)))) {
+    stop("Selected Flow statistics must be numeric.", call. = FALSE)
+  }
+  if (!is.numeric(data[[biology_metric]])) {
+    stop("The selected biology metric must be numeric.", call. = FALSE)
+  }
+
+  axis_transform <- hev_axis_transform(
+    unlist(data[flow_metrics], use.names = FALSE),
+    data[[biology_metric]]
+  )
+
+  flow_data <- tidyr::pivot_longer(
+    data[, unique(c(date_col, flow_metrics)), drop = FALSE],
+    cols = dplyr::all_of(flow_metrics),
+    names_to = ".flow_metric",
+    values_to = ".flow_value"
+  )
+  flow_data$.flow_metric <- factor(
+    flow_data$.flow_metric,
+    levels = flow_metrics
+  )
+
+  metric_data <- data
+  metric_data$.biology_scaled <- axis_transform$forward(
+    metric_data[[biology_metric]]
+  )
+  flow_colours <- stats::setNames(
+    c("#56B4E9", "#0072B2")[seq_along(flow_metrics)],
+    flow_metrics
+  )
+
+  plot <- ggplot2::ggplot(
+    flow_data,
+    ggplot2::aes(
+      x = .data[[date_col]],
+      y = .flow_value,
+      colour = .flow_metric,
+      group = .flow_metric
+    )
+  ) +
+    ggplot2::geom_line() +
+    ggplot2::scale_colour_manual(
+      name = "Flow Statistics",
+      values = flow_colours,
+      breaks = flow_metrics,
+      labels = flow_metrics,
+      guide = "legend"
+    ) +
+    ggnewscale::new_scale_colour()
+
+  point_mapping <- if (is.null(colour_col)) {
+    ggplot2::aes(
+      x = .data[[date_col]],
+      y = .biology_scaled
+    )
+  } else {
+    ggplot2::aes(
+      x = .data[[date_col]],
+      y = .biology_scaled,
+      colour = .data[[colour_col]]
+    )
+  }
+  plot <- plot +
+    ggplot2::geom_point(
+      data = metric_data,
+      mapping = point_mapping,
+      inherit.aes = FALSE
+    ) +
+    ggplot2::scale_y_continuous(
+      name = "Flow",
+      sec.axis = ggplot2::sec_axis(
+        transform = axis_transform$inverse,
+        name = biology_metric
+      )
+    ) +
+    ggplot2::labs(x = date_col, y = "") +
+    hev_metric_plot_theme()
+
+  if (!is.null(colour_col)) {
+    plot <- plot +
+      ggplot2::scale_colour_discrete(
+        breaks = function(values) values[!is.na(values)]
+      )
+  }
+
+  if (isTRUE(show_status)) {
+    plot <- add_hev_status_layers(
+      plot,
+      biology_metric,
+      axis_transform$ratio,
+      axis_transform$offset,
+      axis_transform$biology_range[[1L]],
+      axis_transform$biology_range[[2L]],
+      river_type
+    )
+  }
+
+  plot
+}
+
 plot_hev_dash <- function(data,
                           date_col,
                           flow_stat,
@@ -451,565 +623,113 @@ plot_hev_dash <- function(data,
                           save_dir = getwd(),
                           clr_by = NULL,
                           show_status = FALSE,
-                          river_type = "non_chalk"){
-  
-  
-  if(is.data.frame(data) == FALSE){stop("Data frame 'data' not found")}
-  
-  if((date_col %in% colnames(data)) == FALSE)
-  {stop("Specified date column was not identified in 'data'")}
-  
-  if(all(unique(flow_stat) %in% colnames(data)) == FALSE)
-  {stop("Specified flow statistics were not identified in 'data'")}
-  
-  if(all(unique(biol_metric) %in% colnames(data)) == FALSE)
-  {stop("Specified biology metrics were not identified in 'data'")}
-  
-  if(is.logical(multiplot) == FALSE) {stop("multiplot is not logical")}
-  
-  if(is.logical(save) == FALSE) {stop("Save is not logical")}
-  
-  if(file.exists(save_dir) == FALSE) {stop("Specified save directory does not exist")}
-  
-  if(length(biol_metric) > 4){stop("More then 4 biology metrics have been selected")}
-  
-  if(length(flow_stat) > 2){stop("More then 2 flow statistics have been selected")}
-  
-  if(is.null(clr_by) == FALSE && isTRUE(clr_by %in% names(data)) == FALSE)
-  {stop("clr_by variable does not exist in data")}
+                          river_type = "non_chalk") {
+  if (!is.data.frame(data)) {
+    stop("Data frame 'data' not found.", call. = FALSE)
+  }
+  if (!is.character(date_col) || length(date_col) != 1L ||
+      is.na(date_col) || !nzchar(date_col) || !date_col %in% names(data)) {
+    stop("Specified date column was not identified in 'data'.", call. = FALSE)
+  }
+  if (!is.logical(multiplot) || length(multiplot) != 1L || is.na(multiplot)) {
+    stop("multiplot must be one logical value.", call. = FALSE)
+  }
+  if (!is.logical(save) || length(save) != 1L || is.na(save)) {
+    stop("save must be one logical value.", call. = FALSE)
+  }
+  if (!is.character(save_dir) || length(save_dir) != 1L ||
+      is.na(save_dir) || !dir.exists(save_dir)) {
+    stop("Specified save directory does not exist.", call. = FALSE)
+  }
+
+  flow_stat <- normalise_hev_metric_selection(flow_stat)
+  biol_metric <- normalise_hev_metric_selection(biol_metric)
+  if (length(flow_stat) == 0L || length(flow_stat) > 2L) {
+    stop("Select one or two Flow statistics.", call. = FALSE)
+  }
+  if (length(biol_metric) == 0L || length(biol_metric) > 4L) {
+    stop("Select between one and four biology metrics.", call. = FALSE)
+  }
+
+  missing_flow <- setdiff(flow_stat, names(data))
+  if (length(missing_flow) > 0L) {
+    stop("Specified Flow statistics were not identified in 'data'.", call. = FALSE)
+  }
+  missing_biology <- setdiff(biol_metric, names(data))
+  if (length(missing_biology) > 0L) {
+    stop("Specified biology metrics were not identified in 'data'.", call. = FALSE)
+  }
+  if (!is.null(clr_by) &&
+      (!is.character(clr_by) || length(clr_by) != 1L ||
+       is.na(clr_by) || !nzchar(clr_by) || !clr_by %in% names(data))) {
+    stop("clr_by variable does not exist in data.", call. = FALSE)
+  }
 
   river_type <- normalise_hev_river_type(river_type)
-  
-  # Pull-in data
-  
-  data$flow_stat_1 <- dplyr::pull(data, flow_stat[1])
-  
-  if(is.numeric(data$flow_stat_1) == FALSE)
-  {stop("Selected flow_stat is non-numeric")}
-  
-  if(is.na(flow_stat[2]) == FALSE){
-    
-    data$flow_stat_2 <- dplyr::pull(data, flow_stat[2])
-    
-    if(is.numeric(data$flow_stat_2) == FALSE)
-    {stop("Second flow_stat is non-numeric")}
-    
-  }
-  
-  if(is.na(flow_stat[2]) == TRUE){
-    
-    data$flow_stat_2 <- NA}
-  
-  data$biol_metric_1 <- dplyr::pull(data, biol_metric[1])
-  
-  if(is.numeric(data$biol_metric_1) == FALSE)
-  {stop("Selected biol_metric is non-numeric")}
-  
-  if(is.na(biol_metric[2]) == FALSE){
-    
-    data$biol_metric_2 <- dplyr::pull(data, biol_metric[2])
-    
-    if(is.numeric(data$biol_metric_2) == FALSE)
-    {stop("Second biol_metric is non-numeric")}
-    
-  }
-  
-  if(is.na(biol_metric[3]) == FALSE){
-    
-    data$biol_metric_3 <- dplyr::pull(data, biol_metric[3])
-    
-    if(is.numeric(data$biol_metric_3) == FALSE)
-    {stop("Third biol_metric is non-numeric")}
-    
-  }
-  
-  if(is.na(biol_metric[4]) == FALSE){
-    
-    data$biol_metric_4 <- dplyr::pull(data, biol_metric[4])
-    
-    if(is.numeric(data$biol_metric_4) == FALSE)
-    {stop("Fourth biol_metric is non-numeric")}
-    
-  }
-  
-  data$plot_date <- dplyr::pull(data, date_col)
-  
-  if(is.null(clr_by) == FALSE){
-    data$clr_by <- dplyr::pull(data, clr_by)}
-  
-  # Set-up data transformation
-  
-  # get y1 range
-  
-  if(is.na(flow_stat[2]) == FALSE){
-    
-    y1a_min <- min(data$flow_stat_1, na.rm = TRUE)
-    y1b_min <- min(data$flow_stat_2, na.rm = TRUE)
-    
-    if(isTRUE(y1a_min <= y1b_min) == TRUE){y1_min <- y1a_min}
-    else {y1_min <- y1b_min}
-    
-    y1a_max <- max(data$flow_stat_1, na.rm = TRUE)
-    y1b_max <- max(data$flow_stat_2, na.rm = TRUE)
-    
-    if(isTRUE(y1a_max >= y1b_max) == TRUE){y1_max <- y1a_max}
-    else {y1_max <- y1b_max}
-    
-    y1_range <- y1_max - y1_min
-    
-  }
-  
-  if(is.na(flow_stat[2]) == TRUE){
-    
-    y1_min <- min(data$flow_stat_1, na.rm = TRUE)
-    y1_max <- max(data$flow_stat_1, na.rm = TRUE)
-    y1_range <- y1_max - y1_min
-    
-  }
-  
-  # Get y2 range
-  
-  y2_min <- min(data$biol_metric_1, na.rm = TRUE)
-  y2_max <- max(data$biol_metric_1, na.rm = TRUE)
-  y2_range <- y2_max - y2_min
-  
-  # range ratio
-  rangeratio_1 <- y1_range/y2_range
-  minadj_1 <- y1_min - y2_min*rangeratio_1
-  
-  data$y2trans <- data$biol_metric_1 * rangeratio_1 + minadj_1
-  
-  #Define colours
-  #cols <- RColorBrewer::brewer.pal(8, "Dark2")
-  
-  if(is.na(flow_stat[2]) == FALSE){
-    
-    # First plot
-    
-    p1 <- data %>%
-      ggplot2::ggplot() +
-      geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-      geom_line(data, mapping = aes(x = plot_date, y = flow_stat_2, colour = '#0072B2')) +
-      scale_color_identity(name = "Flow Statistics",
-                           breaks = c('#56B4E9', '#0072B2'),
-                           labels = c(flow_stat[1], flow_stat[2]),
-                           guide = "legend") +
-      ggnewscale::new_scale_color() +
-      geom_point(data, mapping = aes(x = plot_date, y = y2trans, colour = clr_by)) +
-      scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_1)/rangeratio_1,
-                                                            name = biol_metric[1])) +
-      labs(x = date_col, y = "") +
-      scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-      #ggtitle(biol_metric[1]) +
-      theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                      hjust = 0.5),
-            legend.title = element_blank(),
-            legend.text = element_text(size = 10),
-            axis.text.x = element_text(size = 10),
-            axis.text.y = element_text(size = 10),
-            axis.title.x = element_text(size = 12),
-            axis.title.y.left = element_text(size = 12),
-            axis.title.y.right = element_text(size = 12))
+  plots <- stats::setNames(
+    lapply(biol_metric, function(metric) {
+      build_hev_metric_plot(
+        data = data,
+        date_col = date_col,
+        flow_metrics = flow_stat,
+        biology_metric = metric,
+        colour_col = clr_by,
+        show_status = show_status,
+        river_type = river_type
+      )
+    }),
+    biol_metric
+  )
 
-    if (isTRUE(show_status)) {
-      p1 <- add_hev_status_layers(p1, biol_metric[1], rangeratio_1, minadj_1, y2_min, y2_max, river_type)
+  if (length(plots) == 1L) {
+    print(plots[[1L]])
+    if (isTRUE(save)) {
+      ggplot2::ggsave(
+        file.path(save_dir, paste0(biol_metric[[1L]], "_Plot.png")),
+        plot = plots[[1L]]
+      )
     }
-    
-    if(is.na(biol_metric[2]) == FALSE){
-      
-      # Get y3 range
-      
-      y3_min <- min(data$biol_metric_2, na.rm = TRUE)
-      y3_max <- max(data$biol_metric_2, na.rm = TRUE)
-      y3_range <- y3_max - y3_min
-      
-      # range ratio
-      rangeratio_2 <- y1_range/y3_range
-      minadj_2 <- y1_min - y3_min*rangeratio_2
-      
-      data$y3trans <- data$biol_metric_2 * rangeratio_2 + minadj_2
-      
-      p2 <- data %>%
-        ggplot2::ggplot() +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_2, colour = '#0072B2')) +
-        scale_color_identity(name = "Flow Statistics",
-                             breaks = c('#56B4E9', '#0072B2'),
-                             labels = c(flow_stat[1], flow_stat[2]),
-                             guide = "legend") +
-        ggnewscale::new_scale_color() +
-        geom_point(data, mapping = aes(x = plot_date, y = y3trans, colour = clr_by)) +
-        scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_2)/rangeratio_2, name = biol_metric[2])) +
-        labs(x = date_col, y = "") +
-        scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-        #ggtitle(biol_metric[2]) +
-        theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                        hjust = 0.5),
-              legend.title = element_blank(),
-              legend.text = element_text(size = 10),
-              axis.text.x = element_text(size = 10),
-              axis.text.y = element_text(size = 10),
-              axis.title.x = element_text(size = 12),
-              axis.title.y.left = element_text(size = 12),
-              axis.title.y.right = element_text(size = 12))
+    return(plots[[1L]])
+  }
 
-      if (isTRUE(show_status)) {
-        p2 <- add_hev_status_layers(p2, biol_metric[2], rangeratio_2, minadj_2, y3_min, y3_max, river_type)
-      }
-      
+  if (!isTRUE(multiplot)) {
+    invisible(lapply(plots, print))
+    if (isTRUE(save)) {
+      Map(
+        function(plot, metric) {
+          ggplot2::ggsave(
+            file.path(save_dir, paste0(metric, "_Plot.png")),
+            plot = plot
+          )
+        },
+        plots,
+        biol_metric
+      )
     }
-    
-    if(is.na(biol_metric[3]) == FALSE){
-      
-      # Get y4 range
-      
-      y4_min <- min(data$biol_metric_3, na.rm = TRUE)
-      y4_max <- max(data$biol_metric_3, na.rm = TRUE)
-      y4_range <- y4_max - y4_min
-      
-      # range ratio
-      rangeratio_3 <- y1_range/y4_range
-      minadj_3 <- y1_min - y4_min*rangeratio_3
-      
-      data$y4trans <- data$biol_metric_3 * rangeratio_3 + minadj_3
-      
-      
-      p3 <- data %>%
-        ggplot2::ggplot() +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_2, colour = '#0072B2')) +
-        scale_color_identity(name = "Flow Statistics",
-                             breaks = c('#56B4E9', '#0072B2'),
-                             labels = c(flow_stat[1], flow_stat[2]),
-                             guide = "legend") +
-        ggnewscale::new_scale_color() +
-        geom_point(data, mapping = aes(x = plot_date, y = y4trans, colour = clr_by)) +
-        scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_3)/rangeratio_3, name = biol_metric[3])) +
-        labs(x = date_col, y = "") +
-        scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-        #ggtitle(biol_metric[3]) +
-        theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                        hjust = 0.5),
-              legend.title = element_blank(),
-              legend.text = element_text(size = 10),
-              axis.text.x = element_text(size = 10),
-              axis.text.y = element_text(size = 10),
-              axis.title.x = element_text(size = 12),
-              axis.title.y.left = element_text(size = 12),
-              axis.title.y.right = element_text(size = 12))
+    return(unname(plots))
+  }
 
-      if (isTRUE(show_status)) {
-        p3 <- add_hev_status_layers(p3, biol_metric[3], rangeratio_3, minadj_3, y4_min, y4_max, river_type)
-      }
-      
-    }
-    
-    if(is.na(biol_metric[4]) == FALSE){
-      
-      # Get y5 range
-      
-      y5_min <- min(data$biol_metric_4, na.rm = TRUE)
-      y5_max <- max(data$biol_metric_4, na.rm = TRUE)
-      y5_range <- y5_max - y5_min
-      
-      # range ratio
-      rangeratio_4 <- y1_range/y5_range
-      minadj_4 <- y1_min - y5_min*rangeratio_4
-      
-      data$y5trans <- data$biol_metric_4 * rangeratio_4 + minadj_4
-      
-      p4 <- data %>%
-        ggplot2::ggplot() +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_2, colour = '#0072B2')) +
-        scale_color_identity(name = "Flow Statistics",
-                             breaks = c('#56B4E9', '#0072B2'),
-                             labels = c(flow_stat[1], flow_stat[2]),
-                             guide = "legend") +
-        ggnewscale::new_scale_color() +
-        geom_point(data, mapping = aes(x = plot_date, y = y5trans, colour = clr_by)) +
-        scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_3)/rangeratio_3, name = biol_metric[4])) +
-        labs(x = date_col, y = "") +
-        scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-        #ggtitle(biol_metric[3]) +
-        theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                        hjust = 0.5),
-              legend.title = element_blank(),
-              legend.text = element_text(size = 10),
-              axis.text.x = element_text(size = 10),
-              axis.text.y = element_text(size = 10),
-              axis.title.x = element_text(size = 12),
-              axis.title.y.left = element_text(size = 12),
-              axis.title.y.right = element_text(size = 12))
+  arrange_arguments <- c(
+    unname(plots),
+    list(
+      ncol = 2L,
+      common.legend = TRUE,
+      legend = "bottom"
+    )
+  )
+  if (length(plots) > 2L) {
+    arrange_arguments$nrow <- 2L
+  }
+  combined_plot <- do.call(ggpubr::ggarrange, arrange_arguments)
 
-      if (isTRUE(show_status)) {
-        p4 <- add_hev_status_layers(p4, biol_metric[4], rangeratio_4, minadj_4, y5_min, y5_max, river_type)
-      }
-      
-    }
-    
+  if (isTRUE(save)) {
+    ggplot2::ggsave(
+      file.path(save_dir, "Multi_Plot.png"),
+      plot = combined_plot
+    )
   }
-  
-  if(is.na(flow_stat[2]) == TRUE){
-    
-    
-    # First plot
-    
-    p1 <- data %>%
-      ggplot2::ggplot() +
-      geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-      scale_color_identity(name = "Flow Statistics",
-                           breaks = c('#56B4E9'),
-                           labels = c(flow_stat[1]),
-                           guide = "legend") +
-      ggnewscale::new_scale_color() +
-      geom_point(data, mapping = aes(x = plot_date, y = y2trans, colour = clr_by)) +
-      scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_1)/rangeratio_1,
-                                                            name = biol_metric[1])) +
-      labs(x = date_col, y = "") +
-      scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-      #ggtitle(biol_metric[1]) +
-      theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                      hjust = 0.5),
-            legend.title = element_blank(),
-            legend.text = element_text(size = 10),
-            axis.text.x = element_text(size = 10),
-            axis.text.y = element_text(size = 10),
-            axis.title.x = element_text(size = 12),
-            axis.title.y.left = element_text(size = 12),
-            axis.title.y.right = element_text(size = 12))
 
-    if (isTRUE(show_status)) {
-      p1 <- add_hev_status_layers(p1, biol_metric[1], rangeratio_1, minadj_1, y2_min, y2_max, river_type)
-    }
-    
-    if(is.na(biol_metric[2]) == FALSE){
-      
-      # Get y3 range
-      
-      y3_min <- min(data$biol_metric_2, na.rm = TRUE)
-      y3_max <- max(data$biol_metric_2, na.rm = TRUE)
-      y3_range <- y3_max - y3_min
-      
-      # range ratio
-      rangeratio_2 <- y1_range/y3_range
-      minadj_2 <- y1_min - y3_min*rangeratio_2
-      
-      data$y3trans <- data$biol_metric_2 * rangeratio_2 + minadj_2
-      
-      p2 <- data %>%
-        ggplot2::ggplot() +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-        scale_color_identity(name = "Flow Statistics",
-                             breaks = c('#56B4E9'),
-                             labels = c(flow_stat[1]),
-                             guide = "legend") +
-        ggnewscale::new_scale_color() +
-        geom_point(data, mapping = aes(x = plot_date, y = y3trans, colour = clr_by)) +
-        scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_2)/rangeratio_2, name = biol_metric[2])) +
-        labs(x = date_col, y = "") +
-        scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-        #ggtitle(biol_metric[2]) +
-        theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                        hjust = 0.5),
-              legend.title = element_blank(),
-              legend.text = element_text(size = 10),
-              axis.text.x = element_text(size = 10),
-              axis.text.y = element_text(size = 10),
-              axis.title.x = element_text(size = 12),
-              axis.title.y.left = element_text(size = 12),
-              axis.title.y.right = element_text(size = 12))
-
-      if (isTRUE(show_status)) {
-        p2 <- add_hev_status_layers(p2, biol_metric[2], rangeratio_2, minadj_2, y3_min, y3_max, river_type)
-      }
-      
-    }
-    
-    if(is.na(biol_metric[3]) == FALSE){
-      
-      # Get y4 range
-      
-      y4_min <- min(data$biol_metric_3, na.rm = TRUE)
-      y4_max <- max(data$biol_metric_3, na.rm = TRUE)
-      y4_range <- y4_max - y4_min
-      
-      # range ratio
-      rangeratio_3 <- y1_range/y4_range
-      minadj_3 <- y1_min - y4_min*rangeratio_3
-      
-      data$y4trans <- data$biol_metric_3 * rangeratio_3 + minadj_3
-      
-      
-      p3 <- data %>%
-        ggplot2::ggplot() +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-        scale_color_identity(name = "Flow Statistics",
-                             breaks = c('#56B4E9'),
-                             labels = c(flow_stat[1]),
-                             guide = "legend") +
-        ggnewscale::new_scale_color() +
-        geom_point(data, mapping = aes(x = plot_date, y = y4trans, colour = clr_by)) +
-        
-        scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_3)/rangeratio_3, name = biol_metric[3])) +
-        labs(x = date_col, y = "") +
-        scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-        #ggtitle(biol_metric[3]) +
-        theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                        hjust = 0.5),
-              legend.title = element_blank(),
-              legend.text = element_text(size = 10),
-              axis.text.x = element_text(size = 10),
-              axis.text.y = element_text(size = 10),
-              axis.title.x = element_text(size = 12),
-              axis.title.y.left = element_text(size = 12),
-              axis.title.y.right = element_text(size = 12))
-
-      if (isTRUE(show_status)) {
-        p3 <- add_hev_status_layers(p3, biol_metric[3], rangeratio_3, minadj_3, y4_min, y4_max, river_type)
-      }
-      
-    }
-    
-    if(is.na(biol_metric[4]) == FALSE){
-      
-      # Get y5 range
-      
-      y5_min <- min(data$biol_metric_4, na.rm = TRUE)
-      y5_max <- max(data$biol_metric_4, na.rm = TRUE)
-      y5_range <- y5_max - y5_min
-      
-      # range ratio
-      rangeratio_4 <- y1_range/y5_range
-      minadj_4 <- y1_min - y5_min*rangeratio_4
-      
-      data$y5trans <- data$biol_metric_4 * rangeratio_4 + minadj_4
-      
-      p4 <- data %>%
-        ggplot2::ggplot() +
-        geom_line(data, mapping = aes(x = plot_date, y = flow_stat_1, colour = '#56B4E9')) +
-        scale_color_identity(name = "Flow Statistics",
-                             breaks = c('#56B4E9'),
-                             labels = c(flow_stat[1]),
-                             guide = "legend") +
-        ggnewscale::new_scale_color() +
-        geom_point(data, mapping = aes(x = plot_date, y = y5trans, colour = clr_by)) +
-        scale_y_continuous(name = "Flow", sec.axis = sec_axis(~ (. - minadj_3)/rangeratio_3, name = biol_metric[4])) +
-        labs(x = date_col, y = "") +
-        scale_color_discrete(breaks = ~ .x[!is.na(.x)]) +
-        #ggtitle(biol_metric[3]) +
-        theme(plot.title = element_text(color = "black", size = 10, face = "bold",
-                                        hjust = 0.5),
-              legend.title = element_blank(),
-              legend.text = element_text(size = 10),
-              axis.text.x = element_text(size = 10),
-              axis.text.y = element_text(size = 10),
-              axis.title.x = element_text(size = 12),
-              axis.title.y.left = element_text(size = 12),
-              axis.title.y.right = element_text(size = 12))
-
-      if (isTRUE(show_status)) {
-        p4 <- add_hev_status_layers(p4, biol_metric[4], rangeratio_4, minadj_4, y5_min, y5_max, river_type)
-      }
-    }
-    
-  }
-  
-  if(length(biol_metric) == 1){
-    
-    print(p1)
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", biol_metric[1], "_Plot.png"), plot = p1)}
-    
-    hevPlot <- p1
-    
-    return(hevPlot)
-    
-  }
-  
-  if(length(biol_metric) == 2 && multiplot == FALSE){
-    
-    print(p1)
-    print(p2)
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", biol_metric[1], "_Plot.png"), plot = p1)
-      ggsave(paste0(save_dir, sep = "/", biol_metric[2], "_Plot.png"), plot = p2)}
-    
-    hevPlot <- list(p1, p2)
-    return(hevPlot)
-    
-  }
-  
-  if(length(biol_metric) == 2 && multiplot == TRUE){
-    
-    plot_a <- ggpubr::ggarrange(p1, p2, ncol = 2, common.legend = TRUE, legend = "bottom")
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", "Multi_Plot.png"), plot = plot_a)}
-    
-    return(plot_a)
-    
-  }
-  
-  
-  if(length(biol_metric) == 3 && multiplot == FALSE){
-    
-    print(p1)
-    print(p2)
-    print(p3)
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", biol_metric[1], "_Plot.png"), plot = p1)
-      ggsave(paste0(save_dir, sep = "/", biol_metric[2], "_Plot.png"), plot = p2)
-      ggsave(paste0(save_dir, sep = "/", biol_metric[3], "_Plot.png"), plot = p3)}
-    
-    hevPlot <- list(p1, p2, p3)
-    return(hevPlot)
-    
-  }
-  
-  if(length(biol_metric) == 3 && multiplot == TRUE){
-    
-    plot_a <- ggpubr::ggarrange(p1, p2, p3, ncol = 2, nrow = 2, common.legend = TRUE, legend = "bottom")
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", "Multi_Plot.png"), plot = plot_a)}
-    
-    return(plot_a)
-    
-  }
-  
-  if(length(biol_metric) == 4 && multiplot == FALSE){
-    
-    print(p1)
-    print(p2)
-    print(p3)
-    print(p4)
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", biol_metric[1], "_Plot.png"), plot = p1)
-      ggsave(paste0(save_dir, sep = "/", biol_metric[2], "_Plot.png"), plot = p2)
-      ggsave(paste0(save_dir, sep = "/", biol_metric[3], "_Plot.png"), plot = p3)
-      ggsave(paste0(save_dir, sep = "/", biol_metric[4], "_Plot.png"), plot = p4)}
-    
-    hevPlot <- list(p1, p2, p3, p4)
-    return(hevPlot)
-    
-  }
-  
-  if(length(biol_metric) == 4 && multiplot == TRUE){
-    
-    plot_a <- ggpubr::ggarrange(p1, p2, p3, p4, ncol = 2, nrow = 2, common.legend = TRUE, legend = "bottom")
-    
-    if(save == TRUE){
-      ggsave(paste0(save_dir, sep = "/", "Multi_Plot.png"), plot = plot_a)}
-    
-    return(plot_a)
-    
-  }
-  
+  combined_plot
 }
 
 ## Download functionality for HEV plots ----
