@@ -1088,6 +1088,12 @@ function(input, output, session){
     )
   }
 
+  local_csv_v2_uploads <- lapply(
+    names(local_csv_checkpoint_specs()),
+    function(data_type) bind_local_csv_checkpoint(input, output, data_type)
+  )
+  names(local_csv_v2_uploads) <- names(local_csv_checkpoint_specs())
+
   wq_upload <- reactive({
     read_result <- read_uploaded_csv_safely(input$wq_csv, "WQ")
     validation <- validate_wq_upload(read_result$data)
@@ -2039,19 +2045,8 @@ function(input, output, session){
   })
 
   local_flow_upload <- reactive({
-    if (is.null(input$local_flow_csv)) {
-      return(list(data = NULL, validation = list(status = "info", messages = "No local flow CSV uploaded yet.")))
-    }
-
-    read_result <- read_dashboard_csv(input$local_flow_csv$datapath, "Local flow")
-    validation <- if (identical(read_result$status, "success")) {
-      validate_local_flow(read_result$data)
-    } else {
-      list(status = read_result$status, messages = read_result$messages)
-    }
-
-    data <- if (validation$status %in% c("success", "warning")) validation$data else read_result$data
-    list(data = data, validation = validation)
+    validation <- local_csv_v2_uploads$flow()
+    list(data = validation$data, validation = validation)
   })
 
   observeEvent(local_inv_upload(), {

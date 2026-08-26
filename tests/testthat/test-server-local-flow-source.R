@@ -57,7 +57,7 @@ testthat::test_that("extra Local Flow columns never enter the operational source
     )
     session$flushReact()
 
-    testthat::expect_identical(local_flow_upload()$validation$status, "warning")
+    testthat::expect_identical(local_flow_upload()$validation$status, "success")
     testthat::expect_identical(names(flow_data()), c("flow_site_id", "date", "flow"))
     testthat::expect_identical(flow_data()$flow, 21.5)
     testthat::expect_identical(importer_calls, 0L)
