@@ -419,7 +419,6 @@ workflow_context_bar_ui <- function(
               )
             },
             shiny::actionLink("open_task_selector", "Task selector"),
-            shiny::actionLink("open_csv_validation", "CSV validation"),
             shiny::tags$a(
               "HE Toolkit GitHub",
               href = "https://github.com/APEM-LTD/hetoolkit",

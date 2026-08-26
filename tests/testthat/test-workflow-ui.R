@@ -196,7 +196,7 @@ testthat::test_that("workflow header owns branding, utilities, and Stage 2 work 
   testthat::expect_match(header_html, "HE Toolkit Dashboard", fixed = TRUE)
   testthat::expect_match(header_html, "EA_logo_white.png", fixed = TRUE)
   testthat::expect_match(header_html, "Task selector", fixed = TRUE)
-  testthat::expect_match(header_html, "CSV validation", fixed = TRUE)
+  testthat::expect_false(grepl("CSV validation", header_html, fixed = TRUE))
   testthat::expect_match(header_html, "Biology processing", fixed = TRUE)
   testthat::expect_match(header_html, "Flow processing", fixed = TRUE)
   testthat::expect_match(
@@ -276,6 +276,28 @@ testthat::test_that("legacy hard-coded progress navigation is removed", {
 
   testthat::expect_false(grepl("wf_progress_bar", active_ui_code, fixed = TRUE))
   testthat::expect_false(grepl("Join & Analyse", active_ui_code, fixed = TRUE))
+})
+
+testthat::test_that("standalone validation Sandbox is retired without orphaning workflow uploads", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  workflow_ui_code <- paste(
+    readLines(file.path(project_root, "R", "workflow_ui.R"), warn = FALSE),
+    collapse = "\n"
+  )
+  server_code <- paste(readLines(file.path(project_root, "server.R"), warn = FALSE), collapse = "\n")
+
+  testthat::expect_false(grepl("File Validation Sandbox", ui_code, fixed = TRUE))
+  testthat::expect_false(grepl("open_csv_validation", workflow_ui_code, fixed = TRUE))
+  testthat::expect_false(grepl("dc11_workbook", paste(ui_code, server_code), fixed = TRUE))
+  testthat::expect_false(grepl("dc11_csv", paste(ui_code, server_code), fixed = TRUE))
+
+  testthat::expect_match(ui_code, "Legacy WQ workflow upload", fixed = TRUE)
+  testthat::expect_match(ui_code, "Legacy RHS workflow upload", fixed = TRUE)
+  testthat::expect_match(ui_code, 'fileInput("wq_csv"', fixed = TRUE)
+  testthat::expect_match(ui_code, 'fileInput("rhs_csv"', fixed = TRUE)
+  testthat::expect_match(ui_code, '`data-task-imports` = "wq"', fixed = TRUE)
+  testthat::expect_match(ui_code, '`data-task-imports` = "rhs"', fixed = TRUE)
 })
 
 testthat::test_that("Workflow Header replaces the legacy primary navbar", {
