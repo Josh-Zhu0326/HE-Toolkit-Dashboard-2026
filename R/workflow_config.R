@@ -61,7 +61,8 @@ he_workflow_tasks <- list(
     task_label = "Assess ecological condition",
     description = "Calculate expected values and O:E ratios.",
     primary_output = "Expected values and O:E ratios",
-    stage_path = c("R", "R", "-", "O", "O"),
+    stage_path = c("R", "R", "-", "-", "-"),
+    import_types = c("biology", "environment"),
     required_artifacts = c("biology_input", "environment_input", "oe_result"),
     reusable_artifacts = c("processed_biology", "processed_environment", "oe_result"),
     completion_artifact = "oe_result",
@@ -72,7 +73,8 @@ he_workflow_tasks <- list(
     task_label = "Summarise the flow regime",
     description = "Review coverage and calculate Q10, Q50 and Q95 with a clear data source.",
     primary_output = "Flow statistics and coverage summary",
-    stage_path = c("R", "R", "-", "O", "O"),
+    stage_path = c("R", "R", "-", "-", "-"),
+    import_types = "flow",
     required_artifacts = c("flow_input", "flow_statistics"),
     reusable_artifacts = c("processed_flow", "flow_statistics"),
     completion_artifact = "flow_statistics",
@@ -83,14 +85,15 @@ he_workflow_tasks <- list(
     task_label = "Combine biology, flow and environmental data",
     description = "Build a Joined HE dataset while keeping source and optional enrichment layers separate.",
     primary_output = "Joined HE dataset",
-    stage_path = c("R", "R", "R", "O", "O"),
+    stage_path = c("R", "R", "R", "-", "-"),
+    import_types = c("biology", "environment", "flow", "wq", "rhs"),
     required_artifacts = c(
       "oe_result",
       "flow_statistics",
       "joined_core",
       "processed_dataset_checkpoint"
     ),
-    reusable_artifacts = c("joined_core", "joined_enriched", "analysis_dataset", "processed_dataset_checkpoint"),
+    reusable_artifacts = c("joined_core", "joined_enriched", "processed_dataset_checkpoint"),
     completion_artifact = "processed_dataset_checkpoint",
     valid_next_tasks = c("generate_hev", "he_modelling")
   ),
@@ -99,7 +102,8 @@ he_workflow_tasks <- list(
     task_label = "Generate and interpret HEV plots",
     description = "Select sites and biological and flow metrics, generate HEV plots, review patterns and export the current plot.",
     primary_output = "HEV plots, plot data and provenance",
-    stage_path = c("R", "R", "R", "R", "O"),
+    stage_path = c("R", "R", "R", "R", "-"),
+    import_types = c("biology", "environment", "flow", "wq", "rhs"),
     required_artifacts = c("joined_core", "analysis_dataset", "hev_result"),
     reusable_artifacts = c("processed_dataset_checkpoint", "analysis_dataset", "hev_result"),
     completion_artifact = "hev_result",
@@ -111,6 +115,7 @@ he_workflow_tasks <- list(
     description = "Select flow and ecology variables, fit an eligible model, review diagnostics and export the current results.",
     primary_output = "Model results, diagnostics and export files",
     stage_path = c("R", "R", "R", "R", "R"),
+    import_types = c("biology", "environment", "flow", "wq", "rhs"),
     required_artifacts = c("joined_core", "analysis_dataset", "model_result"),
     reusable_artifacts = c("processed_dataset_checkpoint", "analysis_dataset", "model_result"),
     completion_artifact = "model_result",
@@ -155,8 +160,36 @@ required_stage_ids <- function(task) {
   he_workflow_stage_ids()[task$stage_path == "R"]
 }
 
-optional_stage_ids <- function(task) {
-  he_workflow_stage_ids()[task$stage_path == "O"]
+he_workflow_import_types <- c("biology", "environment", "flow", "wq", "rhs")
+
+task_stage_is_enabled <- function(task, stage_index) {
+  if (is.character(task) && length(task) == 1L) {
+    task <- get_he_workflow_task(task)
+  }
+  is.numeric(stage_index) &&
+    length(stage_index) == 1L &&
+    !is.na(stage_index) &&
+    stage_index == as.integer(stage_index) &&
+    stage_index >= 1L &&
+    stage_index <= length(task$stage_path) &&
+    identical(task$stage_path[[as.integer(stage_index)]], "R")
+}
+
+task_import_is_enabled <- function(task, import_type) {
+  if (is.character(task) && length(task) == 1L) {
+    task <- get_he_workflow_task(task)
+  }
+  is.character(import_type) &&
+    length(import_type) == 1L &&
+    !is.na(import_type) &&
+    import_type %in% task$import_types
+}
+
+task_last_enabled_stage <- function(task) {
+  if (is.character(task) && length(task) == 1L) {
+    task <- get_he_workflow_task(task)
+  }
+  max(which(task$stage_path == "R"))
 }
 
 validate_he_workflow_config <- function(
@@ -169,6 +202,7 @@ validate_he_workflow_config <- function(
   required_stage_fields <- c("stage_id", "stage_label", "description")
   required_task_fields <- c(
     "task_id", "task_label", "description", "primary_output", "stage_path",
+    "import_types",
     "required_artifacts", "reusable_artifacts", "completion_artifact",
     "valid_next_tasks"
   )
@@ -238,8 +272,23 @@ validate_he_workflow_config <- function(
   # Keep paths, artifact contracts, and next Tasks in sync with matrix tests.
   for (task in tasks) {
     if (length(task$stage_path) != length(stage_ids) ||
-        any(!task$stage_path %in% c("R", "O", "-"))) {
+        any(!task$stage_path %in% c("R", "-"))) {
       stop(sprintf("Task %s has an invalid five-stage path.", task$task_id), call. = FALSE)
+    }
+
+    required_stage_numbers <- which(task$stage_path == "R")
+    if (length(required_stage_numbers) == 0L ||
+        !identical(required_stage_numbers, seq_len(max(required_stage_numbers)))) {
+      stop(
+        sprintf("Task %s must require a contiguous Stage path starting at Stage 1.", task$task_id),
+        call. = FALSE
+      )
+    }
+
+    if (length(task$import_types) == 0L ||
+        anyDuplicated(task$import_types) ||
+        any(!task$import_types %in% he_workflow_import_types)) {
+      stop(sprintf("Task %s has invalid import types.", task$task_id), call. = FALSE)
     }
 
     referenced_artifacts <- unique(c(
@@ -271,9 +320,9 @@ validate_he_workflow_config <- function(
       )
     }
 
-    required_stage_numbers <- unname(artifact_stage_index[task$required_artifacts])
+    required_artifact_stage_numbers <- unname(artifact_stage_index[task$required_artifacts])
     non_required_artifacts <- task$required_artifacts[
-      task$stage_path[required_stage_numbers] != "R"
+      task$stage_path[required_artifact_stage_numbers] != "R"
     ]
     if (length(non_required_artifacts) > 0L) {
       stop(
@@ -281,6 +330,20 @@ validate_he_workflow_config <- function(
           "Task %s has required artifact(s) mapped to a non-required Stage: %s",
           task$task_id,
           paste(non_required_artifacts, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
+
+    disabled_reusable_artifacts <- task$reusable_artifacts[
+      task$stage_path[unname(artifact_stage_index[task$reusable_artifacts])] != "R"
+    ]
+    if (length(disabled_reusable_artifacts) > 0L) {
+      stop(
+        sprintf(
+          "Task %s has reusable artifact(s) mapped to a disabled Stage: %s",
+          task$task_id,
+          paste(disabled_reusable_artifacts, collapse = ", ")
         ),
         call. = FALSE
       )

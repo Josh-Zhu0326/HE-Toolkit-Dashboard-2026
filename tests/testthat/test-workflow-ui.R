@@ -334,6 +334,39 @@ testthat::test_that("not-used stages are disabled", {
   testthat::expect_match(stage_three, "disabled", fixed = TRUE)
 })
 
+testthat::test_that("Task-disabled stages stay visible with accessible explanation", {
+  html <- render_workflow_html(workflow_shell_ui("generate_hev", 4L))
+  stage_five <- regmatches(
+    html,
+    regexpr('<button[^>]*id="workflow_stage_5"[^>]*>', html)
+  )
+
+  testthat::expect_match(stage_five, "disabled", fixed = TRUE)
+  testthat::expect_match(stage_five, 'aria-disabled="true"', fixed = TRUE)
+  testthat::expect_match(html, "Not required for this Task", fixed = TRUE)
+})
+
+testthat::test_that("Stage 1 import controls declare policy-derived import types", {
+  project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
+  ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
+  script_html <- render_workflow_html(workflow_task_policy_script())
+
+  for (import_type in he_workflow_import_types) {
+    testthat::expect_match(
+      ui_code,
+      sprintf('`data-task-imports` = "%s"', import_type),
+      fixed = TRUE
+    )
+  }
+  testthat::expect_match(script_html, "workflow-task-policy", fixed = TRUE)
+  testthat::expect_match(script_html, "data-task-import-panel", fixed = TRUE)
+  testthat::expect_match(
+    script_html,
+    "typeof configured === 'string' ? [configured] : []",
+    fixed = TRUE
+  )
+})
+
 testthat::test_that("optional reusable artifacts do not affect required Stage status", {
   task <- get_he_workflow_task("build_he_dataset")
   registry <- new_he_artifact_registry()

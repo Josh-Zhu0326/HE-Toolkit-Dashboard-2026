@@ -92,6 +92,48 @@ testthat::test_that("Task selection and stage navigation use the shared workflow
   })
 })
 
+testthat::test_that("server rejects navigation to a Task-disabled Stage", {
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(
+      session$setInputs(`select_task__ecological_condition` = 1)
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(workflow_session$stage_index, 1L)
+    muffle_interrupted_workflow_promise(session$setInputs(workflow_stage_3 = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_session$stage_index, 1L)
+  })
+})
+
+testthat::test_that("server rejects a hidden import type for the active Task", {
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(
+      session$setInputs(`select_task__flow_regime` = 1)
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "site_mapping",
+      "complete",
+      data_source = "test fixture"
+    )
+    workflow_artifacts(registry)
+
+    muffle_interrupted_workflow_promise(session$setInputs(import_inv = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_null(biology_import_request())
+    testthat::expect_identical(
+      workflow_artifacts()$biology_input$status,
+      "not_started"
+    )
+  })
+})
+
 testthat::test_that("Flow display controls match the selected table or heatmap view", {
   shiny::testServer(workflow_dashboard_server, {
     set_inputs_ignoring_interrupted_promises(
@@ -136,6 +178,43 @@ testthat::test_that("Change Task preserves reusable runtime artifacts", {
     testthat::expect_identical(workflow_session$stage_index, 1L)
     testthat::expect_identical(workflow_artifacts()$processed_biology$status, "complete")
     testthat::expect_identical(workflow_artifacts()$processed_biology$output_revision, 1L)
+  })
+})
+
+testthat::test_that("switching from Stage 5 to Task 1 returns to Stage 2 without deleting data", {
+  shiny::testServer(workflow_dashboard_server, {
+    muffle_interrupted_workflow_promise(session$flushReact())
+    muffle_interrupted_workflow_promise(
+      session$setInputs(`select_task__he_modelling` = 1)
+    )
+    muffle_interrupted_workflow_promise(session$setInputs(workflow_stage_5 = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_session$stage_index, 5L)
+
+    registry <- set_he_artifact_status(
+      workflow_artifacts(),
+      "flow_input",
+      "complete",
+      data_source = "retained Task 5 input"
+    )
+    workflow_artifacts(registry)
+
+    muffle_interrupted_workflow_promise(session$setInputs(change_task = 1))
+    muffle_interrupted_workflow_promise(
+      session$setInputs(`select_task__ecological_condition` = 1)
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(workflow_session$task_id, "ecological_condition")
+    testthat::expect_identical(workflow_session$stage_index, 2L)
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+
+    muffle_interrupted_workflow_promise(session$setInputs(change_task = 2))
+    muffle_interrupted_workflow_promise(
+      session$setInputs(`select_task__he_modelling` = 2)
+    )
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
   })
 })
 

@@ -294,9 +294,9 @@ prepare_workspace_for_restore <- function(snapshot, require_dataset_coverage = T
     workflow_session$stage_index <- 1L
   } else {
     task <- get_he_workflow_task(workflow_session$task_id)
-    workflow_session$stage_index <- workflow_resume_stage(
-      task,
-      snapshot$state$workflow_artifacts
+    workflow_session$stage_index <- min(
+      workflow_resume_stage(task, snapshot$state$workflow_artifacts),
+      task_last_enabled_stage(task)
     )
   }
 
