@@ -2,6 +2,7 @@
 # Run in RStudio: open the project, then Source this file.
 # Expect: "test_analysis_model_helpers.R: all checks passed"
 
+source(file.path("R", "workflow_config.R"))
 source(file.path("R", "analysis_model_helpers.R"))
 source(file.path("R", "mixed_model_helpers.R"))
 
@@ -53,21 +54,33 @@ stopifnot(identical(run_analysis_model(joined,
 stopifnot(identical(run_analysis_model(joined[0, ], spec)$status, "blocked"))
 
 # --- 7. Stage 5 choices route Flow fields by site count ---------------------
-single_choices <- analysis_model_variable_choices(transform(
+model_choice_data <- transform(
   joined,
   orthophosphate_mean = seq_len(nrow(joined)) / 10,
   ammonia_p90 = seq_len(nrow(joined)) / 5,
-  HMSRBB = seq_len(nrow(joined))
-))
+  HMSRBB = seq_len(nrow(joined)),
+  Q95z_lag3 = seq_len(nrow(joined)) / 7,
+  Q10_lag6 = seq_len(nrow(joined)) / 8,
+  Q10z_lag12 = seq_len(nrow(joined)) / 9,
+  Q95z_lag2 = seq_len(nrow(joined)) / 10
+)
+single_choices <- analysis_model_variable_choices(model_choice_data)
 stopifnot(single_choices$model_path == "single_site_additive")
 stopifnot(all(c("Q95_lag0", "Q95z_lag0") %in% single_choices$flow))
+stopifnot(all(c("Q95z_lag3", "Q10_lag6", "Q10z_lag12") %in% single_choices$flow))
+stopifnot(!"Q95z_lag2" %in% single_choices$flow)
 stopifnot(identical(single_choices$wq, c("orthophosphate_mean", "ammonia_p90")))
 stopifnot(identical(single_choices$rhs, "HMSRBB"))
 
-multi_choices <- analysis_model_variable_choices(multi)
+multi_choice_data <- model_choice_data
+multi_choice_data$biol_site_id <- c("291", "291", "292", "292", "292")
+multi_choices <- analysis_model_variable_choices(multi_choice_data)
 stopifnot(multi_choices$model_path == "multi_site_mixed")
 stopifnot("Q95z_lag0" %in% multi_choices$flow)
+stopifnot(all(c("Q95z_lag3", "Q10z_lag12") %in% multi_choices$flow))
 stopifnot(!"Q95_lag0" %in% multi_choices$flow)
+stopifnot(!"Q10_lag6" %in% multi_choices$flow)
+stopifnot(!"Q95z_lag2" %in% multi_choices$flow)
 stopifnot(analysis_model_year_column(joined) == "sampling_year")
 stopifnot(analysis_model_year_column(
   data.frame(Year = 2020:2021)

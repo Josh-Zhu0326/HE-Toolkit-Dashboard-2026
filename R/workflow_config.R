@@ -1,6 +1,8 @@
 # Keep this file as the single Task/Stage contract for the five-stage workflow.
 # Preserve internal IDs; apply client wording changes only to user-facing labels.
 
+SUPPORTED_FLOW_LAGS <- c(0L, 1L, 3L, 6L, 12L)
+
 he_workflow_stages <- list(
   list(
     stage_id = "prepare_data",

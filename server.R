@@ -392,13 +392,15 @@ function(input, output, session){
   join_settings_used <- reactiveVal(NULL)
 
   normalise_join_settings <- function(lags, method) {
-    lags <- sort(unique(as.integer(lags)))
-    invalid_lags <- setdiff(lags, c(0L, 1L))
-    if (length(lags) == 0L || anyNA(lags)) {
-      stop("Select lag 0, lag 1, or both before building the Joined HE Dataset.", call. = FALSE)
+    lag_values <- suppressWarnings(as.numeric(as.character(lags)))
+    if (length(lag_values) == 0L || anyNA(lag_values) ||
+        any(lag_values != floor(lag_values))) {
+      stop("Select one or more lags from 0, 1, 3, 6, or 12 before building the Joined HE Dataset.", call. = FALSE)
     }
+    lags <- sort(unique(as.integer(lag_values)))
+    invalid_lags <- setdiff(lags, SUPPORTED_FLOW_LAGS)
     if (length(invalid_lags) > 0L) {
-      stop("Only lag 0 and lag 1 are supported for the Dashboard workflow.", call. = FALSE)
+      stop("Only lags 0, 1, 3, 6, and 12 are supported for the Dashboard workflow.", call. = FALSE)
     }
     method <- as.character(method)[[1L]]
     if (is.na(method) || !identical(method, "A")) {
@@ -578,7 +580,7 @@ function(input, output, session){
         workflow_block_artifact(
           "joined_core",
           conditionMessage(error),
-          "Select lag 0 or lag 1 and build the Joined HE Dataset again."
+          "Select one or more lags from 0, 1, 3, 6, or 12 and build the Joined HE Dataset again."
         )
         showNotification(conditionMessage(error), type = "error", duration = 10)
         NULL

@@ -327,6 +327,21 @@ testthat::test_that("Join-setting changes stale current outputs without rerunnin
     )
     testthat::expect_null(join_request())
 
+    testthat::expect_identical(
+      normalise_join_settings(c(12, 3, 1, 3, 6, 0), "A")$lags,
+      SUPPORTED_FLOW_LAGS
+    )
+    testthat::expect_error(
+      normalise_join_settings(2, "A"),
+      "Only lags 0, 1, 3, 6, and 12",
+      fixed = TRUE
+    )
+    testthat::expect_error(
+      normalise_join_settings(1.5, "A"),
+      "Select one or more lags from 0, 1, 3, 6, or 12",
+      fixed = TRUE
+    )
+
     registry <- workflow_artifacts()
     for (artifact_id in c(
       "flow_statistics",

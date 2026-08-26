@@ -569,7 +569,7 @@ page_navbar(
           pickerInput(
             inputId = "choose_lags",
             label = "Select lags",
-            choices = c(0, 1),
+            choices = SUPPORTED_FLOW_LAGS,
             multiple = TRUE
           ),
           pickerInput(
