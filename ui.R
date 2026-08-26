@@ -426,30 +426,30 @@ page_navbar(
                       )
             ),
             nav_panel("Local File Import",
-                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "biology,flow", `data-task-import-panel` = "true",
-                        h3(class = "section-title", "Local CSV file import"),
-                        p(class = "page-lead", "Upload local files for validation. A valid Local Flow upload is used as the Flow data source; local invertebrate data remain separate from O:E."),
-                        layout_columns(
-                          col_widths = c(6, 6),
-                          card(class = "dashboard-card", `data-task-imports` = "biology",
-                            card_header("Local invertebrate CSV"),
-                            div(class = "hint-text", "Required columns: biol_site_id, date, taxon, abundance."),
-                            fileInput("local_inv_csv", "Choose local invertebrate CSV", accept = c(".csv", "text/csv")),
+                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "biology,environment,flow,wq,rhs", `data-task-import-panel` = "true",
+                        local_csv_checkpoint_panel(),
+                        tags$details(
+                          class = "dashboard-card",
+                          `data-task-imports` = "biology",
+                          tags$summary(class = "card-header", "Legacy taxon-level Biology exclusion log"),
+                          div(
+                            class = "card-body",
+                            div(
+                              class = "hint-text",
+                              "This compatibility checkpoint uses the existing biol_site_id, date, taxon and abundance format. It is separate from the Data Contract v2.0 Biology CSV above."
+                            ),
+                            fileInput(
+                              "local_inv_csv",
+                              "Choose legacy taxon-level Biology CSV",
+                              accept = c(".csv", "text/csv")
+                            ),
                             uiOutput("local_inv_status"),
                             DT::dataTableOutput("local_inv_preview"),
-                            hr(),
                             h5("Exclusion log"),
-                            div(class = "hint-text", "Records removed or flagged during filtering, with the reason for each."),
+                            div(class = "hint-text", "Records removed or flagged during the existing filtering workflow, with the reason for each."),
                             uiOutput("exclusion_log_status"),
                             DT::dataTableOutput("exclusion_log_table"),
                             downloadButton("download_exclusion_log", "Download exclusion log as CSV")
-                          ),
-                          card(class = "dashboard-card", `data-task-imports` = "flow",
-                            card_header("Local flow CSV"),
-                            div(class = "hint-text", "Required columns: flow_site_id, date, flow. A valid upload is used as the Flow data source."),
-                            fileInput("local_flow_csv", "Choose local flow CSV", accept = c(".csv", "text/csv")),
-                            uiOutput("local_flow_status"),
-                            DT::dataTableOutput("local_flow_preview")
                           )
                         )
                       )

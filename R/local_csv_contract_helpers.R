@@ -275,7 +275,7 @@ validate_local_csv_v2 <- function(data, data_type) {
       data_type,
       "error",
       "unreadable_csv",
-      "The CSV could not be read as a table."
+      "The CSV could not be read or validated. Correct the CSV structure and upload it again."
     ))
     return(list(
       status = "error",
