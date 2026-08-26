@@ -10,9 +10,9 @@
 
 This document defines the dependency, state, stale-propagation, recovery, and continuation contract for the shared five-stage Dashboard workflow.
 
-It implements the paths in the [Goal-Stage Path Matrix](goal-stage-path-matrix-v1.md) without creating a second navigation system or a general workflow engine. States attach to versioned workflow nodes and outputs, not to pages. Goal cards summarise their required nodes; they do not own a separate state machine.
+It implements the paths in the [Goal-Stage Path Matrix v1.0](goal-stage-path-matrix-v1.0.md) without creating a second navigation system or a general workflow engine. States attach to versioned workflow nodes and outputs, not to pages. Goal cards summarise their required nodes; they do not own a separate state machine.
 
-Authoritative supporting specifications are the [client decision log](../decisions/client-decision-log-v1.md), [data contract](data-contract-v1.md), [modelling contract](modelling-contract-v1.md), and [requirement traceability matrix](requirement-traceability-matrix-v1.md). The original dependency whiteboard remains design evidence, but this matrix supersedes its single joined-dataset node and direct WQ/RHS-to-model paths.
+Authoritative supporting specifications are the [client decision log](../decisions/client-decision-log-v1.md), [data contract v1.0](data-contract-v1.0.md), [modelling contract v1.0](modelling-contract-v1.0.md), and [requirement traceability matrix v1.0](requirement-traceability-matrix-v1.0.md). The original dependency whiteboard remains design evidence, but this matrix supersedes its single joined-dataset node and direct WQ/RHS-to-model paths.
 
 ## 2. Public state contract
 

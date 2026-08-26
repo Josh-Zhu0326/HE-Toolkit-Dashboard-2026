@@ -1,5 +1,7 @@
 # User-Facing Error and Guidance Messages
 
+> Historical-baseline notice: this file preserves the Week 8 message catalogue. Current requirements are governed by the [v2.0 catalogue](error-and-guidance-message-catalogue-v2.0.md). Do not rewrite the historical messages below to make them appear retrospectively current.
+
 This catalogue defines clear Dashboard messages and practical recovery actions for users of the Hydroecology Toolkit Dashboard. Raw programming errors, local file paths, stack traces, package names, and console output must never be shown to ordinary users. Technical details may be recorded separately in internal developer logs.
 
 Biology and Flow form the core analysis. Water Quality (WQ) and River Habitat Survey (RHS) data are optional enrichment, so an absent or unsuccessful WQ/RHS import must not imply that valid core Biology and Flow results have failed.

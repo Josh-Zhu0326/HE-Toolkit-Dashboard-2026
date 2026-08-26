@@ -9,7 +9,7 @@
 
 This document maps five user Goals onto one shared five-stage workflow. Goals describe desired outcomes; Stages describe where work occurs. The Goal Selector highlights a predefined path and must not create a second navigation system or workflow engine.
 
-Authoritative supporting specifications are the [client decision log](../decisions/client-decision-log-v1.md), [data contract](data-contract-v1.md), [modelling contract](modelling-contract-v1.md), and [requirement traceability matrix](requirement-traceability-matrix-v1.md).
+Authoritative supporting specifications are the [client decision log](../decisions/client-decision-log-v1.md), [data contract v1.0](data-contract-v1.0.md), [modelling contract v1.0](modelling-contract-v1.0.md), and [requirement traceability matrix v1.0](requirement-traceability-matrix-v1.0.md).
 
 ## 2. Shared Workflow and Path Matrix
 

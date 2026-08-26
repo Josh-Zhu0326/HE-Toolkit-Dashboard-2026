@@ -1,5 +1,7 @@
 # Modelling Contract — v1 (Frozen)
 
+> Historical-baseline notice: this file preserves the frozen v1 contract. New modelling work is governed by the [v2.0 contract](modelling-contract-v2.0.md). Do not rewrite the historical rules below to make them appear retrospectively current.
+
 > Date: 14 July 2026 (baseline); frozen 30 July 2026  
 > Status: **Frozen v1** — all `MC-O01`–`MC-O11` decided (see Section 3)  
 > Owner / decider: Yutong (Modelling/Evaluation), delegated by the team  
@@ -7,7 +9,7 @@
 > Decisions: `DEC-08`, `DEC-09`, `DEC-10`, `DEC-21`  
 > Requirements: `RTM-08A`, `RTM-08B`, `RTM-09`, `RTM-10`, `RTM-21`  
 > Closes: `OPEN-06`  
-> Sources: [Client Decision Log](../decisions/client-decision-log-v1.md) and [Requirement Traceability Matrix](requirement-traceability-matrix-v1.md)
+> Sources: [Client Decision Log](../decisions/client-decision-log-v1.md) and [Requirement Traceability Matrix v1.0](requirement-traceability-matrix-v1.0.md)
 
 ## 1. Purpose and Current State
 

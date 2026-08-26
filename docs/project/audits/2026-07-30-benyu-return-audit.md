@@ -195,7 +195,7 @@ Status terms in this section are limited to the requested vocabulary. “Execute
 | `docs/testing/reports/2026-07-10/Functional_Test_Execution_Record.md` | Manual/customer functional evidence | Existing record at `7cf242f`/`08b595a`; not current RC evidence |
 | `docs/testing/plans/high-level-test-plan.md`, `docs/testing/plans/Test_Plan.md`, `docs/testing/plans/testing-checklist.md` | Research readiness / documentation-only checklist | Not execution evidence |
 | `docs/research/study-materials/pilot-execution.md` | Pilot/manual research pack | Template only |
-| `docs/contracts/requirement-traceability-matrix-v1.md` | Research readiness/RTM | Exists but status/evidence links are incomplete |
+| `docs/contracts/requirement-traceability-matrix-v1.0.md` | Research readiness/RTM | Exists but status/evidence links are incomplete |
 | `01_Update_Dashboard.cmd` | Operational updater | Not executed: network clone/pull and possible installer |
 | `02_Setup_R_and_Run_Dashboard.cmd` | Setup/start runner | Not executed: may install R/packages and access GitHub/CRAN; its syntax/startup substeps were reproduced safely |
 
@@ -285,7 +285,7 @@ No RAW row has a recorded owner/current status in the RAW definition file. The W
 | Protocol deviation log | Not found | — |
 | Pause/version-change log | Not found | — |
 | Week 9 evidence note | Claimed but evidence missing on main | UI Week 9 record exists only on unmerged follow-up branch |
-| RTM | Exists but incomplete | `docs/contracts/requirement-traceability-matrix-v1.md`; many planned/partial/blocked items and stale links |
+| RTM | Exists but incomplete | `docs/contracts/requirement-traceability-matrix-v1.0.md`; many planned/partial/blocked items and stale links |
 | Marking evidence matrix | Not found | — |
 | Contribution record | Not found | — |
 

@@ -1,5 +1,7 @@
 # UI-to-Shiny Mapping — v1.1
 
+> Historical-baseline notice: this file preserves the frozen v1.1 implementation mapping. New work is governed by [UI-to-Shiny Mapping v2.0](ui-to-shiny-mapping-v2.0.md). Do not rewrite the historical evidence below to make it appear retrospectively current.
+
 > Prototype baseline: [`workflow-stepper-prototype-v2.2.html`](../prototypes/workflow-stepper/workflow-stepper-prototype-v2.2.html)
 > Controlled implementation date: 23 July 2026
 > Status: **FROZEN**

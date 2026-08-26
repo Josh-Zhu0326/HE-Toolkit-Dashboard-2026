@@ -2,7 +2,7 @@
 
 > Date: 4 August 2026  
 > Status: Runtime-aligned amendment  
-> Supersedes: the public state vocabulary, transitions, outcome labels, and checkpoint-state rows in the [Week 7 v1 review baseline](dependency-state-matrix-v1.md)  
+> Supersedes: the public state vocabulary, transitions, outcome labels, and checkpoint-state rows in the [Week 7 v1.0 review baseline](dependency-state-matrix-v1.0.md)
 > Runtime source of truth: [`R/workflow_config.R`](../../R/workflow_config.R)
 
 ## 1. Scope
