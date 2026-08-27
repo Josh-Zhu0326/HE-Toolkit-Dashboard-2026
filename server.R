@@ -465,6 +465,10 @@ function(input, output, session){
   rict_request <- reactiveVal(NULL)
   oe_request <- reactiveVal(NULL)
   biology_import_request <- reactiveVal(NULL)
+  biology_source_revision <- reactiveVal(0L)
+  external_biology_loaded <- reactiveVal(FALSE)
+  external_biology_revision <- reactiveVal(NULL)
+  external_biology_requested_revision <- reactiveVal(NULL)
   environment_import_request <- reactiveVal(NULL)
   external_import_diagnostics <- reactiveVal(data.frame(
     recorded_at = as.POSIXct(character()),
@@ -500,6 +504,31 @@ function(input, output, session){
 
   local_flow_is_operational <- function(upload) {
     upload$validation$status %in% c("success", "warning")
+  }
+
+  local_biology_is_operational <- function(upload) {
+    upload$validation$status %in% c("success", "warning") &&
+      !is.null(upload$data) && nrow(upload$data) > 0L
+  }
+
+  invalidate_biology_derived_state <- function(reset_external = FALSE) {
+    biology_source_revision(isolate(biology_source_revision()) + 1L)
+    biology_import_request(NULL)
+    external_biology_requested_revision(NULL)
+    workflow_reset_artifact(
+      "biology_input",
+      "The Biology source changed after downstream outputs were generated.",
+      "Validate or import the current Biology source."
+    )
+
+    if (reset_external) {
+      external_biology_loaded(FALSE)
+      external_biology_revision(NULL)
+    }
+
+    if (exists("biol_data_exist", envir = server_context, inherits = FALSE)) {
+      get("biol_data_exist", envir = server_context)(FALSE)
+    }
   }
 
   invalidate_flow_derived_state <- function(
@@ -567,7 +596,12 @@ function(input, output, session){
   observeEvent(input$import_inv, {
     if (!require_task_stage(1L) || !require_import_type("biology")) return()
     biology_import_request(NULL)
+    if (local_biology_is_operational(local_biology_upload())) {
+      external_biology_requested_revision(NULL)
+      return()
+    }
     if (!workflow_artifact_is_current("site_mapping")) {
+      external_biology_requested_revision(NULL)
       workflow_block_artifact(
         "biology_input",
         "Current site metadata with valid biol_site_id values are required before importing Biology data.",
@@ -575,6 +609,7 @@ function(input, output, session){
       )
       return()
     }
+    external_biology_requested_revision(isolate(biology_source_revision()))
     biology_import_request(input$import_inv)
     workflow_begin_artifact("biology_input", "Complete the Biology import.")
   }, ignoreInit = FALSE, priority = 50)
@@ -1048,6 +1083,11 @@ function(input, output, session){
     function(data_type) bind_local_csv_checkpoint(input, output, data_type)
   )
   names(local_csv_v2_uploads) <- names(local_csv_checkpoint_specs())
+
+  local_biology_upload <- reactive({
+    validation <- local_csv_v2_uploads$biology()
+    list(data = validation$data, validation = validation)
+  })
 
   wq_upload <- reactive({
     read_result <- read_uploaded_csv_safely(input$wq_csv, "WQ")
@@ -1916,16 +1956,15 @@ function(input, output, session){
     list(data = validation$data, validation = validation)
   })
 
-  observeEvent(local_inv_upload(), {
+  observeEvent(local_biology_upload(), {
     if (!require_task_stage(1L) || !require_import_type("biology")) return()
-    upload <- local_inv_upload()
-    req(!is.null(upload$data), nrow(upload$data) > 0L)
-    req(upload$validation$status %in% c("success", "warning"))
+    upload <- local_biology_upload()
+    req(local_biology_is_operational(upload))
     workflow_set_artifact(
       "biology_input",
       if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local invertebrate file",
-      history_summary = "Validated local invertebrate upload.",
+      data_source = "Local Biology CSV",
+      history_summary = sprintf("Validated %d local Biology record(s).", nrow(upload$data)),
       invalidate_downstream = TRUE
     )
   })
@@ -1948,13 +1987,15 @@ function(input, output, session){
     invalidate_flow_derived_state(reset_external = TRUE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
-  observeEvent(input$local_inv_csv, {
+  observeEvent(input$local_v2_biology_csv, {
     if (!require_task_stage(1L) || !require_import_type("biology")) return()
-    workflow_reset_artifact(
-      "biology_input",
-      "The Local Biology source changed.",
-      "Validate the current Local Biology file."
-    )
+    invalidate_biology_derived_state(reset_external = TRUE)
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$date_range_biol, {
+    if (!local_biology_is_operational(local_biology_upload())) {
+      invalidate_biology_derived_state(reset_external = TRUE)
+    }
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$site_metadata_csv, {
@@ -2058,8 +2099,11 @@ function(input, output, session){
   
   ## Biology data ----
   ### importing ----
-  biol_data <- eventReactive(biology_import_request(), {
-    req(!is.null(biology_import_request()))
+  external_biology_data <- eventReactive(biology_import_request(), {
+    req(
+      !is.null(biology_import_request()),
+      identical(external_biology_requested_revision(), biology_source_revision())
+    )
     biol_sites <- as.character(metadata()$biol_site_id)
     result <- safe_external_import(
       function() {
@@ -2083,19 +2127,36 @@ function(input, output, session){
         message,
         "Check the Biology site IDs and date range, then try the import again."
       )
+      external_biology_loaded(FALSE)
+      external_biology_revision(NULL)
       validate(need(FALSE, message))
     }
+    external_biology_loaded(TRUE)
+    external_biology_revision(isolate(biology_source_revision()))
     result$data
   })
 
-  observeEvent(biol_data(), {
-    imported <- biol_data()
+  observeEvent(external_biology_data(), {
+    imported <- external_biology_data()
     req(nrow(imported) > 0L)
     workflow_complete_artifact(
       "biology_input",
       "Biology import",
       sprintf("Imported %d Biology record(s).", nrow(imported))
     )
+  })
+
+  biol_data <- reactive({
+    local_upload <- local_biology_upload()
+    if (local_biology_is_operational(local_upload)) {
+      return(local_biology_to_hetoolkit_input(local_upload$data))
+    }
+
+    req(
+      isTRUE(external_biology_loaded()),
+      identical(external_biology_revision(), biology_source_revision())
+    )
+    external_biology_data()
   })
   
   
@@ -4636,6 +4697,10 @@ function(input, output, session){
   collect_current_workspace_runtime <- function() {
     collect_workspace_named_values(list(
       analysis_filter_selection = function() analysis_filter_selection(),
+      biology_source_revision = function() biology_source_revision(),
+      external_biology_loaded = function() external_biology_loaded(),
+      external_biology_revision = function() external_biology_revision(),
+      external_biology_requested_revision = function() external_biology_requested_revision(),
       flow_source_revision = function() flow_source_revision(),
       external_flow_loaded = function() external_flow_loaded(),
       external_flow_revision = function() external_flow_revision(),
@@ -4677,7 +4742,8 @@ function(input, output, session){
       mapped_wq = function() wq_site_import_data(),
       mapped_rhs = function() rhs_site_import_data(),
       wq_contract_summary = function() wq_contract_summary_result(),
-      local_biology_input = function() local_inv_upload()$data,
+      local_biology_input = function() local_biology_upload()$data,
+      legacy_local_invertebrate = function() local_inv_upload()$data,
       local_flow_input = function() local_flow_upload()$data,
       biology_input = function() biol_data(),
       environment_input = function() env_data(),

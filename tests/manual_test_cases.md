@@ -162,6 +162,7 @@ Expected result:
 - File validates successfully.
 - Preview table shows local invertebrate rows.
 - Local data do not automatically enter O:E.
+- The legacy taxon/abundance preview does not mark the formal Biology input complete.
 
 ## TC-012 Local Flow CSV Upload
 
@@ -366,3 +367,18 @@ Expected result:
 - An unavailable selected mode is blocked without falling back to the other mode or overwriting the previous successful result.
 - Correcting the selected source allows an explicit same-session retry to succeed.
 - Provenance and download history distinguish the two modes and their respective source revisions/fingerprints.
+
+## TC-045 v2 Local Biology Operational Source
+
+Steps:
+1. Download and upload `www/templates/local_csv_v2/biology.csv` from the Biology CSV card.
+2. Confirm the upload status and preview.
+3. Trigger the external Biology import while the valid local file remains selected.
+4. Replace the file with one that is missing a required Biology header.
+
+Expected result:
+- The valid CSV becomes the current formal Biology input and preserves character sample IDs and parsed sample dates.
+- The HE Toolkit processing boundary receives inherited Biology field names without changing the canonical validated upload.
+- The external importer is not called while the valid local source is active.
+- The invalid replacement makes Biology and its downstream outputs non-current and does not reuse an earlier result.
+- The legacy taxon/abundance upload remains a separate preview and exclusion-log input.
