@@ -61,8 +61,9 @@ Expected result:
 ## TC-005 WQ CSV File Validation
 
 Steps:
-1. Go to File Validation Sandbox.
-2. Upload `tests/fixtures/wq.csv` in the WQ section.
+1. Go to Data Import > Local File Import.
+2. Expand Legacy WQ workflow upload.
+3. Upload `tests/fixtures/wq.csv`.
 
 Expected result:
 - WQ file validates successfully.
@@ -72,33 +73,34 @@ Expected result:
 ## TC-006 RHS CSV File Validation
 
 Steps:
-1. Go to File Validation Sandbox.
-2. Upload `tests/fixtures/rhs.csv` in the RHS section.
+1. Go to Data Import > Local File Import.
+2. Expand Legacy RHS workflow upload.
+3. Upload `tests/fixtures/rhs.csv`.
 
 Expected result:
 - RHS file validates successfully.
 - Preview table shows RHS rows.
 - No modelling or O:E calculation is triggered.
 
-## TC-040 DC-11 Workbook Checkpoint
+## TC-040 Standalone Validation Sandbox Retirement
 
 Steps:
-1. Go to File Validation Sandbox.
-2. Upload a standard DC-11 multi-sheet XLSX workbook in the DC-11 workbook checkpoint section.
-3. Review the workbook validation status and issue report.
-4. Select at least one uploaded workbook sheet in the preview selector.
+1. Open the Utilities menu and review the primary navigation.
+2. Go to Data Import > Local File Import.
+3. Confirm the five Data Contract v2.0 CSV checkpoints are available for the current Task.
+4. Confirm any applicable legacy workflow upload is shown only in a collapsed compatibility section.
 
 Expected result:
-- Workbook sheets are validated against the frozen DC-11 schemas.
-- Sheet-level issues are shown clearly.
-- The selected sheet preview renders.
-- No import, join, modelling, O:E calculation, or HEV generation is triggered.
+- No File Validation Sandbox page or Utilities link is available.
+- No DC-11 workbook or single-CSV runtime checkpoint is shown.
+- Existing WQ/RHS workflow uploads remain reachable only for Tasks that require those data types.
+- The historical workbook validation helper remains outside the user-facing runtime path.
 
 ## TC-007 WQ Data Plot Controls
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload WQ CSV in File Validation Sandbox, or import WQ using site IDs if network/API access is available.
+2. Upload WQ CSV through the Stage 1 legacy workflow entry, or import WQ using site IDs if network/API access is available.
 3. Go to Data Import > WQ Data.
 4. Try WQ plot types:
    - Time series
@@ -126,7 +128,7 @@ Expected result:
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload RHS CSV in File Validation Sandbox, or import RHS using site IDs if available.
+2. Upload RHS CSV through the Stage 1 legacy workflow entry, or import RHS using site IDs if available.
 3. Go to Data Import > RHS Data.
 4. Try RHS plot types:
    - Numeric variable by biological site ID

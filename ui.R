@@ -451,6 +451,38 @@ page_navbar(
                             DT::dataTableOutput("exclusion_log_table"),
                             downloadButton("download_exclusion_log", "Download exclusion log as CSV")
                           )
+                        ),
+                        tags$details(
+                          class = "dashboard-card",
+                          `data-task-imports` = "wq",
+                          tags$summary(class = "card-header", "Legacy WQ workflow upload"),
+                          div(
+                            class = "card-body",
+                            div(
+                              class = "hint-text",
+                              "This temporary compatibility entry keeps the existing mapped WQ workflow available while Data Contract v2.0 ingestion is completed. Use the WQ checkpoint above for the primary upload-time validation result."
+                            ),
+                            fileInput("wq_csv", "Choose legacy workflow WQ CSV", accept = c(".csv", "text/csv")),
+                            uiOutput("wq_validation_status"),
+                            h5("WQ preview"),
+                            DT::dataTableOutput("wq_preview")
+                          )
+                        ),
+                        tags$details(
+                          class = "dashboard-card",
+                          `data-task-imports` = "rhs",
+                          tags$summary(class = "card-header", "Legacy RHS workflow upload"),
+                          div(
+                            class = "card-body",
+                            div(
+                              class = "hint-text",
+                              "This temporary compatibility entry keeps the existing mapped RHS workflow available while Data Contract v2.0 ingestion is completed. Use the RHS checkpoint above for the primary upload-time validation result."
+                            ),
+                            fileInput("rhs_csv", "Choose legacy workflow RHS CSV", accept = c(".csv", "text/csv")),
+                            uiOutput("rhs_validation_status"),
+                            h5("RHS preview"),
+                            DT::dataTableOutput("rhs_preview")
+                          )
                         )
                       )
             ),
@@ -868,96 +900,6 @@ page_navbar(
 )
 ),
 
-  # WQ/RHS UPLOAD DEMO ----
-    nav_panel("File Validation Sandbox",
-      layout_columns(
-        col_widths = c(12),
-        card(
-          class = "dashboard-card",
-          card_header("Introduction"),
-          p("Use this page to validate local files before moving them into the mapped supporting-data workflow."),
-          p("No RICT calculation, O:E calculation, or production modelling is run from this page.")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("DC-11 workbook checkpoint"),
-          p("Check a multi-sheet Excel workbook against the frozen Data Contract v1 schemas. This reports validation results only and does not change the active dashboard data."),
-          div(class = "hint-text",
-              "Upload the standard DC-11 .xlsx template to validate all workbook sheets together."),
-          fileInput("dc11_workbook", "Choose DC-11 workbook", accept = c(".xlsx", ".xls")),
-          h5("DC-11 workbook status"),
-          uiOutput("dc11_workbook_validation_status"),
-          h5("DC-11 workbook issue report"),
-          dataTableOutput("dc11_workbook_validation_issues"),
-          h5("Workbook sheet preview"),
-          selectInput(
-            "dc11_workbook_preview_sheet",
-            "Preview sheet",
-            choices = names(dc11_sheet_schemas()),
-            selected = "site_mapping"
-          ),
-          div(class = "hint-text", "This preview shows the first rows of the selected workbook sheet. No import, joining, modelling, or HEV generation is run from this checkpoint."),
-          dataTableOutput("dc11_workbook_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("DC-11 single CSV checkpoint"),
-          p("Check a CSV against one frozen Data Contract v1 sheet schema. This reports validation results only and does not change the active dashboard data."),
-          div(class = "hint-text",
-              "Choose the DC-11 sheet type that this CSV represents. Column names and order must match the frozen contract."),
-          selectInput(
-            "dc11_csv_sheet",
-            "DC-11 dataset type",
-            choices = names(dc11_sheet_schemas()),
-            selected = "biology_samples"
-          ),
-          fileInput("dc11_csv", "Choose DC-11 CSV file", accept = c(".csv", "text/csv")),
-          h5("DC-11 checkpoint status"),
-          uiOutput("dc11_validation_status"),
-          h5("DC-11 issue report"),
-          dataTableOutput("dc11_validation_issues"),
-          h5("CSV preview"),
-          div(class = "hint-text", "This preview shows the first rows of the uploaded file. No import, joining, modelling, or HEV generation is run from this checkpoint."),
-          dataTableOutput("dc11_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("Upload WQ CSV"),
-          p("Water Quality data usually contains monitoring site identifiers, sample dates, determinands, measured results, units, and optional qualifiers."),
-          div(class = "hint-text",
-              "Expected columns are flexible for this first demo. Helpful site identifier columns include: biol_site_id, wq_site_id, site_id, monitoring_site_id. Date or measurement columns are also recommended."),
-          fileInput("wq_csv", "Choose WQ CSV file", accept = c(".csv", "text/csv")),
-          h5("WQ validation status"),
-          uiOutput("wq_validation_status"),
-          h5("WQ preview"),
-          div(class = "hint-text", "This preview shows the first rows of your uploaded file. No modelling has been run yet."),
-          dataTableOutput("wq_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("Upload RHS CSV"),
-          p("River Habitat Survey data usually contains survey identifiers plus habitat metrics or descriptors such as HMS, HQA, channel, bank, substrate, vegetation, and flow-type fields."),
-          div(class = "hint-text",
-              "Local RHS CSV files must use rhs_survey_id as the identifier column."),
-          fileInput("rhs_csv", "Choose RHS CSV file", accept = c(".csv", "text/csv")),
-          h5("RHS validation status"),
-          uiOutput("rhs_validation_status"),
-          h5("RHS preview"),
-          div(class = "hint-text", "This preview shows the first rows of your uploaded file. No modelling has been run yet."),
-          dataTableOutput("rhs_preview")
-        ),
-        card(
-          class = "dashboard-card",
-          card_header("Notes / Next steps"),
-          tags$ul(
-            tags$li("The DC-11 workbook and CSV checkpoints are strict and report schema/type issues without changing downstream data."),
-            tags$li("The older WQ/RHS previews remain separate and are still for quick supporting-data inspection only."),
-            tags$li("The next step is to connect stable checkpoint results to the production import flow after review.")
-          )
-        )
-      )
-    ),
-    
   # Navbar links ----
   nav_menu(
     title = "Links",
