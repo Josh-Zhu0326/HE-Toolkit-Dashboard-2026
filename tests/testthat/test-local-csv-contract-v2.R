@@ -71,6 +71,25 @@ testthat::test_that("biology ingestion uses explicit canonical field mappings", 
   testthat::expect_type(result$data$LIFE_F, "double")
 })
 
+testthat::test_that("canonical Biology data cross the HE Toolkit boundary explicitly", {
+  canonical <- read_local_csv_v2(fixture_path("biology.csv"), "biology")$data
+  adapted <- local_biology_to_hetoolkit_input(canonical)
+
+  testthat::expect_identical(names(adapted), c(
+    "biol_site_id", "SAMPLE_ID", "SAMPLE_DATE", "WHPT_ASPT",
+    "WHPT_N_TAXA", "LIFE_FAMILY_INDEX", "PSI_FAMILY_SCORE", "Month",
+    "Year", "Season"
+  ))
+  testthat::expect_identical(adapted$SAMPLE_ID[[1L]], "00017")
+  testthat::expect_s3_class(adapted$SAMPLE_DATE, "Date")
+  testthat::expect_false(any(c("sample_id", "date", "LIFE_F") %in% names(adapted)))
+  testthat::expect_error(
+    local_biology_to_hetoolkit_input(canonical[, setdiff(names(canonical), "sample_id")]),
+    "must pass Data Contract v2.0 normalisation",
+    fixed = TRUE
+  )
+})
+
 testthat::test_that("identifier leading zeros are preserved", {
   flow <- read_local_csv_v2(fixture_path("flow.csv"), "flow")$data
   wq <- read_local_csv_v2(fixture_path("wq.csv"), "wq")$data

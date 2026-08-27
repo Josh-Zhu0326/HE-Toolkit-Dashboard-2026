@@ -502,6 +502,27 @@ normalise_local_csv_v2 <- function(data, data_type) {
   normalised
 }
 
+local_biology_to_hetoolkit_input <- function(data) {
+  required <- c(
+    "biol_site_id", "sample_id", "date", "WHPT_ASPT", "WHPT_N_TAXA",
+    "LIFE_F", "PSI_F", "month", "sampling_year", "season"
+  )
+  if (!is.data.frame(data) || !all(required %in% names(data))) {
+    stop(
+      "Local Biology data must pass Data Contract v2.0 normalisation before HE Toolkit processing.",
+      call. = FALSE
+    )
+  }
+
+  adapted <- data[, required, drop = FALSE]
+  names(adapted) <- c(
+    "biol_site_id", "SAMPLE_ID", "SAMPLE_DATE", "WHPT_ASPT",
+    "WHPT_N_TAXA", "LIFE_FAMILY_INDEX", "PSI_FAMILY_SCORE", "Month",
+    "Year", "Season"
+  )
+  adapted
+}
+
 read_local_csv_v2 <- function(path, data_type, reader = read_character_csv) {
   if (!is.character(path) || length(path) != 1L || is.na(path) || !file.exists(path)) {
     return(validate_local_csv_v2(NULL, data_type))
