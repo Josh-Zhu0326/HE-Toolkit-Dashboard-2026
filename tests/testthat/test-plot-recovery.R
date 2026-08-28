@@ -397,7 +397,7 @@ testthat::test_that("RAW-18 final server boundary alone suppresses Shiny redraw"
   testthat::expect_identical(grDevices::dev.list(), devices_before)
 })
 
-testthat::test_that("RAW-18 WQ and RHS shared reactives retain downloadable plots", {
+testthat::test_that("RAW-18 WQ reactive retains the contracted downloadable plot", {
   mapping <- paste(
     "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id",
     "291,27090,SW-A4070115,TBC",
@@ -405,42 +405,28 @@ testthat::test_that("RAW-18 WQ and RHS shared reactives retain downloadable plot
     sep = "\n"
   )
   wq_path <- tempfile("mapped-wq-", fileext = ".png")
-  rhs_path <- tempfile("mapped-rhs-", fileext = ".png")
-  on.exit(unlink(c(wq_path, rhs_path), force = TRUE), add = TRUE)
+  on.exit(unlink(wq_path, force = TRUE), add = TRUE)
 
   shiny::testServer(workflow_dashboard_server, {
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = mapping,
       wq_csv = shiny_upload_input(testthat::test_path("..", "fixtures", "wq.csv")),
-      rhs_csv = shiny_upload_input(testthat::test_path("..", "fixtures", "rhs.csv")),
-      wq_plot_type = "Boxplot by biological site ID",
+      wq_plot_type = "Boxplot",
       wq_determinand_filter = "0180",
       wq_site_filter = "__all__",
-      wq_plot_date_range = as.Date(c("2024-01-01", "2024-12-31")),
-      rhs_plot_type = "Numeric variable by biological site ID",
-      rhs_variable = "habitat_score",
-      rhs_group_col = "biol_site_id"
+      wq_plot_date_range = as.Date(c("2024-01-01", "2024-12-31"))
     )
     muffle_interrupted_workflow_promise(session$flushReact())
 
     wq_plot <- current_wq_plot()
-    rhs_plot <- current_rhs_plot()
-
     testthat::expect_s3_class(wq_plot, "ggplot")
-    testthat::expect_s3_class(rhs_plot, "ggplot")
     testthat::expect_false(is.null(wq_plot))
-    testthat::expect_false(is.null(rhs_plot))
     testthat::expect_error(
       ggplot2::ggsave(wq_path, plot = wq_plot, width = 10, height = 5, dpi = 150),
       NA
     )
-    testthat::expect_error(
-      ggplot2::ggsave(rhs_path, plot = rhs_plot, width = 10, height = 5, dpi = 150),
-      NA
-    )
     testthat::expect_true(file.exists(wq_path) && file.info(wq_path)$size > 0)
-    testthat::expect_true(file.exists(rhs_path) && file.info(rhs_path)$size > 0)
   })
 })
 

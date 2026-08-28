@@ -86,6 +86,33 @@ testthat::test_that("server rejects a hidden import type for the active Task", {
   })
 })
 
+testthat::test_that("WQ Explorer requests before 2000 are blocked without silent clamping", {
+  mapping <- paste(
+    "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id",
+    "291,27090,SW-A4070115,TBC",
+    sep = "\n"
+  )
+
+  shiny::testServer(workflow_dashboard_server, {
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = mapping,
+      date_range_wq = as.Date(c("1999-12-31", "2000-01-02"))
+    )
+    muffle_interrupted_workflow_promise(session$setInputs(import_wq_site_ids = 1))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(wq_site_import_result()$status, "error")
+    testthat::expect_match(
+      wq_site_import_result()$messages,
+      "earliest selectable Water Quality Explorer start date is 2000-01-01",
+      fixed = TRUE
+    )
+    testthat::expect_identical(workflow_artifacts()$wq_input$status, "blocked")
+    testthat::expect_null(wq_site_import_data())
+  })
+})
+
 testthat::test_that("Flow display controls match the selected table or heatmap view", {
   shiny::testServer(workflow_dashboard_server, {
     set_inputs_ignoring_interrupted_promises(

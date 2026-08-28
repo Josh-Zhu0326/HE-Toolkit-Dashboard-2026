@@ -126,7 +126,7 @@ testthat::test_that("Stage workspaces share the workflow visual system", {
 
   testthat::expect_length(
     gregexpr("workflow-stage-workspace", ui_code, fixed = TRUE)[[1]],
-    7L
+    8L
   )
   testthat::expect_match(
     style_html,
@@ -199,9 +199,15 @@ testthat::test_that("workflow header owns branding, utilities, and Stage 2 work 
   testthat::expect_false(grepl("CSV validation", header_html, fixed = TRUE))
   testthat::expect_match(header_html, "Biology processing", fixed = TRUE)
   testthat::expect_match(header_html, "Flow processing", fixed = TRUE)
+  testthat::expect_match(header_html, "WQ processing", fixed = TRUE)
   testthat::expect_match(
     header_html,
     'id="workflow_stage_view_flow"',
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    header_html,
+    'id="workflow_stage_view_wq"',
     fixed = TRUE
   )
   testthat::expect_false(grepl('id="workspace_name"', header_html, fixed = TRUE))
@@ -229,6 +235,27 @@ testthat::test_that("Stage 3 exposes the processed dataset checkpoint round trip
   testthat::expect_match(ui_code, '"processed_dataset_checkpoint_file"', fixed = TRUE)
   testthat::expect_match(ui_code, '"load_processed_dataset_checkpoint"', fixed = TRUE)
   testthat::expect_match(ui_code, '"processed_dataset_checkpoint_download"', fixed = TRUE)
+})
+
+testthat::test_that("Stage 2 WQ presentation uses only contracted controls and RHS stays table-only", {
+  ui_code <- paste(
+    readLines(testthat::test_path("..", "..", "ui.R"), warn = FALSE),
+    collapse = "\n"
+  )
+  server_code <- paste(
+    readLines(testthat::test_path("..", "..", "server.R"), warn = FALSE),
+    collapse = "\n"
+  )
+
+  testthat::expect_match(ui_code, 'nav_panel(\n    "Process WQ"', fixed = TRUE)
+  testthat::expect_match(ui_code, '"wq_stage2_display"', fixed = TRUE)
+  testthat::expect_match(ui_code, 'choices = c("Time series", "Boxplot")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'min = "2000-01-01"', fixed = TRUE)
+  testthat::expect_false(grepl("Mean bar chart", ui_code, fixed = TRUE))
+  testthat::expect_false(grepl('output$wq_contract_summary_plot', server_code, fixed = TRUE))
+  testthat::expect_false(grepl('output$rhs_mapped_plot', server_code, fixed = TRUE))
+  testthat::expect_false(grepl('"rhs_plot_type"', ui_code, fixed = TRUE))
+  testthat::expect_match(ui_code, 'full_screen = TRUE', fixed = TRUE)
 })
 
 testthat::test_that("Task 4 and Task 5 pages expose distinct user paths", {

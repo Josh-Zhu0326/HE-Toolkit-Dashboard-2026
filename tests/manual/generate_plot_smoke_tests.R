@@ -19,81 +19,25 @@ set.seed(20260723)
 site_ids <- sprintf("BIO_SITE_%02d_LONG_LABEL", 1:24)
 dates <- seq.Date(as.Date("2022-01-01"), as.Date("2024-12-31"), by = "month")
 wq_data <- expand.grid(
-  biol_site_id = site_ids[1:12],
-  sample_date = dates,
+  wq_site_id = sprintf("WQ_SITE_%02d_LONG_LABEL", 1:12),
+  date_time = dates,
   KEEP.OUT.ATTRS = FALSE,
   stringsAsFactors = FALSE
 )
-wq_data$result_value <- round(runif(nrow(wq_data), 0.02, 1.1), 3)
+wq_data$result <- round(runif(nrow(wq_data), 0.02, 1.1), 3)
 wq_data$det_id <- sample(c("0180", "0111"), nrow(wq_data), replace = TRUE)
 
 wq_time <- build_wq_plot(
   wq_data,
-  plot_type = "Time series",
-  numeric_var = "result_value",
-  date_col = "sample_date",
-  group_col = "biol_site_id"
+  plot_type = "Time series"
 )$plot
 save_plot("wq_preview_time_series_many_sites", wq_time, 12, 6)
 
 wq_box <- build_wq_plot(
   wq_data,
-  plot_type = "Boxplot by biological site ID",
-  numeric_var = "result_value",
-  group_col = "biol_site_id"
+  plot_type = "Boxplot"
 )$plot
 save_plot("wq_preview_boxplot_long_site_ids", wq_box, 12, 6)
-
-wq_mean <- build_wq_plot(
-  wq_data,
-  plot_type = "Mean bar plot by biological site ID",
-  numeric_var = "result_value",
-  group_col = "biol_site_id"
-)$plot
-save_plot("wq_preview_mean_bar_long_site_ids", wq_mean, 12, 6)
-
-summary_data <- data.frame(
-  biol_site_id = site_ids,
-  orthophosphate_mean = round(runif(length(site_ids), 0.01, 0.7), 3),
-  ammonia_p90 = round(runif(length(site_ids), 0.05, 1.3), 3),
-  orthophosphate_record_count = sample(1:40, length(site_ids), replace = TRUE),
-  ammonia_record_count = sample(1:40, length(site_ids), replace = TRUE),
-  wq_window_start = as.Date("2022-01-01"),
-  wq_window_end = as.Date("2024-12-31")
-)
-wq_contract <- build_wq_contract_summary_plot(summary_data)$plot
-save_plot("wq_contract_summary_many_long_sites", wq_contract, 13, 9)
-
-rhs_data <- data.frame(
-  biol_site_id = rep(site_ids[1:18], each = 6),
-  rhs_survey_id = sprintf("RHS_%03d", seq_len(108)),
-  hqa_score = round(rnorm(108, 55, 12), 1),
-  channel_type = sample(sprintf("Category_%02d_long_name", 1:18), 108, replace = TRUE),
-  stringsAsFactors = FALSE
-)
-
-rhs_numeric <- build_rhs_plot(
-  rhs_data,
-  plot_type = "Numeric variable by biological site ID",
-  variable = "hqa_score",
-  group_col = "biol_site_id"
-)$plot
-save_plot("rhs_numeric_boxplot_long_site_ids", rhs_numeric, 12, 6)
-
-rhs_category <- build_rhs_plot(
-  rhs_data,
-  plot_type = "Categorical count/bar plot",
-  variable = "channel_type",
-  group_col = "biol_site_id"
-)$plot
-save_plot("rhs_categorical_many_categories", rhs_category, 12, 6)
-
-rhs_count <- build_rhs_plot(
-  rhs_data,
-  plot_type = "Record count by biological site ID",
-  group_col = "biol_site_id"
-)$plot
-save_plot("rhs_record_count_long_site_ids", rhs_count, 12, 6)
 
 env_data <- data.frame(
   biol_site_id = site_ids[1:18],

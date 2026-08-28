@@ -257,6 +257,13 @@ function(input, output, session){
     updateNavbarPage(session, "main_nav", selected = "Process Flow")
   }, ignoreInit = TRUE)
 
+  observeEvent(input$workflow_stage_view_wq, {
+    req(workflow_session$task_id)
+    req(identical(workflow_session$stage_index, 2L))
+    if (!require_import_type("wq")) return()
+    updateNavbarPage(session, "main_nav", selected = "Process WQ")
+  }, ignoreInit = TRUE)
+
   output$workflow_status_announcement <- renderText({
     req(workflow_session$task_id)
     task <- get_he_workflow_task(workflow_session$task_id)
@@ -1420,6 +1427,11 @@ function(input, output, session){
       messages = message,
       data = data.frame()
     ))
+    workflow_reset_artifact(
+      "wq_summary",
+      message,
+      "Go to Stage 2 and rebuild the WQ summary."
+    )
   }
 
   observeEvent(list(input$meta_paste, input$date_range_wq), {
@@ -1466,10 +1478,24 @@ function(input, output, session){
       return()
     }
 
-    start_date <- max(as.Date(input$date_range_wq[[1]]), as.Date("2000-01-01"))
-    end_date <- as.Date(input$date_range_wq[[2]])
-    if (end_date <= start_date) {
-      message <- "The WQ end date must be later than the start date. Water Quality Explorer data are available from 2000 onwards."
+    selected_range <- input$date_range_wq
+    parsed_range <- tryCatch(
+      as.Date(selected_range),
+      error = function(error) rep(as.Date(NA), 2L)
+    )
+    start_date <- if (length(parsed_range) >= 1L) parsed_range[[1L]] else as.Date(NA)
+    end_date <- if (length(parsed_range) >= 2L) parsed_range[[2L]] else as.Date(NA)
+    invalid_range <- length(parsed_range) != 2L || anyNA(parsed_range)
+    before_available_data <- !is.na(start_date) && start_date < wq_contract_min_date()
+    reversed_range <- !is.na(start_date) && !is.na(end_date) && end_date < start_date
+    if (invalid_range || before_available_data || reversed_range) {
+      message <- if (before_available_data) {
+        "The earliest selectable Water Quality Explorer start date is 2000-01-01. Choose a later start date and retry."
+      } else if (reversed_range) {
+        "The WQ end date must be the same as or later than the start date."
+      } else {
+        "Choose a complete, valid WQ date range before importing Water Quality Explorer data."
+      }
       wq_site_import_data(NULL)
       wq_site_import_result(list(status = "error", messages = message))
       workflow_set_artifact(
@@ -1656,13 +1682,13 @@ function(input, output, session){
 
   output$wq_site_import_preview <- DT::renderDataTable({
     req(wq_site_import_data())
-    wq_site_import_data()
-  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+    dashboard_datatable(wq_site_import_data(), frozen_columns = 2L)
+  })
 
   output$rhs_site_import_preview <- DT::renderDataTable({
     req(rhs_site_import_data())
-    rhs_site_import_data()
-  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+    dashboard_datatable(rhs_site_import_data(), frozen_columns = 2L)
+  })
 
   output$download_mapped_wq_csv <- downloadHandler(
     filename = function() "mapped_wq_data.csv",
@@ -1691,7 +1717,7 @@ function(input, output, session){
   )
 
   observeEvent(input$build_wq_contract_summary, {
-    if (!require_import_type("wq")) return()
+    if (!require_task_stage(2L) || !require_import_type("wq")) return()
     wq_data <- mapped_wq_plot_data()
     biology_data <- tryCatch(
       isolate(biol_all()),
@@ -1702,13 +1728,21 @@ function(input, output, session){
     if (result$status %in% c("success", "warning") && !is.null(result$data) && nrow(result$data) > 0) {
       workflow_status <- if (identical(result$status, "warning")) "warning" else "complete"
       workflow_set_artifact(
-        "wq_input",
+        "wq_summary",
         workflow_status,
         data_source = "Contracted WQ summary",
         history_summary = sprintf(
           "Built WQ summary for %d biology record(s): 0180 orthophosphate mean, 0111 ammonia P90, DO pending OPEN-02.",
           nrow(result$data)
         ),
+        invalidate_downstream = TRUE
+      )
+    } else if (identical(result$status, "error")) {
+      workflow_set_artifact(
+        "wq_summary",
+        "failed",
+        blocking_reason = paste(result$messages, collapse = " "),
+        next_action = "Correct the WQ or processed Biology input, then rebuild the Stage 2 WQ summary.",
         invalidate_downstream = TRUE
       )
     }
@@ -1731,13 +1765,7 @@ function(input, output, session){
   output$wq_contract_summary_table <- DT::renderDataTable({
     result <- wq_contract_summary_result()
     req(!is.null(result$data), nrow(result$data) > 0)
-    result$data
-  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
-
-  output$wq_contract_summary_plot <- renderPlot({
-    plot_result <- build_wq_contract_summary_plot(wq_contract_summary_result()$data)
-    validate(need(!is.null(plot_result$plot), plot_result$message))
-    safe_server_plot("WQ summary", function() plot_result$plot)
+    dashboard_datatable(result$data, frozen_columns = 2L)
   })
 
   output$wq_contract_summary_provenance <- renderUI({
@@ -1826,12 +1854,12 @@ function(input, output, session){
   output$wq_plot_controls <- renderUI({
     data <- mapped_wq_plot_data()
     spec <- wq_preview_filter_spec(data)
-    determinant_choices <- c("All determinands" = "__all__", spec$determinand_choices)
+    determinant_choices <- c("Select a determinand" = "", spec$determinand_choices)
     site_choices <- c("All sites" = "__all__", spec$site_choices)
     has_dates <- !is.na(spec$date_min) && !is.na(spec$date_max)
 
     tagList(
-      selectInput("wq_determinand_filter", "Determinand", choices = determinant_choices, selected = "__all__"),
+      selectInput("wq_determinand_filter", "Determinand", choices = determinant_choices, selected = ""),
       selectInput("wq_site_filter", "WQ site", choices = site_choices, selected = "__all__"),
       if (has_dates) {
         dateRangeInput(
@@ -1859,57 +1887,21 @@ function(input, output, session){
     )
   })
 
-  output$rhs_plot_controls <- renderUI({
-    data <- mapped_rhs_plot_data()
-    numeric_cols <- wq_rhs_numeric_columns(data)
-    categorical_cols <- wq_rhs_categorical_columns(data)
-    variable_cols <- if (identical(input$rhs_plot_type, "Categorical count/bar plot")) categorical_cols else numeric_cols
-    if (identical(input$rhs_plot_type, "Record count by biological site ID")) {
-      variable_cols <- character(0)
-    }
-    group_cols <- if (is.null(data)) character(0) else names(data)
-    default_group <- if ("biol_site_id" %in% group_cols) "biol_site_id" else wq_rhs_default_group(data)
-    default_variable <- if (length(variable_cols) > 0) variable_cols[[1]] else character(0)
-
-    tagList(
-      if (!identical(input$rhs_plot_type, "Record count by biological site ID")) {
-        selectInput("rhs_variable", "RHS variable", choices = variable_cols, selected = default_variable)
-      },
-      selectInput("rhs_group_col", "RHS grouping column", choices = group_cols, selected = default_group)
-    )
-  })
-
   current_wq_plot <- reactive({
-    data <- mapped_wq_plot_data()
-    spec <- wq_preview_filter_spec(data)
+    validate(need(
+      !is.null(input$wq_determinand_filter) && nzchar(input$wq_determinand_filter),
+      "Select one WQ determinand before viewing a plot."
+    ))
     result <- build_wq_plot(
       data = filtered_wq_plot_data(),
-      plot_type = input$wq_plot_type,
-      numeric_var = spec$value_col,
-      date_col = spec$date_col,
-      group_col = spec$group_col
+      plot_type = input$wq_plot_type
     )
     validate(need(!is.null(result$plot), result$message))
     safe_server_plot_value("WQ", function() result$plot)
   })
 
-  current_rhs_plot <- reactive({
-    result <- build_rhs_plot(
-      data = mapped_rhs_plot_data(),
-      plot_type = input$rhs_plot_type,
-      variable = input$rhs_variable,
-      group_col = input$rhs_group_col
-    )
-    validate(need(!is.null(result$plot), result$message))
-    safe_server_plot_value("RHS", function() result$plot)
-  })
-
   output$wq_mapped_plot <- renderPlot({
     safe_server_plot_render("WQ", current_wq_plot())
-  })
-
-  output$rhs_mapped_plot <- renderPlot({
-    safe_server_plot_render("RHS", current_rhs_plot())
   })
 
   output$download_wq_plot <- downloadHandler(
@@ -1918,18 +1910,6 @@ function(input, output, session){
       plot <- current_wq_plot()
       safe_server_file_operation(
         "mapped WQ plot",
-        function() ggplot2::ggsave(file, plot = plot, width = 10, height = 5, dpi = 150)
-      )
-    },
-    contentType = "image/png"
-  )
-
-  output$download_rhs_plot <- downloadHandler(
-    filename = function() "mapped_rhs_plot.png",
-    content = function(file) {
-      plot <- current_rhs_plot()
-      safe_server_file_operation(
-        "mapped RHS plot",
         function() ggplot2::ggsave(file, plot = plot, width = 10, height = 5, dpi = 150)
       )
     },
@@ -2257,10 +2237,51 @@ function(input, output, session){
   
   #### render PCA ----
   output$env_fig <- renderPlot({
+    pca_vars <- c(
+      "ALTITUDE", "SLOPE", "WIDTH", "DEPTH",
+      "BOULDERS_COBBLES", "PEBBLES_GRAVEL", "SILT_CLAY"
+    )
+    pca_data <- env_data()
+    required_pca_cols <- c("biol_site_id", pca_vars)
+
+    # Keep structural failures inside the existing safe plot boundary. When
+    # the expected columns are present, stop before PCA unless at least two
+    # distinct sites have complete inputs and a usable site identifier.
+    if (all(required_pca_cols %in% names(pca_data))) {
+      site_ids <- trimws(as.character(pca_data$biol_site_id))
+      usable_rows <- complete.cases(
+        pca_data[, required_pca_cols, drop = FALSE]
+      ) & !is.na(site_ids) & nzchar(site_ids)
+      usable_site_count <- length(unique(site_ids[usable_rows]))
+
+      if (usable_site_count == 1L) {
+        validate(need(
+          FALSE,
+          paste(
+            "PCA cannot be run with data from only one site.",
+            "Currently 1 usable site was detected; add data for at least one more site."
+          )
+        ))
+      }
+
+      if (usable_site_count == 0L) {
+        validate(need(
+          FALSE,
+          paste(
+            "PCA cannot be run because no site has complete environmental data.",
+            "Complete or add data for at least two sites."
+          )
+        ))
+      }
+    }
+
     safe_server_plot("Environmental PCA", function() {
-      plot_sitepca_dash(env_data(), vars = c("ALTITUDE", "SLOPE", "WIDTH", "DEPTH",
-                                             "BOULDERS_COBBLES", "PEBBLES_GRAVEL", "SILT_CLAY"),
-                        eigenvectors = TRUE, label_by = "biol_site_id")
+      plot_sitepca_dash(
+        pca_data,
+        vars = pca_vars,
+        eigenvectors = TRUE,
+        label_by = "biol_site_id"
+      )
     })
   })
   
@@ -3195,10 +3216,14 @@ function(input, output, session){
   build_current_enrichment_inputs <- function(joined_core, selected) {
     enrichments <- list()
     if ("wq" %in% selected) {
-      enrichments$wq <- prepare_wq_enrichment_summary(
-        wq_contract_summary_result()$data,
-        joined_core
-      )
+      enrichments$wq <- if (workflow_artifact_is_current("wq_summary")) {
+        prepare_wq_enrichment_summary(
+          wq_contract_summary_result()$data,
+          joined_core
+        )
+      } else {
+        NULL
+      }
     }
     if ("rhs" %in% selected) {
       enrichments$rhs <- prepare_rhs_enrichment_summary(
@@ -3223,6 +3248,32 @@ function(input, output, session){
     )
     joined_enriched_result(result)
 
+    for (enrichment_name in selected) {
+      artifact_id <- paste0(enrichment_name, "_enrichment")
+      if (enrichment_name %in% result$provenance$successful_enrichments) {
+        workflow_set_artifact(
+          artifact_id,
+          "complete",
+          data_source = paste(toupper(enrichment_name), "optional enrichment"),
+          history_summary = paste("Prepared", enrichment_name, "enrichment for the current Core Joined HE dataset."),
+          invalidate_downstream = TRUE
+        )
+      } else {
+        reason <- result$provenance$failure_reasons[[enrichment_name]]
+        workflow_set_artifact(
+          artifact_id,
+          "failed",
+          blocking_reason = if (is.null(reason)) "No usable enrichment output was produced." else reason,
+          next_action = if (identical(enrichment_name, "wq")) {
+            "Build a current WQ summary in Stage 2, then retry optional enrichment."
+          } else {
+            "Validate current RHS data and mapping, then retry optional enrichment."
+          },
+          invalidate_downstream = TRUE
+        )
+      }
+    }
+
     has_enriched <- !is.null(result$joined_enriched) && nrow(result$joined_enriched) > 0L
     if (has_enriched) {
       workflow_set_artifact(
@@ -3241,7 +3292,7 @@ function(input, output, session){
       updateCheckboxInput(session, "use_joined_enriched", value = FALSE)
       workflow_set_artifact(
         "joined_enriched",
-        "not_ready",
+        "blocked",
         blocking_reason = result$messages,
         next_action = "Select WQ/RHS enrichment with usable mapped summary data, or continue with the core Joined HE dataset.",
         invalidate_downstream = TRUE
