@@ -1096,6 +1096,11 @@ function(input, output, session){
     list(data = validation$data, validation = validation)
   })
 
+  local_wq_upload <- reactive({
+    validation <- local_csv_v2_uploads$wq()
+    list(data = validation$data, validation = validation)
+  })
+
   wq_upload <- reactive({
     read_result <- read_uploaded_csv_safely(input$wq_csv, "WQ")
     validation <- validate_wq_upload(read_result$data)
@@ -1799,7 +1804,21 @@ function(input, output, session){
       return(normalise_wq_preview_records(imported))
     }
 
-    uploaded <- wq_upload()$data
+    local_checkpoint <- local_wq_upload()
+    legacy_upload <- wq_upload()
+    uploaded <- if (
+      local_checkpoint$validation$status %in% c("success", "warning") &&
+        !is.null(local_checkpoint$data) && nrow(local_checkpoint$data) > 0L
+    ) {
+      local_checkpoint$data
+    } else if (
+      legacy_upload$validation$status %in% c("success", "warning") &&
+        !is.null(legacy_upload$data) && nrow(legacy_upload$data) > 0L
+    ) {
+      legacy_upload$data
+    } else {
+      NULL
+    }
     if (is.null(uploaded) || nrow(uploaded) == 0) {
       return(NULL)
     }
@@ -1813,11 +1832,9 @@ function(input, output, session){
       }
     }
 
-    if (all(c("biol_site_id", "wq_site_id") %in% names(uploaded))) {
-      return(uploaded)
-    }
-
-    NULL
+    # Biology mapping is required by the contracted summary, but not by the
+    # WQ source preview and its determinand/site inspection controls.
+    uploaded
   })
 
   mapped_rhs_plot_data <- reactive({
@@ -1854,7 +1871,13 @@ function(input, output, session){
   output$wq_plot_controls <- renderUI({
     data <- mapped_wq_plot_data()
     spec <- wq_preview_filter_spec(data)
-    determinant_choices <- c("Select a determinand" = "", spec$determinand_choices)
+    if (length(spec$determinant_choices) == 0L) {
+      return(div(
+        class = "upload-status upload-status-info",
+        "No valid WQ determinands are available in the current validated WQ source."
+      ))
+    }
+    determinant_choices <- c("Select a determinand" = "", spec$determinant_choices)
     site_choices <- c("All sites" = "__all__", spec$site_choices)
     has_dates <- !is.na(spec$date_min) && !is.na(spec$date_max)
 
