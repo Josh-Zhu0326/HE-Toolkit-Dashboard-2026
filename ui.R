@@ -16,7 +16,7 @@ tagList(
       }
       .dashboard-page {
         width: 100%;
-        max-width: 1240px;
+        max-width: var(--wf-page-max, 1480px);
         margin: 0 auto;
         padding: 1.25rem 1rem 2.5rem 1rem;
       }
