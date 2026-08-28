@@ -90,6 +90,59 @@ testthat::test_that("canonical Biology data cross the HE Toolkit boundary explic
   )
 })
 
+testthat::test_that("Environmental NGR values are validated before boundary conversion", {
+  environmental <- read_character_csv(path = fixture_path("environmental.csv"))
+  environmental$NGR_10_FIG <- "SO12345"
+  result <- validate_local_csv_v2(environmental, "environmental")
+
+  testthat::expect_identical(result$status, "error")
+  testthat::expect_true("invalid_ngr_10_fig" %in% result$issues$code)
+})
+
+testthat::test_that("canonical Environmental data cross the HE Toolkit boundary explicitly", {
+  canonical <- read_local_csv_v2(
+    fixture_path("environmental.csv"),
+    "environmental"
+  )$data
+  adapted <- local_environment_to_hetoolkit_input(canonical)
+
+  testthat::expect_identical(names(adapted), c(
+    "WATER_BODY", "biol_site_id", "NGR_PREFIX", "EASTING", "NORTHING",
+    "WFD_WATERBODY_ID", "ALTITUDE", "SLOPE", "DIST_FROM_SOURCE",
+    "DISCHARGE", "WIDTH", "DEPTH", "BOULDERS_COBBLES", "PEBBLES_GRAVEL",
+    "SAND", "SILT_CLAY", "ALKALINITY", "CONDUCTIVITY", "TOTAL_HARDNESS",
+    "CALCIUM", "NGR_10_FIG"
+  ))
+  testthat::expect_identical(adapted$NGR_PREFIX, "SO")
+  testthat::expect_identical(adapted$EASTING, "12345")
+  testthat::expect_identical(adapted$NORTHING, "12345")
+  testthat::expect_true(all(is.na(adapted$WATER_BODY)))
+  testthat::expect_true(all(is.na(adapted$TOTAL_HARDNESS)))
+  testthat::expect_identical(adapted$NGR_10_FIG, canonical$NGR_10_FIG)
+})
+
+testthat::test_that("Environmental boundary output is accepted by the real RICT path", {
+  canonical <- read_local_csv_v2(
+    fixture_path("environmental.csv"),
+    "environmental"
+  )$data
+  canonical$ALKALINITY <- NA_real_
+  adapted <- local_environment_to_hetoolkit_input(canonical)
+
+  predictions <- suppressWarnings(hetoolkit::predict_indices(
+    env_data = adapted,
+    file_format = "EDE",
+    all_indices = TRUE
+  ))
+
+  testthat::expect_identical(nrow(predictions), 3L)
+  testthat::expect_identical(unique(predictions$biol_site_id), "B001")
+  testthat::expect_true(all(c(
+    "SEASON", "TL2_WHPT_ASPT_AbW_DistFam", "TL3_LIFE_Fam_DistFam"
+  ) %in% names(predictions)))
+  testthat::expect_true(all(is.finite(predictions$ALKALINITY)))
+})
+
 testthat::test_that("identifier leading zeros are preserved", {
   flow <- read_local_csv_v2(fixture_path("flow.csv"), "flow")$data
   wq <- read_local_csv_v2(fixture_path("wq.csv"), "wq")$data
