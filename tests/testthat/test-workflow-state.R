@@ -60,7 +60,8 @@ testthat::test_that("biology changes stale only dependent downstream outputs", {
   changed <- invalidate_he_artifacts_from(registry, "biology_input")
 
   expected_stale <- c(
-    "processed_biology", "oe_result", "joined_core", "joined_enriched",
+    "processed_biology", "oe_result", "wq_summary", "joined_core",
+    "wq_enrichment", "rhs_enrichment", "joined_enriched",
     "analysis_dataset", "processed_dataset_checkpoint", "hev_result",
     "model_result"
   )
@@ -78,10 +79,22 @@ testthat::test_that("WQ changes never stale joined_core", {
   changed <- invalidate_he_artifacts_from(registry, "wq_input")
 
   testthat::expect_true(artifact_is_current(changed$joined_core))
+  testthat::expect_identical(changed$wq_summary$status, "stale")
+  testthat::expect_identical(changed$wq_enrichment$status, "stale")
   testthat::expect_identical(changed$joined_enriched$status, "stale")
   testthat::expect_identical(changed$analysis_dataset$status, "stale")
   testthat::expect_identical(changed$hev_result$status, "stale")
   testthat::expect_identical(changed$model_result$status, "stale")
+})
+
+testthat::test_that("WQ summary is a Stage 2 artifact consumed by Stage 3 enrichment", {
+  testthat::expect_identical(he_artifact_stage_index[["wq_summary"]], 2L)
+  testthat::expect_setequal(
+    he_artifact_dependencies$wq_summary,
+    c("wq_input", "oe_result", "site_mapping")
+  )
+  testthat::expect_identical(he_artifact_stage_index[["wq_enrichment"]], 3L)
+  testthat::expect_true("wq_summary" %in% he_artifact_dependencies$wq_enrichment)
 })
 
 testthat::test_that("filter changes preserve joined datasets", {

@@ -1,11 +1,12 @@
 # Workspace snapshots are plain, versioned R objects. Storage backends must not
 # depend on Shiny reactives or temporary upload paths.
 
-workspace_schema_version <- "1.0.0"
+workspace_schema_version <- "1.1.0"
 
 workspace_artifact_dataset_requirements <- list(
   oe_result = "oe_results",
   flow_statistics = "flow_statistics",
+  wq_summary = "wq_contract_summary",
   joined_core = "joined_core",
   processed_dataset_checkpoint = "joined_core",
   analysis_dataset = "analysis_dataset",
@@ -48,13 +49,11 @@ workspace_saved_input_ids <- c(
   "flow_data_display",
   "imp_flow_data_display",
   "flow_stats_display",
+  "wq_stage2_display",
   "wq_plot_type",
   "wq_determinand_filter",
   "wq_site_filter",
-  "wq_plot_date_range",
-  "rhs_plot_type",
-  "rhs_variable",
-  "rhs_group_col"
+  "wq_plot_date_range"
 )
 
 workspace_app_version <- function() {

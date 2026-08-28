@@ -2,6 +2,10 @@ wq_contract_empty_result <- function(status = "info", messages = character(0)) {
   list(data = data.frame(), status = status, messages = messages)
 }
 
+wq_contract_min_date <- function() {
+  as.Date("2000-01-01")
+}
+
 wq_contract_det_registry <- function() {
   data.frame(
     det_id = c("0180", "0111"),
@@ -155,6 +159,7 @@ standardise_wq_contract_records <- function(wq_data) {
     )
   unsupported_units <- supported & (is.na(data$canonical_unit) | data$canonical_unit != "mg/L")
   invalid_dates <- is.na(data$date_time)
+  before_min_date <- !invalid_dates & data$date_time < wq_contract_min_date()
   invalid_values <- supported & is.na(data$analysis_value)
 
   messages <- character(0)
@@ -179,6 +184,16 @@ standardise_wq_contract_records <- function(wq_data) {
     messages <- c(messages, "Some WQ records had invalid dates and were excluded from summary calculations.")
     status <- "warning"
   }
+  if (any(before_min_date, na.rm = TRUE)) {
+    messages <- c(
+      messages,
+      sprintf(
+        "%d WQ record(s) before 2000-01-01 were retained in the source data but excluded from the current summary.",
+        sum(before_min_date, na.rm = TRUE)
+      )
+    )
+    status <- "warning"
+  }
   if (any(invalid_values, na.rm = TRUE)) {
     messages <- c(messages, "Some supported WQ records had missing or non-numeric results and were excluded from summary calculations.")
     status <- "warning"
@@ -194,7 +209,8 @@ standardise_wq_contract_records <- function(wq_data) {
     status <- "warning"
   }
 
-  data$wq_contract_usable <- supported & !unsupported_units & !determinand_conflict & !invalid_dates & !invalid_values
+  data$wq_before_min_date <- before_min_date
+  data$wq_contract_usable <- supported & !unsupported_units & !determinand_conflict & !invalid_dates & !before_min_date & !invalid_values
   data$wq_contract_usable[is.na(data$wq_contract_usable)] <- FALSE
   if (length(messages) == 0) {
     messages <- "WQ records were standardised successfully for the v1 WQ contract."
@@ -226,15 +242,15 @@ build_wq_contract_summary <- function(wq_data, biology_data) {
     return(standardised)
   }
 
-  wq <- standardised$data
-  if (!"biol_site_id" %in% names(wq)) {
+  wq_all <- standardised$data
+  if (!"biol_site_id" %in% names(wq_all)) {
     return(wq_contract_empty_result(
       "error",
       "Mapped WQ records must contain biol_site_id before WQ summaries can be built."
     ))
   }
 
-  wq <- wq[wq$wq_contract_usable, , drop = FALSE]
+  wq <- wq_all[wq_all$wq_contract_usable, , drop = FALSE]
   biology <- as.data.frame(biology_data, stringsAsFactors = FALSE)
   if (!"biol_site_id" %in% names(biology)) {
     return(wq_contract_empty_result(
@@ -253,6 +269,7 @@ build_wq_contract_summary <- function(wq_data, biology_data) {
     biology$date <- as.Date(NA)
   }
 
+  generated_at_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
   result_rows <- lapply(seq_len(nrow(biology)), function(i) {
     row <- biology[i, , drop = FALSE]
     year <- row$sampling_year_contract
@@ -262,8 +279,11 @@ build_wq_contract_summary <- function(wq_data, biology_data) {
       date = as.character(row$date),
       sampling_year = year,
       wq_window_start = as.Date(NA),
+      wq_effective_window_start = as.Date(NA),
       wq_window_end = as.Date(NA),
       wq_window_duration_years = 3L,
+      wq_excluded_before_2000_count = 0L,
+      wq_summary_generated_at_utc = generated_at_utc,
       orthophosphate_mean = NA_real_,
       orthophosphate_record_count = 0L,
       orthophosphate_below_detection_count = 0L,
@@ -291,16 +311,26 @@ build_wq_contract_summary <- function(wq_data, biology_data) {
     }
 
     start <- as.Date(sprintf("%d-01-01", year - 2L))
+    effective_start <- max(start, wq_contract_min_date())
     end <- as.Date(sprintf("%d-12-31", year))
     window <- wq[
       as.character(wq$biol_site_id) == as.character(row$biol_site_id) &
-        wq$date_time >= start &
+        wq$date_time >= effective_start &
         wq$date_time <= end,
       ,
       drop = FALSE
     ]
     out$wq_window_start <- start
+    out$wq_effective_window_start <- effective_start
     out$wq_window_end <- end
+    out$wq_excluded_before_2000_count <- sum(
+      as.character(wq_all$biol_site_id) == as.character(row$biol_site_id) &
+        !is.na(wq_all$date_time) &
+        wq_all$date_time >= start &
+        wq_all$date_time <= end &
+        wq_all$date_time < wq_contract_min_date(),
+      na.rm = TRUE
+    )
 
     orth <- window$analysis_value[window$det_id == "0180"]
     amm <- window$analysis_value[window$det_id == "0111"]
@@ -315,13 +345,19 @@ build_wq_contract_summary <- function(wq_data, biology_data) {
       out$ammonia_p90 <- as.numeric(stats::quantile(amm, probs = 0.90, type = 7, names = FALSE))
     }
     out$orthophosphate_provenance <- wq_contract_provenance_text(
-      "0180", "mean", out$orthophosphate_record_count, out$orthophosphate_below_detection_count, start, end
+      "0180", "mean", out$orthophosphate_record_count, out$orthophosphate_below_detection_count, effective_start, end
     )
     out$ammonia_provenance <- wq_contract_provenance_text(
-      "0111", "p90", out$ammonia_record_count, out$ammonia_below_detection_count, start, end
+      "0111", "p90", out$ammonia_record_count, out$ammonia_below_detection_count, effective_start, end
     )
     out$wq_summary_provenance <- paste(
       "Biology-anchored three-calendar-year WQ summary.",
+      paste0(
+        "requested_window=", format(start, "%Y-%m-%d"), " to ", format(end, "%Y-%m-%d"),
+        "; effective_window=", format(effective_start, "%Y-%m-%d"), " to ", format(end, "%Y-%m-%d"),
+        "; excluded_before_2000=", out$wq_excluded_before_2000_count,
+        "; generated_at_utc=", generated_at_utc, "."
+      ),
       out$orthophosphate_provenance,
       out$ammonia_provenance,
       "Dissolved oxygen P10 remains not_ready_open_02 pending OPEN-02.",
@@ -337,109 +373,13 @@ build_wq_contract_summary <- function(wq_data, biology_data) {
     status <- "warning"
     messages <- c(messages, "No supported WQ records matched the biology-anchored three-calendar-year windows.")
   }
+  if (nrow(summary) > 0 && any(summary$wq_window_start < wq_contract_min_date(), na.rm = TRUE)) {
+    status <- "warning"
+    messages <- c(
+      messages,
+      "At least one biology-anchored WQ window began before 2000-01-01; the effective window was limited to available data from 2000-01-01."
+    )
+  }
 
   list(data = summary, status = status, messages = messages)
-}
-
-build_wq_contract_summary_plot <- function(summary_data) {
-  if (is.null(summary_data) || nrow(summary_data) == 0) {
-    return(list(plot = NULL, message = "No WQ contract summary is available."))
-  }
-
-  plot_data <- summary_data[, c("biol_site_id", "orthophosphate_mean", "ammonia_p90"), drop = FALSE]
-  value_data <- tidyr::pivot_longer(
-    plot_data,
-    cols = c("orthophosphate_mean", "ammonia_p90"),
-    names_to = "summary_field",
-    values_to = "value"
-  )
-  count_data <- summary_data[, c("biol_site_id", "orthophosphate_record_count", "ammonia_record_count"), drop = FALSE]
-  count_data <- tidyr::pivot_longer(
-    count_data,
-    cols = c("orthophosphate_record_count", "ammonia_record_count"),
-    names_to = "summary_field",
-    values_to = "value"
-  )
-  value_data$plot_measure <- "Summary value (mg/L)"
-  count_data$plot_measure <- "Supporting record count"
-  value_data$summary_field <- dplyr::recode(
-    value_data$summary_field,
-    orthophosphate_mean = "0180 orthophosphate_mean",
-    ammonia_p90 = "0111 ammonia_p90"
-  )
-  count_data$summary_field <- dplyr::recode(
-    count_data$summary_field,
-    orthophosphate_record_count = "0180 orthophosphate_mean",
-    ammonia_record_count = "0111 ammonia_p90"
-  )
-  plot_data <- rbind(value_data, count_data)
-  plot_data <- plot_data[!is.na(plot_data$value), , drop = FALSE]
-  if (nrow(plot_data) == 0) {
-    return(list(plot = NULL, message = "No WQ summary values are available to plot."))
-  }
-
-  has_window_dates <- all(c("wq_window_start", "wq_window_end") %in% names(summary_data)) &&
-    any(!is.na(summary_data$wq_window_start)) &&
-    any(!is.na(summary_data$wq_window_end))
-  window_text <- if (has_window_dates) {
-    paste0(
-      "Window: ",
-      format(min(summary_data$wq_window_start, na.rm = TRUE), "%Y-%m-%d"),
-      " to ",
-      format(max(summary_data$wq_window_end, na.rm = TRUE), "%Y-%m-%d"),
-      "; biology anchored Y-2 to Y"
-    )
-  } else {
-    "Window: biology anchored Y-2 to Y"
-  }
-
-  site_count <- length(unique(plot_data$biol_site_id))
-  many_sites <- site_count > 10L
-  facet_scales <- if (many_sites) "free_x" else "free_y"
-  plot_data$plot_site_id <- stringr::str_trunc(as.character(plot_data$biol_site_id), width = 28)
-  plot_data$plot_site_id <- factor(plot_data$plot_site_id, levels = unique(plot_data$plot_site_id))
-  show_value_labels <- site_count <= 10L
-
-  plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = plot_site_id, y = value, fill = summary_field)) +
-    ggplot2::geom_col(position = "dodge") +
-    ggplot2::facet_wrap(~plot_measure, scales = facet_scales, ncol = 1) +
-    ggplot2::labs(
-      x = "Biology site ID",
-      y = NULL,
-      fill = "Contract field",
-      title = "Formal WQ contract summary",
-      subtitle = window_text
-    ) +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(
-      legend.position = "bottom",
-      axis.text.x = ggplot2::element_text(
-        angle = if (many_sites) 0 else 30,
-        hjust = if (many_sites) 0.5 else 1,
-        size = if (many_sites) 7 else 9
-      ),
-      axis.text.y = ggplot2::element_text(
-        size = if (many_sites) 7 else 9,
-        lineheight = if (many_sites) 0.9 else 1
-      ),
-      panel.spacing.y = ggplot2::unit(1.1, "lines")
-    )
-
-  if (show_value_labels) {
-    plot <- plot +
-      ggplot2::geom_text(
-        ggplot2::aes(label = ifelse(plot_measure == "Supporting record count", paste0("n=", value), round(value, 3))),
-        position = ggplot2::position_dodge(width = 0.9),
-        vjust = -0.25,
-        size = 3
-      )
-  }
-
-  if (many_sites) {
-    plot <- plot +
-      ggplot2::coord_flip() +
-      ggplot2::labs(caption = "Long biology site IDs are truncated in the plot; full IDs remain available in the summary table and CSV.")
-  }
-
-  list(plot = plot, message = NULL)
 }

@@ -303,7 +303,14 @@ page_navbar(
                 div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
                 div(
                   `data-task-imports` = "wq",
-                  dateRangeInput("date_range_wq", "WQ data dates", start="2020-01-01", end=as.character(Sys.Date())),
+                  dateRangeInput(
+                    "date_range_wq",
+                    "WQ data dates",
+                    start = "2020-01-01",
+                    end = as.character(Sys.Date()),
+                    min = "2000-01-01",
+                    max = as.character(Sys.Date())
+                  ),
                   actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
                 ),
                 div(
@@ -352,43 +359,15 @@ page_navbar(
             nav_panel("WQ Data",
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "wq", `data-task-import-panel` = "true",
                         h3(class = "section-title", "Water Quality supporting data"),
-                        p(class = "page-lead", "Mapped WQ data can be reviewed, plotted, and downloaded here. These data remain separate from O:E calculations."),
+                        p(class = "page-lead", "Mapped WQ source data can be reviewed and downloaded here. Build the processed WQ summary in Stage 2."),
                         layout_columns(
-                          col_widths = c(12, 12),
-                          card(class = "dashboard-card",
+                          col_widths = 12,
+                          card(class = "dashboard-card", full_screen = TRUE,
                             card_header("Mapped WQ preview"),
                             uiOutput("wq_site_import_status"),
                             DT::dataTableOutput("wq_site_import_preview"),
                             div(class = "download-row",
                               downloadButton("download_mapped_wq_csv", "Download mapped WQ data as CSV", class = "wq-rhs-action-button")
-                            )
-                          ),
-                          card(class = "dashboard-card",
-                            card_header("Contracted WQ summary"),
-                            div(class = "hint-text", "Builds the formal v1 WQ summary and plot from mapped WQ records: det_id 0180 as orthophosphate_mean, det_id 0111 as ammonia_p90, biology-year Y-2 to Y calendar window, record counts, and provenance. Dissolved oxygen is kept as not_ready_open_02 pending OPEN-02."),
-                            div(class = "action-stack",
-                              actionButton("build_wq_contract_summary", "Build WQ summary", class = "wq-rhs-action-button", icon = shiny::icon("calculator", verify_fa = FALSE))
-                            ),
-                            uiOutput("wq_contract_summary_status"),
-                            DT::dataTableOutput("wq_contract_summary_table"),
-                            div(class = "plot-frame", plotOutput("wq_contract_summary_plot", height = 560)),
-                            uiOutput("wq_contract_summary_provenance"),
-                            div(class = "download-row",
-                              downloadButton("download_wq_contract_summary_csv", "Download WQ summary CSV", class = "wq-rhs-action-button")
-                            )
-                          ),
-                          card(class = "dashboard-card",
-                            card_header("WQ preview plots"),
-                            div(class = "hint-text", "Preview plots use the contracted WQ determinant, site and date fields. Coordinate and unrelated numeric fields are not offered as plot controls."),
-                            selectInput(
-                              "wq_plot_type",
-                              "WQ plot type",
-                              choices = c("Time series", "Boxplot by biological site ID", "Mean bar chart by biological site ID")
-                            ),
-                            uiOutput("wq_plot_controls"),
-                            div(class = "plot-frame", plotOutput("wq_mapped_plot", height = 420)),
-                            div(class = "download-row",
-                              downloadButton("download_wq_plot", "Download current WQ plot as PNG", class = "wq-rhs-action-button")
                             )
                           )
                         )
@@ -397,29 +376,15 @@ page_navbar(
             nav_panel("RHS Data",
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "rhs", `data-task-import-panel` = "true",
                         h3(class = "section-title", "River Habitat Survey supporting data"),
-                        p(class = "page-lead", "Mapped RHS data can be reviewed, plotted, and downloaded here. Missing or TBC RHS IDs are handled safely."),
+                        p(class = "page-lead", "Mapped RHS data can be reviewed and downloaded here. Missing or TBC RHS IDs are handled safely."),
                         layout_columns(
-                          col_widths = c(12, 12),
-                          card(class = "dashboard-card",
+                          col_widths = 12,
+                          card(class = "dashboard-card", full_screen = TRUE,
                             card_header("Mapped RHS preview"),
                             uiOutput("rhs_site_import_status"),
                             DT::dataTableOutput("rhs_site_import_preview"),
                             div(class = "download-row",
                               downloadButton("download_mapped_rhs_csv", "Download mapped RHS data as CSV", class = "wq-rhs-action-button")
-                            )
-                          ),
-                          card(class = "dashboard-card",
-                            card_header("RHS plots"),
-                            div(class = "hint-text", "Plots use mapped RHS data only. RHS data are mapped through rhs_survey_id when a site metadata mapping is available."),
-                            selectInput(
-                              "rhs_plot_type",
-                              "RHS plot type",
-                              choices = c("Numeric variable by biological site ID", "Categorical count/bar plot", "Record count by biological site ID")
-                            ),
-                            uiOutput("rhs_plot_controls"),
-                            div(class = "plot-frame", plotOutput("rhs_mapped_plot", height = 420)),
-                            div(class = "download-row",
-                              downloadButton("download_rhs_plot", "Download current RHS plot as PNG", class = "wq-rhs-action-button")
                             )
                           )
                         )
@@ -600,6 +565,75 @@ page_navbar(
   )
   )
 ),
+
+  # STAGE 2 — WQ PROCESSING ----
+  nav_panel(
+    "Process WQ",
+    div(
+      class = "workflow-stage-workspace",
+      div(
+        class = "dashboard-page dashboard-page-wide",
+        h3(class = "section-title", "Process Water Quality data"),
+        p(
+          class = "page-lead",
+          "Use the validated Stage 1 WQ source to inspect contracted plots and build the reusable Stage 2 WQ summary."
+        ),
+        radioButtons(
+          "wq_stage2_display",
+          "Display:",
+          choices = c("Plots" = "plot", "Summary table" = "summary"),
+          selected = "plot",
+          inline = TRUE
+        ),
+        conditionalPanel(
+          condition = "input.wq_stage2_display === 'plot'",
+          card(
+            class = "dashboard-card",
+            full_screen = TRUE,
+            card_header("WQ preview plots"),
+            div(
+              class = "hint-text",
+              "Choose one determinand. Plots always use result over date_time and group records by wq_site_id."
+            ),
+            uiOutput("wq_plot_controls"),
+            selectInput(
+              "wq_plot_type",
+              "WQ plot type",
+              choices = c("Time series", "Boxplot")
+            ),
+            div(class = "plot-frame", plotOutput("wq_mapped_plot", height = 520)),
+            div(
+              class = "download-row",
+              downloadButton("download_wq_plot", "Download current WQ plot as PNG", class = "wq-rhs-action-button")
+            )
+          )
+        ),
+        conditionalPanel(
+          condition = "input.wq_stage2_display === 'summary'",
+          card(
+            class = "dashboard-card",
+            full_screen = TRUE,
+            card_header("Contracted WQ summary"),
+            div(
+              class = "hint-text",
+              "Builds the Stage 2 biology-anchored summary for orthophosphate 0180 and ammonia 0111. Dissolved oxygen remains pending OPEN-02."
+            ),
+            div(
+              class = "action-stack",
+              actionButton("build_wq_contract_summary", "Build WQ summary", class = "wq-rhs-action-button", icon = shiny::icon("calculator", verify_fa = FALSE))
+            ),
+            uiOutput("wq_contract_summary_status"),
+            DT::dataTableOutput("wq_contract_summary_table"),
+            uiOutput("wq_contract_summary_provenance"),
+            div(
+              class = "download-row",
+              downloadButton("download_wq_contract_summary_csv", "Download WQ summary CSV", class = "wq-rhs-action-button")
+            )
+          )
+        )
+      )
+    )
+  ),
 
   # STAGE 3 ----
   nav_panel(

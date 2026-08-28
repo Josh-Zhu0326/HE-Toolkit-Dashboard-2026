@@ -13,7 +13,10 @@ he_workflow_artifact_labels <- c(
   processed_flow = "Processed flow",
   oe_result = "Expected values and O:E ratios",
   flow_statistics = "Flow statistics",
+  wq_summary = "Water-quality summary",
   joined_core = "Core Joined HE dataset",
+  wq_enrichment = "Water-quality enrichment",
+  rhs_enrichment = "River Habitat Survey enrichment",
   joined_enriched = "Enriched Joined HE dataset",
   processed_dataset_checkpoint = "Downloadable Joined HE dataset checkpoint",
   filter_selection = "Current record selection",
@@ -462,6 +465,11 @@ workflow_stage_subnav_ui <- function(task = NULL, current_stage = NULL, current_
       "workflow_stage_view_flow",
       "Flow processing",
       class = if (identical(current_panel, "Process Flow")) "is-current" else ""
+    ),
+    if ("wq" %in% task$import_types) shiny::actionButton(
+      "workflow_stage_view_wq",
+      "WQ processing",
+      class = if (identical(current_panel, "Process WQ")) "is-current" else ""
     )
   )
 }
