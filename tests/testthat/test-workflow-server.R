@@ -1186,7 +1186,11 @@ testthat::test_that("Stage 5 routes multi-site data through the formal mixed mod
   checkpoint_data$LIFE_F_OE <- 1 +
     0.2 * checkpoint_data$Q95z_lag0 +
     0.03 * (checkpoint_data$sampling_year - mean(years)) +
-    site_effect[checkpoint_data$biol_site_id]
+    site_effect[checkpoint_data$biol_site_id] +
+    stats::setNames(seq(-0.04, 0.04, length.out = length(sites)), sites)[
+      checkpoint_data$biol_site_id
+    ] * (checkpoint_data$sampling_year - mean(years)) +
+    0.015 * sin(seq_len(nrow(checkpoint_data)))
 
   write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
   upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")

@@ -91,7 +91,89 @@ local_csv_checkpoint_panel <- function() {
     do.call(
       bslib::layout_columns,
       c(list(col_widths = c(6, 6)), cards)
+    ),
+    shiny::uiOutput("source_conflict_resolution_panel")
+  )
+}
+
+source_conflict_resolution_panel <- function(results) {
+  if (is.null(results) || length(results) == 0L) {
+    return(NULL)
+  }
+  combined <- results[vapply(results, function(result) {
+    provenance <- result$provenance
+    !is.null(provenance) &&
+      isTRUE(provenance$local_rows > 0L) &&
+      isTRUE(provenance$explorer_rows > 0L)
+  }, logical(1))]
+  if (length(combined) == 0L) {
+    return(shiny::div(
+      class = "dashboard-card",
+      shiny::h4("Local and Data Explorer conflicts"),
+      shiny::p(
+        class = "hint-text",
+        "Conflict choices appear here when Local and Data Explorer records are loaded for the same data type."
+      )
+    ))
+  }
+
+  cards <- lapply(names(combined), function(data_type) {
+    result <- combined[[data_type]]
+    contract <- source_reconciliation_contract(data_type)
+    status <- if (identical(result$status, "conflict")) "warning" else result$status
+    conflict_table <- if (nrow(result$conflicts) > 0L) {
+      shown <- utils::head(result$conflicts[, c(
+        "record_key", "differing_fields", "local_values", "explorer_values"
+      ), drop = FALSE], 20L)
+      shiny::tagList(
+        shiny::tags$div(
+          class = "table-responsive",
+          shiny::tags$table(
+            class = "table table-sm table-striped",
+            shiny::tags$thead(shiny::tags$tr(lapply(names(shown), shiny::tags$th))),
+            shiny::tags$tbody(lapply(seq_len(nrow(shown)), function(row) {
+              shiny::tags$tr(lapply(shown[row, , drop = TRUE], shiny::tags$td))
+            }))
+          )
+        ),
+        shiny::selectInput(
+          source_reconciliation_input_id(data_type),
+          paste("For conflicting", contract$label, "records"),
+          choices = c(
+            "Choose a resolution" = "",
+            "Keep Local records" = "local",
+            "Keep Data Explorer records" = "explorer",
+            "Exclude conflicting records" = "exclude"
+          ),
+          selected = if (result$provenance$conflict_preference %in%
+                         c("local", "explorer", "exclude")) {
+            result$provenance$conflict_preference
+          } else {
+            ""
+          }
+        )
+      )
+    } else {
+      shiny::p(
+        class = "hint-text",
+        "No conflicting values were found; exact duplicates were removed automatically with provenance."
+      )
+    }
+    bslib::card(
+      class = "dashboard-card",
+      bslib::card_header(paste(contract$label, "source reconciliation")),
+      local_csv_checkpoint_status_tag(list(status = status, messages = result$messages)),
+      conflict_table
     )
+  })
+
+  shiny::tagList(
+    shiny::h3(class = "section-title", "Resolve Local and Data Explorer conflicts"),
+    shiny::p(
+      class = "page-lead",
+      "Exact duplicates are reported and collapsed. Conflicting values stay blocked until you choose which source to retain, or exclude those records."
+    ),
+    do.call(bslib::layout_columns, c(list(col_widths = c(12)), cards))
   )
 }
 

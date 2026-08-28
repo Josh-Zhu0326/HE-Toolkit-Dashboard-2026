@@ -81,6 +81,22 @@ stopifnot(all(c("Q95z_lag3", "Q10z_lag12") %in% multi_choices$flow))
 stopifnot(!"Q95_lag0" %in% multi_choices$flow)
 stopifnot(!"Q10_lag6" %in% multi_choices$flow)
 stopifnot(!"Q95z_lag2" %in% multi_choices$flow)
+stopifnot(identical(
+  run_analysis_model(
+    multi_choice_data,
+    list(response = "LIFE_F_OE", flow_predictors = "Q95_lag0")
+  )$status,
+  "blocked"
+))
+invalid_single <- joined
+invalid_single$Q95_lag2 <- seq_len(nrow(invalid_single))
+stopifnot(identical(
+  run_analysis_model(
+    invalid_single,
+    list(response = "LIFE_F_OE", flow_predictors = "Q95_lag2")
+  )$status,
+  "blocked"
+))
 stopifnot(analysis_model_year_column(joined) == "sampling_year")
 stopifnot(analysis_model_year_column(
   data.frame(Year = 2020:2021)

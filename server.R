@@ -503,18 +503,34 @@ function(input, output, session){
   }
 
   local_flow_is_operational <- function(upload) {
-    upload$validation$status %in% c("success", "warning")
+    !is.null(upload) && !is.null(upload$validation) &&
+      upload$validation$status %in% c("success", "warning") &&
+      !is.null(upload$data) && is.data.frame(upload$data) && nrow(upload$data) > 0L
   }
 
   local_biology_is_operational <- function(upload) {
-    upload$validation$status %in% c("success", "warning") &&
-      !is.null(upload$data) && nrow(upload$data) > 0L
+    local_flow_is_operational(upload)
+  }
+
+  local_csv_upload_is_operational <- function(upload) {
+    local_flow_is_operational(upload)
+  }
+
+  source_data_or_null <- function(collector) {
+    tryCatch(
+      collector(),
+      error = function(error) NULL,
+      shiny.silent.error = function(error) NULL
+    )
+  }
+
+  source_conflict_preference <- function(data_type) {
+    value <- input[[source_reconciliation_input_id(data_type)]]
+    if (is.null(value)) "" else value
   }
 
   invalidate_biology_derived_state <- function(reset_external = FALSE) {
     biology_source_revision(isolate(biology_source_revision()) + 1L)
-    biology_import_request(NULL)
-    external_biology_requested_revision(NULL)
     workflow_reset_artifact(
       "biology_input",
       "The Biology source changed after downstream outputs were generated.",
@@ -522,8 +538,12 @@ function(input, output, session){
     )
 
     if (reset_external) {
+      biology_import_request(NULL)
+      external_biology_requested_revision(NULL)
       external_biology_loaded(FALSE)
       external_biology_revision(NULL)
+    } else if (isTRUE(isolate(external_biology_loaded()))) {
+      external_biology_revision(isolate(biology_source_revision()))
     }
 
     if (exists("biol_data_exist", envir = server_context, inherits = FALSE)) {
@@ -556,10 +576,12 @@ function(input, output, session){
       external_flow_loaded(FALSE)
       external_flow_revision(NULL)
       external_import_requested_revision(NULL)
-    } else if (isTRUE(preserve_flow_input)) {
+    } else {
       if (isTRUE(isolate(external_flow_loaded()))) {
         external_flow_revision(next_flow_revision)
       }
+    }
+    if (!reset_external && isTRUE(preserve_flow_input)) {
       preserved_status <- if (previous_flow_input$status %in% c("complete", "warning")) {
         previous_flow_input$status
       } else {
@@ -596,10 +618,6 @@ function(input, output, session){
   observeEvent(input$import_inv, {
     if (!require_task_stage(1L) || !require_import_type("biology")) return()
     biology_import_request(NULL)
-    if (local_biology_is_operational(local_biology_upload())) {
-      external_biology_requested_revision(NULL)
-      return()
-    }
     if (!workflow_artifact_is_current("site_mapping")) {
       external_biology_requested_revision(NULL)
       workflow_block_artifact(
@@ -1089,6 +1107,21 @@ function(input, output, session){
     list(data = validation$data, validation = validation)
   })
 
+  local_environmental_upload <- reactive({
+    validation <- local_csv_v2_uploads$environmental()
+    list(data = validation$data, validation = validation)
+  })
+
+  local_wq_v2_upload <- reactive({
+    validation <- local_csv_v2_uploads$wq()
+    list(data = validation$data, validation = validation)
+  })
+
+  local_rhs_v2_upload <- reactive({
+    validation <- local_csv_v2_uploads$rhs()
+    list(data = validation$data, validation = validation)
+  })
+
   wq_upload <- reactive({
     read_result <- read_uploaded_csv_safely(input$wq_csv, "WQ")
     validation <- validate_wq_upload(read_result$data)
@@ -1409,6 +1442,46 @@ function(input, output, session){
   ))
   wq_site_import_data <- reactiveVal(NULL)
   rhs_site_import_data <- reactiveVal(NULL)
+  local_wq_source_data <- reactive({
+    v2 <- local_wq_v2_upload()
+    if (local_csv_upload_is_operational(v2)) {
+      return(v2$data)
+    }
+    legacy <- wq_upload()
+    if (!is.null(legacy$data) && is.data.frame(legacy$data) && nrow(legacy$data) > 0L &&
+        legacy$validation$status %in% c("success", "warning")) {
+      return(legacy$data)
+    }
+    NULL
+  })
+  local_rhs_source_data <- reactive({
+    v2 <- local_rhs_v2_upload()
+    if (local_csv_upload_is_operational(v2)) {
+      return(v2$data)
+    }
+    legacy <- rhs_upload()
+    if (!is.null(legacy$data) && is.data.frame(legacy$data) && nrow(legacy$data) > 0L &&
+        legacy$validation$status %in% c("success", "warning")) {
+      return(tryCatch(normalise_rhs_records(legacy$data), error = function(error) legacy$data))
+    }
+    NULL
+  })
+  wq_source_reconciliation <- reactive({
+    reconcile_source_records(
+      local = local_wq_source_data(),
+      explorer = wq_site_import_data(),
+      data_type = "wq",
+      conflict_preference = source_conflict_preference("wq")
+    )
+  })
+  rhs_source_reconciliation <- reactive({
+    reconcile_source_records(
+      local = local_rhs_source_data(),
+      explorer = rhs_site_import_data(),
+      data_type = "rhs",
+      conflict_preference = source_conflict_preference("rhs")
+    )
+  })
   wq_contract_summary_result <- reactiveVal(list(
     status = "info",
     messages = "Import mapped WQ records and calculate O:E biology data, then click 'Build WQ summary'.",
@@ -1655,13 +1728,15 @@ function(input, output, session){
   })
 
   output$wq_site_import_preview <- DT::renderDataTable({
-    req(wq_site_import_data())
-    wq_site_import_data()
+    data <- mapped_wq_plot_data()
+    req(data)
+    data
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
 
   output$rhs_site_import_preview <- DT::renderDataTable({
-    req(rhs_site_import_data())
-    rhs_site_import_data()
+    data <- mapped_rhs_plot_data()
+    req(data)
+    data
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
 
   output$download_mapped_wq_csv <- downloadHandler(
@@ -1766,17 +1841,11 @@ function(input, output, session){
   )
 
   mapped_wq_plot_data <- reactive({
-    imported <- wq_site_import_data()
-    if (!is.null(imported) && nrow(imported) > 0) {
-      return(normalise_wq_preview_records(imported))
-    }
-
-    uploaded <- wq_upload()$data
-    if (is.null(uploaded) || nrow(uploaded) == 0) {
+    reconciled <- wq_source_reconciliation()
+    if (!isTRUE(reconciled$ready) || is.null(reconciled$data) || nrow(reconciled$data) == 0L) {
       return(NULL)
     }
-
-    uploaded <- normalise_wq_preview_records(uploaded)
+    uploaded <- normalise_wq_preview_records(reconciled$data)
     parsed <- parse_site_metadata(input$meta_paste)
     if (is.null(parsed$error) && !is.null(parsed$data) && all(c("biol_site_id", "wq_site_id") %in% names(parsed$data)) && "wq_site_id" %in% names(uploaded)) {
       mapped <- map_wq_records_to_biology(uploaded, parsed$data)
@@ -1793,19 +1862,13 @@ function(input, output, session){
   })
 
   mapped_rhs_plot_data <- reactive({
-    imported <- rhs_site_import_data()
-    if (!is.null(imported) && nrow(imported) > 0) {
-      return(imported)
-    }
-
-    uploaded <- rhs_upload()$data
-    if (is.null(uploaded) || nrow(uploaded) == 0) {
+    reconciled <- rhs_source_reconciliation()
+    if (!isTRUE(reconciled$ready) || is.null(reconciled$data) || nrow(reconciled$data) == 0L) {
       return(NULL)
     }
-
     uploaded <- tryCatch(
-      normalise_rhs_records(uploaded),
-      error = function(e) uploaded
+      normalise_rhs_records(reconciled$data),
+      error = function(e) reconciled$data
     )
 
     parsed <- parse_site_metadata(input$meta_paste)
@@ -1984,12 +2047,12 @@ function(input, output, session){
 
   observeEvent(input$local_flow_csv, {
     if (!require_task_stage(1L) || !require_import_type("flow")) return()
-    invalidate_flow_derived_state(reset_external = TRUE)
+    invalidate_flow_derived_state(reset_external = FALSE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$local_v2_biology_csv, {
     if (!require_task_stage(1L) || !require_import_type("biology")) return()
-    invalidate_biology_derived_state(reset_external = TRUE)
+    invalidate_biology_derived_state(reset_external = FALSE)
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
   observeEvent(input$date_range_biol, {
@@ -2022,22 +2085,18 @@ function(input, output, session){
 
   observeEvent(input$import_flow, {
     if (!require_task_stage(1L) || !require_import_type("flow")) return()
-    if (!local_flow_is_operational(local_flow_upload())) {
-      invalidate_flow_derived_state(reset_external = TRUE)
-      if (!workflow_artifact_is_current("site_mapping")) {
-        external_import_requested_revision(NULL)
-        workflow_block_artifact(
-          "flow_input",
-          "Current site metadata with valid flow_site_id values are required before importing Flow data.",
-          "Correct and validate the site metadata, then import Flow data again."
-        )
-        return()
-      }
-      external_import_requested_revision(isolate(flow_source_revision()))
-      workflow_begin_artifact("flow_input", "Complete the external Flow import.")
-    } else {
+    invalidate_flow_derived_state(reset_external = FALSE)
+    if (!workflow_artifact_is_current("site_mapping")) {
       external_import_requested_revision(NULL)
+      workflow_block_artifact(
+        "flow_input",
+        "Current site metadata with valid flow_site_id values are required before importing Flow data.",
+        "Correct and validate the site metadata, then import Flow data again."
+      )
+      return()
     }
+    external_import_requested_revision(isolate(flow_source_revision()))
+    workflow_begin_artifact("flow_input", "Complete the external Flow import.")
   }, ignoreInit = FALSE, priority = 100)
 
   output$local_inv_status <- renderUI({
@@ -2146,17 +2205,34 @@ function(input, output, session){
     )
   })
 
-  biol_data <- reactive({
+  biology_source_reconciliation <- reactive({
     local_upload <- local_biology_upload()
-    if (local_biology_is_operational(local_upload)) {
-      return(local_biology_to_hetoolkit_input(local_upload$data))
+    local_data <- if (local_biology_is_operational(local_upload)) {
+      local_biology_to_hetoolkit_input(local_upload$data)
+    } else {
+      NULL
     }
-
-    req(
-      isTRUE(external_biology_loaded()),
-      identical(external_biology_revision(), biology_source_revision())
+    explorer_data <- if (isTRUE(external_biology_loaded()) &&
+                         identical(external_biology_revision(), biology_source_revision())) {
+      source_data_or_null(function() external_biology_data())
+    } else {
+      NULL
+    }
+    reconcile_source_records(
+      local = local_data,
+      explorer = explorer_data,
+      data_type = "biology",
+      conflict_preference = source_conflict_preference("biology")
     )
-    external_biology_data()
+  })
+
+  biol_data <- reactive({
+    result <- biology_source_reconciliation()
+    validate(need(
+      isTRUE(result$ready) && is.data.frame(result$data),
+      paste(result$messages, collapse = " ")
+    ))
+    result$data
   })
   
   
@@ -2182,7 +2258,7 @@ function(input, output, session){
   
   ## Environmental data ----
   ### importing ----
-  env_data <- eventReactive(environment_import_request(), {
+  external_environment_data <- eventReactive(environment_import_request(), {
     req(!is.null(environment_import_request()))
     biol_sites <- as.character(metadata()$biol_site_id)
     result <- safe_external_import(
@@ -2208,14 +2284,39 @@ function(input, output, session){
     result$data
   })
 
-  observeEvent(env_data(), {
-    imported <- env_data()
+  observeEvent(external_environment_data(), {
+    imported <- external_environment_data()
     req(nrow(imported) > 0L)
     workflow_complete_artifact(
       "environment_input",
       "Environmental import",
       sprintf("Imported %d environmental record(s).", nrow(imported))
     )
+  })
+
+  environmental_source_reconciliation <- reactive({
+    local_upload <- local_environmental_upload()
+    local_data <- if (local_csv_upload_is_operational(local_upload)) {
+      local_upload$data
+    } else {
+      NULL
+    }
+    explorer_data <- source_data_or_null(function() external_environment_data())
+    reconcile_source_records(
+      local = local_data,
+      explorer = explorer_data,
+      data_type = "environmental",
+      conflict_preference = source_conflict_preference("environmental")
+    )
+  })
+
+  env_data <- reactive({
+    result <- environmental_source_reconciliation()
+    validate(need(
+      isTRUE(result$ready) && is.data.frame(result$data),
+      paste(result$messages, collapse = " ")
+    ))
+    result$data
   })
   
   #### warning message for unID'd sites----
@@ -2313,17 +2414,92 @@ function(input, output, session){
     )
   })
 
-  flow_data <- reactive({
+  flow_source_reconciliation <- reactive({
     local_flow <- local_flow_upload()
-    if (local_flow_is_operational(local_flow)) {
-      return(local_flow$data)
+    local_data <- if (local_flow_is_operational(local_flow)) local_flow$data else NULL
+    explorer_data <- if (isTRUE(external_flow_loaded()) &&
+                         identical(external_flow_revision(), flow_source_revision())) {
+      source_data_or_null(function() external_flow_data())
+    } else {
+      NULL
     }
-
-    imported <- external_flow_data()
-    req(isTRUE(external_flow_loaded()))
-    req(identical(external_flow_revision(), flow_source_revision()))
-    imported
+    reconcile_source_records(
+      local = local_data,
+      explorer = explorer_data,
+      data_type = "flow",
+      conflict_preference = source_conflict_preference("flow")
+    )
   })
+
+  flow_data <- reactive({
+    result <- flow_source_reconciliation()
+    validate(need(
+      isTRUE(result$ready) && is.data.frame(result$data),
+      paste(result$messages, collapse = " ")
+    ))
+    result$data
+  })
+
+  source_reconciliation_results <- reactive({
+    list(
+      biology = biology_source_reconciliation(),
+      environmental = environmental_source_reconciliation(),
+      flow = flow_source_reconciliation(),
+      wq = wq_source_reconciliation(),
+      rhs = rhs_source_reconciliation()
+    )
+  })
+
+  output$source_conflict_resolution_panel <- renderUI({
+    source_conflict_resolution_panel(source_reconciliation_results())
+  })
+
+  observeEvent(source_reconciliation_results(), {
+    results <- source_reconciliation_results()
+    artifact_ids <- c(
+      biology = "biology_input",
+      environmental = "environment_input",
+      flow = "flow_input",
+      wq = "wq_input",
+      rhs = "rhs_input"
+    )
+    for (data_type in names(results)) {
+      result <- results[[data_type]]
+      provenance <- result$provenance
+      if (is.null(provenance) ||
+          (!isTRUE(provenance$local_rows > 0L) &&
+           !isTRUE(provenance$explorer_rows > 0L))) {
+        next
+      }
+      artifact_id <- artifact_ids[[data_type]]
+      if (!isTRUE(result$ready)) {
+        workflow_set_artifact(
+          artifact_id,
+          "blocked",
+          data_source = "Local + Data Explorer",
+          blocking_reason = paste(result$messages, collapse = " "),
+          next_action = "Review the conflicting values and choose Local, Data Explorer, or exclude conflicts.",
+          invalidate_downstream = TRUE
+        )
+        next
+      }
+      data_source <- if (isTRUE(provenance$local_rows > 0L) &&
+                         isTRUE(provenance$explorer_rows > 0L)) {
+        "Local + Data Explorer"
+      } else if (isTRUE(provenance$local_rows > 0L)) {
+        "Local CSV"
+      } else {
+        "Data Explorer"
+      }
+      workflow_set_artifact(
+        artifact_id,
+        if (identical(result$status, "warning")) "warning" else "complete",
+        data_source = data_source,
+        history_summary = paste(result$messages, collapse = " "),
+        invalidate_downstream = TRUE
+      )
+    }
+  }, ignoreInit = TRUE, priority = -50)
   
   
   #### warning message for unID'd sites----
@@ -2398,7 +2574,49 @@ function(input, output, session){
     build_site_map_points(
       mapping = current_site_map_input(metadata),
       environment_data = current_site_map_input(env_data),
-      wq_data = current_site_map_input(wq_site_import_data)
+      biology_data = current_site_map_input(biol_data)
+    )
+  })
+
+  observeEvent(local_environmental_upload(), {
+    if (!require_task_stage(1L) || !require_import_type("environment")) return()
+    upload <- local_environmental_upload()
+    req(local_csv_upload_is_operational(upload))
+    workflow_set_artifact(
+      "environment_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local Site environmental CSV",
+      history_summary = sprintf("Validated %d local Site environmental record(s).", nrow(upload$data)),
+      invalidate_downstream = TRUE
+    )
+  })
+
+  observeEvent(local_wq_v2_upload(), {
+    if (!require_task_stage(1L) || !require_import_type("wq")) return()
+    upload <- local_wq_v2_upload()
+    req(local_csv_upload_is_operational(upload))
+    reset_wq_contract_summary(
+      "The Local Water Quality CSV changed. Rebuild the WQ summary from the reconciled records."
+    )
+    workflow_set_artifact(
+      "wq_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local Water Quality CSV",
+      history_summary = sprintf("Validated %d local Water Quality record(s).", nrow(upload$data)),
+      invalidate_downstream = TRUE
+    )
+  })
+
+  observeEvent(local_rhs_v2_upload(), {
+    if (!require_task_stage(1L) || !require_import_type("rhs")) return()
+    upload <- local_rhs_v2_upload()
+    req(local_csv_upload_is_operational(upload))
+    workflow_set_artifact(
+      "rhs_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local RHS CSV",
+      history_summary = sprintf("Validated %d local RHS record(s).", nrow(upload$data)),
+      invalidate_downstream = TRUE
     )
   })
 
@@ -2407,18 +2625,12 @@ function(input, output, session){
     if (nrow(points) == 0L) {
       return(format_validation_message(list(
         status = "info",
-        messages = "No mapped monitoring-site coordinates are available yet."
+        messages = "No mapped Biology-site coordinates are available yet."
       )))
     }
-    counts <- table(factor(points$site_type, levels = c("Biology", "Flow", "WQ")))
     format_validation_message(list(
       status = "info",
-      messages = sprintf(
-        "Showing %d Biology, %d Flow and %d WQ monitoring site(s).",
-        counts[["Biology"]],
-        counts[["Flow"]],
-        counts[["WQ"]]
-      )
+      messages = sprintf("Showing %d Biology sampling site(s).", nrow(points))
     ))
   })
 
@@ -2431,42 +2643,41 @@ function(input, output, session){
         setView(lng = -2.5, lat = 54.5, zoom = 5))
     }
 
-    colours <- c(Biology = "#237A4B", Flow = "#2474A6", WQ = "#C77700")
-    for (site_type in names(colours)) {
-      layer <- points[points$site_type == site_type, , drop = FALSE]
-      if (nrow(layer) == 0L) {
-        next
-      }
-      layer$popup <- paste0(
-        "<strong>", htmltools::htmlEscape(site_type), " site</strong><br>",
-        htmltools::htmlEscape(layer$site_id), "<br>",
-        "Coordinates: ", htmltools::htmlEscape(layer$coordinate_source)
-      )
-      map <- map |>
-        addCircleMarkers(
-          data = layer,
-          lng = ~lon,
-          lat = ~lat,
-          layerId = ~paste(site_type, site_id, sep = ":"),
-          group = site_type,
-          popup = ~popup,
-          radius = 7,
-          color = "#FFFFFF",
-          weight = 1.5,
-          fillColor = colours[[site_type]],
-          fillOpacity = 0.9
-        )
+    display_value <- function(values, fallback = "Not available") {
+      values <- as.character(values)
+      ifelse(is.na(values) | !nzchar(trimws(values)), fallback, values)
     }
+    points$popup <- paste0(
+      "<strong>Biology sampling site</strong><br>",
+      "Site ID: ", htmltools::htmlEscape(points$site_id), "<br>",
+      "Water body: ", htmltools::htmlEscape(display_value(points$water_body)), "<br>",
+      "Samples: ", points$sample_count, "<br>",
+      "Sampling years: ",
+      htmltools::htmlEscape(display_value(points$first_sampling_year)),
+      "–",
+      htmltools::htmlEscape(display_value(points$last_sampling_year)), "<br>",
+      "Coordinates: ", htmltools::htmlEscape(points$coordinate_source)
+    )
+    map <- map |>
+      addCircleMarkers(
+        data = points,
+        lng = ~lon,
+        lat = ~lat,
+        layerId = ~paste("Biology", site_id, sep = ":"),
+        group = "Biology",
+        popup = ~popup,
+        radius = 7,
+        color = "#FFFFFF",
+        weight = 1.5,
+        fillColor = "#237A4B",
+        fillOpacity = 0.9
+      )
     map |>
-      addLayersControl(
-        overlayGroups = intersect(c("Biology", "Flow", "WQ"), unique(points$site_type)),
-        options = layersControlOptions(collapsed = FALSE)
-      ) |>
       addLegend(
         position = "bottomright",
-        colors = unname(colours[names(colours) %in% points$site_type]),
-        labels = names(colours)[names(colours) %in% points$site_type],
-        title = "Monitoring sites",
+        colors = "#237A4B",
+        labels = "Biology sampling sites",
+        title = "Sites",
         opacity = 0.9
       ) |>
       fitBounds(
@@ -3978,10 +4189,13 @@ function(input, output, session){
     choices <- analysis_model_variable_choices(data)
     route_message <- switch(
       choices$model_path,
-      single_site_additive = "One current site: the additive model path will be used.",
+      single_site_additive = paste(
+        "One current site: the additive model path will be used.",
+        "Raw Q95 and standardised Q95z predictors are available."
+      ),
       multi_site_mixed = paste0(
         choices$site_count,
-        " current sites: the mixed-effects eligibility checks will be applied."
+        " current sites: the mixed-effects eligibility checks will be applied; only standardised Flow predictors are available."
       ),
       "A valid site is required before modelling."
     )

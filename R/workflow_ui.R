@@ -861,7 +861,12 @@ workflow_stage_overview_ui <- function(
         shiny::tags$summary(
           shiny::div(
             class = "workflow-stage-overview-title",
-            shiny::strong(sprintf("Stage %d · %s", current_stage, stage$stage_label)),
+            shiny::strong(sprintf(
+              "Stage %d %s %s",
+              current_stage,
+              intToUtf8(183L),
+              stage$stage_label
+            )),
             shiny::span(stage$description)
           ),
           shiny::span(

@@ -2,7 +2,7 @@
 
 > Scope: v1 decisions frozen from client feedback available by 13 July 2026.
 >
-> Controlled updates: v1.1 adds the 17 and 21 July 2026 UI direction, terminology, and extension decisions; v1.2 records the 10 August 2026 HEV Flow-display decision; v1.3 records the 14 August dashboard-improvement feedback and the five follow-up clarifications consolidated on 25 August 2026, without rewriting the historical Week 7 baseline.
+> Controlled updates: v1.1 adds the 17 and 21 July 2026 UI direction, terminology, and extension decisions; v1.2 records the 10 August 2026 HEV Flow-display decision; v1.3 records the 14 August dashboard-improvement feedback and the five follow-up clarifications consolidated on 25 August 2026; v1.4 records the 28 August implementation clarification without rewriting the historical Week 7 baseline.
 
 ## Version History
 
@@ -12,6 +12,7 @@
 | v1.1 | 2026-07-21 | Added the confirmed Option A direction, Task terminology, eight wording replacements, extension priorities, and the ethics-status resolution. |
 | v1.2 | 2026-08-11 | Added the client-confirmed requirement for selectable raw-daily-Flow and calculated-Flow-statistics HEV modes. |
 | v1.3 | 2026-08-25 | Added task-specific Stage gating, the supported lag options, CSV-first local import, user-resolved source conflicts, Biology-only mapping, revised WQ/RHS presentation, and the GAM modelling direction. |
+| v1.4 | 2026-08-28 | Selected the feasible Raw-Q95 single-site branch and froze the five cross-source record identity keys needed for user-resolved conflict handling. |
 
 ## 1. Decision Rules and Sources
 
@@ -121,6 +122,8 @@ The following decisions consolidate the 14 August feedback and the five follow-u
 | DEC-46 | Use Q95z as the only eligible Q95 predictor for both single-site and multiple-site models. Raw Q95 may remain available in the data for display or provenance but is not a modelling predictor. This selects the client-accepted Q95z-only branch, resolves `OPEN-12`, and supersedes `DEC-21` for Q95 eligibility. It does not independently request raw Q10. | `CLIENT + INTERNAL` | `SRC-09` | Enforce Q95z-only eligibility consistently in selectors, server-side validation, provenance and tests. |
 | DEC-47 | Modelling is iterative: users may fit and assess a model, create alternatives, compare candidates initially through `summary()` and `AIC()`, and select a preferred model. Only after selection should the Dashboard generate appropriate partial-effect and diagnostic outputs, including `gratia::draw()`, `mgcv::gam.check()` and `gratia::appraise()`. Model-result tables use three significant figures. | `CLIENT + INTERNAL` | `SRC-09` | Define candidate/preferred-model history, comparison semantics, diagnostic gates, exports and acceptance evidence in the modelling and dependency contracts. |
 | DEC-48 | Apply the specified usability and defect corrections: show `PCA cannot be run with data from only one site` for the one-site case; fix the Flow heatmap; replace indeterminate long-operation feedback with meaningful progress where progress can be measured; optimise the workspace for full-screen use; and improve table, figure and menu presentation across the Dashboard. | `CLIENT` | `SRC-09` | Trace each correction to an acceptance test and retained evidence; do not classify confirmed defects as optional visual backlog. |
+| DEC-49 | Because Raw Q95 support is straightforward in the existing path-aware selector, single-site models offer both Raw `Q95_lagL` and standardised `Q95z_lagL`; multiple-site models accept only standardised `Q95z_lagL`. Supported lags remain `0`, `1`, `3`, `6`, and `12`. This selects the client's preferred branch and supersedes the internal Q95z-only fallback in `DEC-46`. | `CLIENT + INTERNAL` | `SRC-09` | Keep UI and server-side eligibility identical, reject Raw Q95 for multiple-site models, and cover every supported lag. |
+| DEC-50 | Cross-source record identity uses Biology (`biol_site_id` + `SAMPLE_ID`), site environmental (`biol_site_id`), daily Flow (`flow_site_id` + `date`), WQ (`wq_site_id` + `date_time` + `det_id`), and RHS (`rhs_survey_id`). Compare shared canonical non-key fields. Collapse exact cross-source duplicates with reported provenance; show conflicting values and require Local, Explorer, or exclude; block ambiguous non-identical duplicate identities within one source. | `INTERNAL` | `DEC-41`, `SRC-09` | Implement one reusable reconciliation boundary, user-facing conflict choices, provenance, and unit/server regression tests. |
 
 ### Supersession Register
 
@@ -130,7 +133,7 @@ The following decisions consolidate the 14 August feedback and the five follow-u
 | `DEC-03` and the lag rule in `SRC-08` | `DEC-39` | Supported lag values are `0,1,3,6,12` wherever lag settings apply. |
 | `DEC-08`, `DEC-10`, `OPEN-06` | `DEC-45`, `OPEN-08` | The additive/mixed-effects v1 model architecture is replaced by a reviewed GAM/GAMM contract. |
 | `DEC-18` coordinate clause, `DEC-22`, `DEF-05` | `DEC-43` | Only Biology sites require coordinate-backed mapping; non-Biology map layers are withdrawn. |
-| `DEC-21` | `DEC-46` | Q95z is the only eligible Q95 predictor for both model paths; Raw Q95 is not a modelling predictor. |
+| `DEC-21`, `DEC-46` | `DEC-49` | Raw Q95 and Q95z are eligible for single-site models; multiple-site models remain Q95z-only. |
 | `DEC-30` | `DEC-40`, `DEC-41` | Local import now includes site-environmental CSV and may be combined with Explorer data under explicit conflict handling. |
 | `DEC-34` GAM scope | `DEC-45`, `DEC-47` | GAM modelling is promoted from backlog to controlled client direction. |
 | `DEC-36` | `DEC-38` | Former optional trailing Stages become disabled for Tasks 1–4. |
@@ -161,7 +164,6 @@ The following decisions consolidate the 14 August feedback and the five follow-u
 | OPEN-09 | Whether three flow-statistic windows is a fixed maximum | Treat three as a recommendation, not a confirmed acceptance limit | Documentation/Client owner |
 | OPEN-10 | Duplicate selection and averaging rules for more than two or non-numeric records | Detect and block the affected resolution action; never silently average or remove | Data Pipeline owner with scientific review |
 | OPEN-11 | Required report format and permitted interpretation content | Do not promise interactive tabs in a static format or introduce AI interpretation | Documentation/Client and Modelling/Evaluation owners |
-| OPEN-13 | Exact identity key and comparison fields for identical/conflicting local-versus-Explorer records in each of the five data types | Detect no cross-source conflict until the relevant identity key is defined; never silently overwrite | Data Pipeline owner with domain review before data-contract revision |
 | OPEN-14 | Which CSV validation findings are non-blocking orange warnings and which structural/type failures block processing | Missing required identifiers/fields, unreadable structure and unsafe types remain blocking until the full severity table is approved | Data Pipeline and QA owners before validation-specification freeze |
 | OPEN-15 | Authoritative source and required fields for Biology-site coordinates after non-Biology coordinates are removed | Continue displaying only Biology sites; do not infer whether coordinates come from Biology CSV, site-environmental CSV or a reduced mapping record | Data Pipeline and UX/Workflow owners before data-contract revision |
 
@@ -174,7 +176,9 @@ The original `OPEN-05` row is retained above as historical Week 7 evidence. `OPE
 | OPEN-05 | 2026-07-21 | Ethics approval confirmed. Archive the authoritative approval reference/date, approved scope, participant-material versions, and data-handling boundaries in the controlled ethics record before counting pilot or formal-study data. |
 | OPEN-03 | 2026-08-25 | Resolved by `DEC-40`: five separate CSV files are the primary local-import contract; XLSX is optional backward compatibility only if it does not complicate the main workflow. |
 | OPEN-06 | 2026-08-25 | The frozen mixed-effects readiness question is superseded by `DEC-45`; GAM/GAMM readiness and scientific thresholds are reopened under `OPEN-08` and require modelling-contract v2. |
-| OPEN-12 | 2026-08-25 | Resolved by `DEC-46`: use Q95z as the only eligible Q95 predictor for both single-site and multiple-site models. |
+| OPEN-12 | 2026-08-25 | Initially resolved by `DEC-46` using the acceptable Q95z-only fallback; superseded on 28 August by the feasible preferred branch in `DEC-49`. |
+| OPEN-12 | 2026-08-28 | Amended by `DEC-49`: the easy-to-deliver preferred branch is Raw Q95 plus Q95z for single-site models and Q95z-only for multiple-site models. |
+| OPEN-13 | 2026-08-28 | Resolved by `DEC-50`: the five identity keys and shared-field comparison boundary are frozen for implementation. |
 
 ## 7. Execution Rules
 

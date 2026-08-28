@@ -1,12 +1,17 @@
 dashboard_server <- workflow_dashboard_server
 biology_upload_input <- shiny_upload_input
 
-testthat::test_that("valid v2 Local Biology is operational and bypasses the external importer", {
+testthat::test_that("valid v2 Local Biology can be combined with the external importer", {
   importer_calls <- 0L
   rlang::local_bindings(
     import_inv = function(...) {
       importer_calls <<- importer_calls + 1L
-      stop("External Biology importer must not be called for valid Local Biology data.")
+      data.frame(
+        biol_site_id = "B001",
+        SAMPLE_ID = "EXTERNAL",
+        SAMPLE_DATE = as.Date("2023-04-15"),
+        stringsAsFactors = FALSE
+      )
     },
     .env = environment(dashboard_server)
   )
@@ -31,11 +36,16 @@ testthat::test_that("valid v2 Local Biology is operational and bypasses the exte
 
     session$setInputs(import_inv = 1)
     session$flushReact()
-    testthat::expect_identical(importer_calls, 0L)
+    testthat::expect_identical(importer_calls, 1L)
+    testthat::expect_setequal(biol_data()$SAMPLE_ID, c("00017", "00018", "EXTERNAL"))
+    testthat::expect_identical(
+      workflow_artifacts()$biology_input$data_source,
+      "Local + Data Explorer"
+    )
   })
 })
 
-testthat::test_that("invalid Local Biology replacement cannot reuse a previous source", {
+testthat::test_that("invalid Local Biology replacement falls back to the current Explorer source", {
   invalid_path <- tempfile("invalid-local-biology-", fileext = ".csv")
   on.exit(unlink(invalid_path, force = TRUE), add = TRUE)
   writeLines("biol_site_id,SAMPLE_ID,SAMPLE_DATE\nB001,00019,2024-05-01", invalid_path)
@@ -79,9 +89,9 @@ testthat::test_that("invalid Local Biology replacement cannot reuse a previous s
     session$flushReact()
 
     testthat::expect_identical(local_biology_upload()$validation$status, "error")
-    testthat::expect_false(artifact_is_current(workflow_artifacts()$biology_input))
-    testthat::expect_false(isTRUE(external_biology_loaded()))
-    testthat::expect_error(biol_data(), class = "shiny.silent.error")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
+    testthat::expect_true(isTRUE(external_biology_loaded()))
+    testthat::expect_identical(biol_data()$SAMPLE_ID, "EXTERNAL")
   })
 })
 

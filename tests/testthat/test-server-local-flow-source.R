@@ -1,12 +1,17 @@
 dashboard_server <- workflow_dashboard_server
 flow_upload_input <- shiny_upload_input
 
-testthat::test_that("valid Local Flow is operational and bypasses the external importer", {
+testthat::test_that("valid Local Flow can be combined with the external importer", {
   importer_calls <- 0L
   rlang::local_bindings(
     import_dashboard_flow = function(...) {
       importer_calls <<- importer_calls + 1L
-      stop("External Flow importer must not be called for valid Local Flow data.")
+      data.frame(
+        flow_site_id = "27090",
+        date = as.Date("2024-03-01"),
+        flow = 18.6,
+        stringsAsFactors = FALSE
+      )
     },
     .env = environment(dashboard_server)
   )
@@ -35,7 +40,9 @@ testthat::test_that("valid Local Flow is operational and bypasses the external i
 
     session$setInputs(import_flow = 1)
     session$flushReact()
-    testthat::expect_identical(importer_calls, 0L)
+    testthat::expect_identical(importer_calls, 1L)
+    testthat::expect_equal(nrow(flow_data()), 4L)
+    testthat::expect_identical(workflow_artifacts()$flow_input$data_source, "Local + Data Explorer")
   })
 })
 
@@ -227,8 +234,14 @@ testthat::test_that("replacing valid Local Flow with an invalid file removes the
 
     session$setInputs(import_flow = 1)
     session$flushReact()
+    testthat::expect_false(flow_source_reconciliation()$ready)
+    testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data not imported", fixed = TRUE)
+    testthat::expect_identical(importer_calls, 1L)
+
+    session$setInputs(source_conflict_preference_flow = "local")
+    session$flushReact()
+    testthat::expect_setequal(flow_data()$flow, c(12.4, 15.2, 9.8))
     testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
-    testthat::expect_identical(importer_calls, 0L)
 
     set_inputs_ignoring_interrupted_promises(session,
       local_flow_csv = flow_upload_input(invalid_path)
@@ -236,14 +249,14 @@ testthat::test_that("replacing valid Local Flow with an invalid file removes the
     session$flushReact()
 
     testthat::expect_identical(local_flow_upload()$validation$status, "error")
-    testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data not imported", fixed = TRUE)
-    testthat::expect_error(flow_data(), class = "shiny.silent.error")
-    testthat::expect_identical(importer_calls, 0L)
+    testthat::expect_match(paste(as.character(output$cp_flow), collapse = ""), "Flow data loaded", fixed = TRUE)
+    testthat::expect_identical(flow_data()$flow, 99)
+    testthat::expect_identical(importer_calls, 1L)
 
     session$setInputs(import_flow = 2)
     session$flushReact()
     testthat::expect_identical(flow_data()$flow, 99)
-    testthat::expect_identical(importer_calls, 1L)
+    testthat::expect_identical(importer_calls, 2L)
   })
 })
 

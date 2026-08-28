@@ -88,6 +88,36 @@ run_analysis_model <- function(analysis_dataset, model_spec,
   sites <- unique(as.character(model_df[[site_col]]))
   site_count <- length(sites)
 
+  eligible_flow <- analysis_model_eligible_flow_predictors(
+    names(analysis_dataset),
+    site_count = site_count
+  )
+  invalid_flow <- setdiff(flow_preds, eligible_flow)
+  if (length(invalid_flow) > 0L) {
+    eligibility_message <- if (site_count >= 2L) {
+      paste(
+        "Multiple-site models accept only standardised Q10z/Q95z predictors",
+        "at lags 0, 1, 3, 6, or 12."
+      )
+    } else {
+      paste(
+        "Single-site models accept Q10/Q10z/Q95/Q95z predictors",
+        "at lags 0, 1, 3, 6, or 12; Raw Q95 is supported."
+      )
+    }
+    return(.model_result(
+      "blocked",
+      paste0(
+        eligibility_message,
+        " Ineligible Flow predictor(s): ",
+        paste(invalid_flow, collapse = ", "),
+        "."
+      ),
+      model_path = if (site_count >= 2L) "multi_site_mixed" else "single_site_additive",
+      site_count = site_count
+    ))
+  }
+
   base_fields <- list(
     n_input = n_input, n_complete = n_complete, n_excluded = n_excluded,
     site_count = site_count, year_range = year_range, year_center = year_center,
@@ -167,6 +197,16 @@ run_analysis_model <- function(analysis_dataset, model_spec,
     ))))
 }
 
+analysis_model_eligible_flow_predictors <- function(fields, site_count) {
+  supported_lag_pattern <- paste(SUPPORTED_FLOW_LAGS, collapse = "|")
+  flow_pattern <- if (site_count >= 2L) {
+    paste0("^Q(10|95)z_lag(", supported_lag_pattern, ")$")
+  } else {
+    paste0("^Q(10|95)z?_lag(", supported_lag_pattern, ")$")
+  }
+  fields[grepl(flow_pattern, fields, ignore.case = TRUE)]
+}
+
 analysis_model_variable_choices <- function(data, site_col = "biol_site_id") {
   if (is.null(data) || !is.data.frame(data) || nrow(data) == 0L) {
     return(list(
@@ -190,13 +230,7 @@ analysis_model_variable_choices <- function(data, site_col = "biol_site_id") {
   }
   site_count <- length(sites)
 
-  supported_lag_pattern <- paste(SUPPORTED_FLOW_LAGS, collapse = "|")
-  flow_pattern <- if (site_count >= 2L) {
-    paste0("^Q(10|95)z_lag(", supported_lag_pattern, ")$")
-  } else {
-    paste0("^Q(10|95)z?_lag(", supported_lag_pattern, ")$")
-  }
-  flow <- numeric_columns[grepl(flow_pattern, numeric_columns, ignore.case = TRUE)]
+  flow <- analysis_model_eligible_flow_predictors(numeric_columns, site_count)
 
   list(
     response = response,

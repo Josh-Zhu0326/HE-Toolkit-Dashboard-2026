@@ -460,7 +460,7 @@ page_navbar(
                             class = "card-body",
                             div(
                               class = "hint-text",
-                              "This temporary compatibility entry keeps the existing mapped WQ workflow available while Data Contract v2.0 ingestion is completed. Use the WQ checkpoint above for the primary upload-time validation result."
+                              "This extended-format uploader is retained for backward compatibility. The primary Data Contract v2.0 WQ CSV above now feeds the mapped WQ workflow directly."
                             ),
                             fileInput("wq_csv", "Choose legacy workflow WQ CSV", accept = c(".csv", "text/csv")),
                             uiOutput("wq_validation_status"),
@@ -476,7 +476,7 @@ page_navbar(
                             class = "card-body",
                             div(
                               class = "hint-text",
-                              "This temporary compatibility entry keeps the existing mapped RHS workflow available while Data Contract v2.0 ingestion is completed. Use the RHS checkpoint above for the primary upload-time validation result."
+                              "This extended-format uploader is retained for backward compatibility. The primary Data Contract v2.0 RHS CSV above now feeds the mapped RHS workflow directly."
                             ),
                             fileInput("rhs_csv", "Choose legacy workflow RHS CSV", accept = c(".csv", "text/csv")),
                             uiOutput("rhs_validation_status"),
@@ -489,7 +489,7 @@ page_navbar(
             nav_panel("Site Map",
                       div(class = "dashboard-page dashboard-page-wide",
                         card(class = "dashboard-card",
-                          card_header("Mapped monitoring sites"),
+                          card_header("Biology sampling sites"),
                           uiOutput("site_map_status"),
                           leafletOutput("map0", height = 600)
                         )

@@ -5,6 +5,10 @@ empty_site_map_points <- function() {
     lon = numeric(),
     lat = numeric(),
     coordinate_source = character(),
+    water_body = character(),
+    sample_count = integer(),
+    first_sampling_year = integer(),
+    last_sampling_year = integer(),
     stringsAsFactors = FALSE
   )
 }
@@ -55,22 +59,14 @@ site_map_points_from_bng <- function(data, site_type, id_col, easting_col,
 }
 
 site_map_points_from_mapping <- function(mapping) {
-  specifications <- list(
-    c("Biology", "biol_site_id", "biol_easting", "biol_northing"),
-    c("Flow", "flow_site_id", "flow_easting", "flow_northing"),
-    c("WQ", "wq_site_id", "wq_easting", "wq_northing")
+  site_map_points_from_bng(
+    mapping,
+    site_type = "Biology",
+    id_col = "biol_site_id",
+    easting_col = "biol_easting",
+    northing_col = "biol_northing",
+    coordinate_source = "Biology site mapping"
   )
-  points <- lapply(specifications, function(specification) {
-    site_map_points_from_bng(
-      mapping,
-      site_type = specification[[1L]],
-      id_col = specification[[2L]],
-      easting_col = specification[[3L]],
-      northing_col = specification[[4L]],
-      coordinate_source = "Site mapping"
-    )
-  })
-  dplyr::bind_rows(points)
 }
 
 site_map_points_from_environment <- function(environment_data) {
@@ -135,28 +131,95 @@ site_map_points_from_environment <- function(environment_data) {
   unique(result[valid, , drop = FALSE])
 }
 
-site_map_points_from_wq <- function(wq_data) {
-  site_map_points_from_bng(
-    wq_data,
-    "WQ",
-    "wq_site_id",
-    "easting",
-    "northing",
-    "Imported WQ data"
-  )
+site_map_first_column <- function(data, candidates) {
+  field <- intersect(candidates, names(data))
+  if (length(field) == 0L) NA_character_ else field[[1L]]
 }
 
-build_site_map_points <- function(mapping = NULL, environment_data = NULL, wq_data = NULL) {
+add_biology_site_map_details <- function(
+    points,
+    biology_data = NULL,
+    environment_data = NULL,
+    mapping = NULL) {
+  if (!is.data.frame(points) || nrow(points) == 0L) {
+    return(empty_site_map_points())
+  }
+  points$water_body <- NA_character_
+  points$sample_count <- 0L
+  points$first_sampling_year <- NA_integer_
+  points$last_sampling_year <- NA_integer_
+
+  location_sources <- list(environment_data, mapping)
+  for (source in location_sources) {
+    if (!is.data.frame(source) || nrow(source) == 0L ||
+        !"biol_site_id" %in% names(source)) {
+      next
+    }
+    water_body_field <- site_map_first_column(source, c(
+      "WATER_BODY", "water_body", "WFD_WATERBODY_ID", "waterbody", "site_name"
+    ))
+    if (is.na(water_body_field)) {
+      next
+    }
+    ids <- trimws(as.character(source$biol_site_id))
+    values <- trimws(as.character(source[[water_body_field]]))
+    for (index in seq_len(nrow(points))) {
+      matches <- which(ids == points$site_id & site_map_nonblank(values))
+      if (length(matches) > 0L && !site_map_nonblank(points$water_body[[index]])) {
+        points$water_body[[index]] <- values[[matches[[1L]]]]
+      }
+    }
+  }
+
+  if (is.data.frame(biology_data) && nrow(biology_data) > 0L &&
+      "biol_site_id" %in% names(biology_data)) {
+    biology_ids <- trimws(as.character(biology_data$biol_site_id))
+    date_field <- site_map_first_column(biology_data, c("SAMPLE_DATE", "date"))
+    year_field <- site_map_first_column(biology_data, c("Year", "sampling_year"))
+    years <- if (!is.na(year_field)) {
+      suppressWarnings(as.integer(biology_data[[year_field]]))
+    } else if (!is.na(date_field)) {
+      suppressWarnings(as.integer(format(as.Date(biology_data[[date_field]]), "%Y")))
+    } else {
+      rep(NA_integer_, nrow(biology_data))
+    }
+
+    for (index in seq_len(nrow(points))) {
+      rows <- which(biology_ids == points$site_id)
+      points$sample_count[[index]] <- length(rows)
+      site_years <- years[rows]
+      site_years <- site_years[is.finite(site_years)]
+      if (length(site_years) > 0L) {
+        points$first_sampling_year[[index]] <- min(site_years)
+        points$last_sampling_year[[index]] <- max(site_years)
+      }
+    }
+  }
+  points
+}
+
+build_site_map_points <- function(
+    mapping = NULL,
+    environment_data = NULL,
+    wq_data = NULL,
+    biology_data = NULL) {
+  # wq_data is retained as a compatibility argument, but non-Biology records
+  # and coordinates are intentionally never promoted to map layers.
   points <- dplyr::bind_rows(
     site_map_points_from_mapping(mapping),
-    site_map_points_from_environment(environment_data),
-    site_map_points_from_wq(wq_data)
+    site_map_points_from_environment(environment_data)
   )
   if (nrow(points) == 0L) {
     return(empty_site_map_points())
   }
 
-  points |>
-    dplyr::filter(site_type %in% c("Biology", "Flow", "WQ")) |>
+  points <- points |>
+    dplyr::filter(site_type == "Biology") |>
     dplyr::distinct(site_type, site_id, .keep_all = TRUE)
+  add_biology_site_map_details(
+    points,
+    biology_data = biology_data,
+    environment_data = environment_data,
+    mapping = mapping
+  )
 }

@@ -10,7 +10,7 @@
 >
 > Historical baseline: [Data Contract](data-contract-v1.0.md)
 >
-> Decision authority: [Client Decision Log v1.3](../decisions/client-decision-log-v1.md), `DEC-39`–`DEC-44` and `DEC-46`
+> Decision authority: [Client Decision Log v1.4](../decisions/client-decision-log-v1.md), `DEC-39`–`DEC-44`, `DEC-49`, and `DEC-50`
 >
 > Traceability: [Requirement Traceability Matrix v2.0](requirement-traceability-matrix-v2.0.md); implementation evidence remains pending
 
@@ -24,9 +24,10 @@ It covers:
 - independent Local and Data Explorer input paths;
 - Q10/Q95 fields for lags `0`, `1`, `3`, `6`, and `12`;
 - WQ operational date limits; and
-- removal of non-Biology coordinate requirements.
+- removal of non-Biology coordinate requirements; and
+- explicit Local/Data Explorer reconciliation.
 
-Combined-source conflict resolution, model-predictor eligibility, and the other topics in Section 4 are deferred.
+Model-predictor eligibility is controlled by the modelling contract. The remaining topics in Section 4 stay deferred.
 
 ### Superseded v1 rules
 
@@ -145,13 +146,26 @@ Current acceptance supports:
 |---|---|
 | `local` | Use the current validated local CSV dataset. |
 | `explorer` | Use the current validated Data Explorer/import-function dataset. |
+| `combined` | Reconcile Local and Explorer records by the identity keys below. |
 
-- Switching source makes the selected dataset current without deleting the retained alternative source.
+- Switching or combining sources makes the reconciled dataset current without deleting either retained source.
 - Source changes invalidate only the affected processed dataset and its descendants.
-- Flow-statistics processing consumes the explicitly selected current Flow dataset, whether Local or Explorer.
-- `combined` mode and automatic cross-source conflict classification are deferred until record identity keys are defined.
+- Flow-statistics processing consumes the current reconciled Flow dataset, whether Local, Explorer, or combined.
+- Exact cross-source duplicates are collapsed only with a reported action and provenance.
+- Conflicting records show the identity, differing fields, Local values, and Explorer values. The user must retain Local, retain Explorer, or exclude the conflict before the reconciled dataset becomes current.
+- Multiple non-identical rows with one identity inside the same source block reconciliation as ambiguous.
 
-Traceability: `DEC-41`; `RTM-27`.
+| Data type | Record identity |
+|---|---|
+| Biology | `biol_site_id` + `SAMPLE_ID` |
+| Site environmental | `biol_site_id` |
+| Daily Flow | `flow_site_id` + `date` |
+| Water Quality | `wq_site_id` + `date_time` + `det_id` |
+| RHS | `rhs_survey_id` |
+
+Comparison uses shared canonical non-key fields. Source-only extra fields are retained where possible but do not create a false conflict.
+
+Traceability: `DEC-41`, `DEC-50`; `RTM-27`.
 
 ### DC2-03: Flow Fields and Lags
 
@@ -177,9 +191,9 @@ flow_window_duration_lagL
 - Q50 may remain descriptive but is outside this joined/modelling field set.
 - Standardisation provenance records site grouping, centre, scale, and any failure reason.
 - Raw-daily HEV mode uses `flow`, not lag fields.
-- Field availability does not determine model eligibility; [Modelling Contract v2.0](modelling-contract-v2.0.md) permits only Q95z as a Q95 modelling predictor.
+- Field availability does not determine model eligibility; [Modelling Contract v2.0](modelling-contract-v2.0.md) permits Raw Q95 and Q95z for single-site models and Q95z only for multiple-site models.
 
-Traceability: `DEC-39`, `DEC-46`; `RTM-03`, `RTM-21`.
+Traceability: `DEC-39`, `DEC-49`; `RTM-03`, `RTM-21`.
 
 ### DC2-04: Biology-Only Map Boundary
 
@@ -215,9 +229,9 @@ processed_output_fingerprint
 generated_at
 ```
 
-Source records are not overwritten. A source change creates a new output revision and fingerprint. Conflict-specific provenance activates only when deferred `combined` mode enters acceptance.
+Source records are not overwritten. A source change creates a new output revision and fingerprint. Combined-source provenance records identity fields, Local/Explorer row counts, exact duplicates removed, conflict count, and the user's resolution.
 
-Traceability: `DEC-41`; `RTM-27`.
+Traceability: `DEC-41`, `DEC-50`; `RTM-27`.
 
 ## 3. Inherited v1.1 Rules
 
@@ -239,7 +253,6 @@ These items are outside the current change and do not block the remaining v2.0 w
 
 | Topic | Current boundary |
 |---|---|
-| Five record identity keys | Do not implement `combined` mode or automatic conflict classification. |
 | Complete CSV warning/blocker matrix | Retain existing structural safety checks. |
 | Biology-coordinate authority | Retain the existing Biology-location path. |
 | Missing WQ source unit | Continue inherited `DC-10`; add no new policy. |
@@ -254,7 +267,7 @@ Contract freeze records the agreed in-scope data rules; it does not claim implem
 1. Publish the five CSV templates.
 2. Maintain RTM v2.0 requirements, acceptance criteria, and evidence states.
 3. Update affected Task, dependency, UI, and modelling contracts.
-4. Test the five schemas, Local/Explorer ingestion, lag fields, WQ date boundary, and non-Biology coordinate removal.
+4. Test the five schemas, Local/Explorer ingestion and reconciliation, lag fields, WQ date boundary, and non-Biology coordinate removal.
 5. Obtain Data Pipeline, QA/Reproducibility, and relevant Modelling review.
 
 ## 6. Traceability Summary
@@ -262,8 +275,8 @@ Contract freeze records the agreed in-scope data rules; it does not claim implem
 | ID | Invariant | Decisions |
 |---|---|---|
 | `DC2-01` | Five separate CSV inputs | `DEC-40`, `DEC-44` |
-| `DC2-02` | Independent Local and Explorer sources | `DEC-41` |
-| `DC2-03` | Q10/Q95 fields for lags `0,1,3,6,12` | `DEC-39`, `DEC-46` |
+| `DC2-02` | Independent and reconciled Local/Explorer sources | `DEC-41`, `DEC-50` |
+| `DC2-03` | Q10/Q95 fields for lags `0,1,3,6,12` | `DEC-39`, `DEC-49` |
 | `DC2-04` | Biology-only map boundary | `DEC-43` |
 | `DC2-05` | WQ starts no earlier than `2000-01-01` | `DEC-42` |
 | `DC2-06` | Source selection remains traceable | `DEC-41` |

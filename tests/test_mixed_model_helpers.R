@@ -5,6 +5,7 @@
 # The actual model fit needs the lme4 package. If lme4 is not installed, the
 # fit-specific checks are skipped and we only confirm the friendly message.
 
+source(file.path("R", "workflow_config.R"))
 source(file.path("R", "analysis_model_helpers.R"))
 source(file.path("R", "mixed_model_helpers.R"))
 
