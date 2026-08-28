@@ -117,4 +117,13 @@ missing_result <- standardise_wq_contract_records(missing_det)
 stopifnot(missing_result$status == "error")
 stopifnot(grepl("det_id", missing_result$messages))
 
+unmapped_wq <- wq_contract_data[, setdiff(names(wq_contract_data), "biol_site_id"), drop = FALSE]
+unmapped_summary <- build_wq_contract_summary(unmapped_wq, biology_contract_data)
+stopifnot(unmapped_summary$status == "error")
+stopifnot(grepl(
+  "Mapped WQ records must contain biol_site_id",
+  unmapped_summary$messages,
+  fixed = TRUE
+))
+
 cat("WQ contract helper tests passed\n")

@@ -130,7 +130,12 @@ testthat::test_that("Stage workspaces share the workflow visual system", {
   )
   testthat::expect_match(
     style_html,
-    ".workflow-stage-workspace { width:100%; max-width:1180px;",
+    "--wf-page-max:1480px;",
+    fixed = TRUE
+  )
+  testthat::expect_match(
+    style_html,
+    ".workflow-stage-workspace { width:100%; max-width:var(--wf-page-max);",
     fixed = TRUE
   )
   testthat::expect_match(

@@ -1197,8 +1197,9 @@ testthat::test_that("Stage 5 routes multi-site data through the formal mixed mod
   checkpoint_path <- tempfile("formal-mixed-model-checkpoint-", fileext = ".rds")
   on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
 
-  sites <- paste0("B", 1:6)
-  years <- 2018:2023
+  set.seed(812)
+  sites <- paste0("B", 1:8)
+  years <- 2015:2023
   checkpoint_data <- expand.grid(
     biol_site_id = sites,
     sampling_year = years,
@@ -1207,13 +1208,24 @@ testthat::test_that("Stage 5 routes multi-site data through the formal mixed mod
   checkpoint_data$sample_id <- paste0("M", seq_len(nrow(checkpoint_data)))
   checkpoint_data$Year <- checkpoint_data$sampling_year
   checkpoint_data$date <- as.Date(paste0(checkpoint_data$sampling_year, "-05-01"))
-  checkpoint_data$Q95z_lag0 <- rep(seq(-1.5, 1.5, length.out = length(years)), length(sites)) +
-    rep(seq(-0.2, 0.2, length.out = length(sites)), each = length(years))
-  site_effect <- stats::setNames(seq(-0.3, 0.3, length.out = length(sites)), sites)
+  year_centered <- checkpoint_data$sampling_year - mean(years)
+  checkpoint_data$Q95z_lag0 <- as.numeric(scale(
+    stats::rnorm(nrow(checkpoint_data)) + 0.08 * year_centered
+  ))
+  site_effect <- stats::setNames(
+    stats::rnorm(length(sites), mean = 0, sd = 0.25),
+    sites
+  )
+  site_slope <- stats::setNames(
+    stats::rnorm(length(sites), mean = 0, sd = 0.04),
+    sites
+  )
   checkpoint_data$LIFE_F_OE <- 1 +
     0.2 * checkpoint_data$Q95z_lag0 +
-    0.03 * (checkpoint_data$sampling_year - mean(years)) +
-    site_effect[checkpoint_data$biol_site_id]
+    0.03 * year_centered +
+    site_effect[checkpoint_data$biol_site_id] +
+    site_slope[checkpoint_data$biol_site_id] * year_centered +
+    stats::rnorm(nrow(checkpoint_data), mean = 0, sd = 0.08)
 
   write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
   upload <- shiny_upload_input(checkpoint_path, "application/octet-stream")
