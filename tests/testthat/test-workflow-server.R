@@ -613,6 +613,7 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
 
     muffle_interrupted_workflow_promise(session$setInputs(
       meta_paste = "biol_site_id,flow_site_id,flow_input\nB1,F1,HDE",
+      flow_source_mode = "local",
       local_flow_csv = local_flow_input,
       date_range_biol = as.Date(c("2020-01-01", "2022-12-31")),
       date_range_flow = as.Date(c("2020-01-01", "2022-12-31")),

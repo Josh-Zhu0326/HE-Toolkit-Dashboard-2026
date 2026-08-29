@@ -30,6 +30,7 @@ testthat::test_that("valid v2 Local Environmental data are operational", {
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = "biol_site_id,flow_site_id\nB001,00123",
+      environment_source_mode = "local",
       local_v2_environmental_csv = environment_upload_input(local_path)
     )
     session$flushReact()
@@ -56,7 +57,7 @@ testthat::test_that("valid v2 Local Environmental data are operational", {
   })
 })
 
-testthat::test_that("invalid Local Environmental replacement cannot reuse an external source", {
+testthat::test_that("invalid selected Local Environmental data do not fall back to retained Explorer data", {
   invalid_path <- tempfile("invalid-local-environment-", fileext = ".csv")
   on.exit(unlink(invalid_path, force = TRUE), add = TRUE)
   writeLines("biol_site_id,NGR_10_FIG\nB001,SO1234512345", invalid_path)
@@ -81,7 +82,8 @@ testthat::test_that("invalid Local Environmental replacement cannot reuse an ext
     )
     set_inputs_ignoring_interrupted_promises(
       session,
-      meta_paste = "biol_site_id,flow_site_id\nB001,00123"
+      meta_paste = "biol_site_id,flow_site_id\nB001,00123",
+      environment_source_mode = "explorer"
     )
     session$flushReact()
 
@@ -95,7 +97,12 @@ testthat::test_that("invalid Local Environmental replacement cannot reuse an ext
       local_v2_environmental_csv = environment_upload_input(valid_path)
     )
     session$flushReact()
-    testthat::expect_false(isTRUE(external_environment_loaded()))
+    testthat::expect_true(isTRUE(external_environment_loaded()))
+    testthat::expect_identical(env_data()$ALTITUDE, 10)
+
+    session$setInputs(environment_source_mode = "local")
+    session$flushReact()
+    testthat::expect_true(isTRUE(external_environment_loaded()))
     testthat::expect_identical(env_data()$ALTITUDE, 102.5)
 
     set_inputs_ignoring_interrupted_promises(
@@ -106,7 +113,11 @@ testthat::test_that("invalid Local Environmental replacement cannot reuse an ext
 
     testthat::expect_identical(local_environment_upload()$validation$status, "error")
     testthat::expect_false(artifact_is_current(workflow_artifacts()$environment_input))
-    testthat::expect_false(isTRUE(external_environment_loaded()))
+    testthat::expect_true(isTRUE(external_environment_loaded()))
     testthat::expect_error(env_data(), class = "shiny.silent.error")
+
+    session$setInputs(environment_source_mode = "explorer")
+    session$flushReact()
+    testthat::expect_identical(env_data()$ALTITUDE, 10)
   })
 })

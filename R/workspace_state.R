@@ -24,6 +24,11 @@ workspace_dataset_artifact_ids <- function(dataset_name) {
 workspace_saved_input_ids <- c(
   "main_nav",
   "meta_paste",
+  "biology_source_mode",
+  "environment_source_mode",
+  "flow_source_mode",
+  "wq_source_mode",
+  "rhs_source_mode",
   "date_range_biol",
   "date_range_flow",
   "date_range_wq",

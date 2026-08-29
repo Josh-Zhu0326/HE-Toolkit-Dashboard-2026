@@ -7,6 +7,7 @@ testthat::test_that("validated v2 WQ populates determinands without Biology mapp
     muffle_interrupted_workflow_promise(session$flushReact())
     set_inputs_ignoring_interrupted_promises(
       session,
+      wq_source_mode = "local",
       local_v2_wq_csv = shiny_upload_input(wq_path)
     )
     muffle_interrupted_workflow_promise(session$flushReact())
@@ -41,6 +42,7 @@ testthat::test_that("validated v2 WQ uses Biology mapping when it is available",
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = mapping,
+      wq_source_mode = "local",
       local_v2_wq_csv = shiny_upload_input(wq_path)
     )
     muffle_interrupted_workflow_promise(session$flushReact())
