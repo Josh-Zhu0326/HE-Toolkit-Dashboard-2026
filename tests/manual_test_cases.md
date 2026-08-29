@@ -396,3 +396,21 @@ Expected result:
 - `NGR_10_FIG` remains canonical in the validated upload and is converted explicitly only for the inherited HE Toolkit EDE boundary.
 - RICT predictions accept the converted input; blank alkalinity remains eligible when conductivity is usable.
 - An invalid replacement makes Environmental data and downstream outputs non-current and does not reuse an earlier external or local result.
+
+## TC-047 Local Biology and Environmental O:E Closure
+
+Steps:
+1. Upload `www/templates/local_csv_v2/biology.csv` and `www/templates/local_csv_v2/environmental.csv` for the same `biol_site_id`.
+2. Run RICT predictions, then calculate O:E ratios.
+3. Confirm the O:E output contains the original stable sample IDs and sample dates.
+4. Replace the Biology file with an invalid file and confirm the previous O:E output is unavailable.
+5. Restore valid Biology, regenerate O:E, then replace Environmental with an invalid file.
+6. Upload otherwise valid Biology and Environmental files whose `biol_site_id` values do not match, run RICT, and attempt O:E.
+
+Expected result:
+- The two valid Local CSV sources complete the RICT and O:E path without calling either external importer.
+- O:E output uses canonical `sample_id` values and the corresponding sample dates.
+- Replacing Biology clears the O:E request and makes Biology-derived outputs non-current without invalidating current RICT predictions.
+- Replacing Environmental clears RICT and O:E requests and makes all Environmental-dependent outputs non-current.
+- No previous O:E result remains readable as the current result after either invalid replacement.
+- Biology site/season records without matching current RICT predictions block O:E and identify the uncovered Biology site IDs.

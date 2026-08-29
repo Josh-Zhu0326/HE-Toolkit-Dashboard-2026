@@ -531,6 +531,7 @@ function(input, output, session){
     biology_source_revision(isolate(biology_source_revision()) + 1L)
     biology_import_request(NULL)
     external_biology_requested_revision(NULL)
+    oe_request(NULL)
     workflow_reset_artifact(
       "biology_input",
       "The Biology source changed after downstream outputs were generated.",
@@ -706,6 +707,23 @@ function(input, output, session){
         "oe_result",
         "Current RICT predictions are required before calculating O:E ratios.",
         "Run RICT predictions before calculating O:E ratios."
+      )
+      return()
+    }
+    missing_prediction_keys <- dplyr::anti_join(
+      dplyr::distinct(biol_data(), biol_site_id, Season),
+      dplyr::distinct(predict_data(), biol_site_id, Season),
+      by = c("biol_site_id", "Season")
+    )
+    if (nrow(missing_prediction_keys) > 0L) {
+      missing_sites <- sort(unique(as.character(missing_prediction_keys$biol_site_id)))
+      workflow_block_artifact(
+        "oe_result",
+        sprintf(
+          "Current RICT predictions do not cover Biology site/season records for: %s.",
+          paste(missing_sites, collapse = ", ")
+        ),
+        "Check the Biology and Environmental site IDs, regenerate RICT predictions, then calculate O:E ratios again."
       )
       return()
     }
