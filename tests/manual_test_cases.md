@@ -384,3 +384,17 @@ Expected result:
 - The external importer is not called while the valid local source is active.
 - The invalid replacement makes Biology and its downstream outputs non-current and does not reuse an earlier result.
 - The legacy taxon/abundance upload remains a separate preview and exclusion-log input.
+
+## TC-046 v2 Local Environmental Operational Source
+
+Steps:
+1. Download and upload `www/templates/local_csv_v2/environmental.csv` from the Site environmental CSV card.
+2. Confirm the upload status and preview.
+3. Run RICT predictions with the valid local source selected.
+4. Replace the file with one containing an invalid `NGR_10_FIG`, then with one missing required headers.
+
+Expected result:
+- The valid CSV becomes the current formal Environmental input without calling the external importer.
+- `NGR_10_FIG` remains canonical in the validated upload and is converted explicitly only for the inherited HE Toolkit EDE boundary.
+- RICT predictions accept the converted input; blank alkalinity remains eligible when conductivity is usable.
+- An invalid replacement makes Environmental data and downstream outputs non-current and does not reuse an earlier external or local result.

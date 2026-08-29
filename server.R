@@ -478,6 +478,11 @@ function(input, output, session){
   external_biology_revision <- reactiveVal(NULL)
   external_biology_requested_revision <- reactiveVal(NULL)
   environment_import_request <- reactiveVal(NULL)
+  environment_source_revision <- reactiveVal(0L)
+  external_environment_loaded <- reactiveVal(FALSE)
+  external_environment_retained <- reactiveVal(NULL)
+  external_environment_revision <- reactiveVal(NULL)
+  external_environment_requested_revision <- reactiveVal(NULL)
   external_import_diagnostics <- reactiveVal(data.frame(
     recorded_at = as.POSIXct(character()),
     context = character(),
@@ -546,6 +551,31 @@ function(input, output, session){
 
     if (exists("biol_data_exist", envir = server_context, inherits = FALSE)) {
       get("biol_data_exist", envir = server_context)(FALSE)
+    }
+  }
+
+  invalidate_environment_derived_state <- function(reset_external = FALSE) {
+    environment_source_revision(isolate(environment_source_revision()) + 1L)
+    environment_import_request(NULL)
+    external_environment_requested_revision(NULL)
+    rict_request(NULL)
+    oe_request(NULL)
+    workflow_reset_artifact(
+      "environment_input",
+      "The Environmental source changed after downstream outputs were generated.",
+      "Validate or import the current Environmental source."
+    )
+
+    if (reset_external) {
+      external_environment_loaded(FALSE)
+      external_environment_retained(NULL)
+      external_environment_revision(NULL)
+    }
+
+    for (flag_name in c("env_data_exist", "predict_data_exist")) {
+      if (exists(flag_name, envir = server_context, inherits = FALSE)) {
+        get(flag_name, envir = server_context)(FALSE)
+      }
     }
   }
 
@@ -634,8 +664,12 @@ function(input, output, session){
   observeEvent(input$import_env, {
     if (!require_task_stage(1L) || !require_import_type("environment")) return()
     environment_import_request(NULL)
-    if (!source_is_selected("environmental", "explorer")) return()
+    if (!source_is_selected("environmental", "explorer")) {
+      external_environment_requested_revision(NULL)
+      return()
+    }
     if (!workflow_artifact_is_current("site_mapping")) {
+      external_environment_requested_revision(NULL)
       workflow_block_artifact(
         "environment_input",
         "Current site metadata with valid biol_site_id values are required before importing Environmental data.",
@@ -643,6 +677,7 @@ function(input, output, session){
       )
       return()
     }
+    external_environment_requested_revision(isolate(environment_source_revision()))
     environment_import_request(input$import_env)
     workflow_begin_artifact("environment_input", "Complete the environmental-data import.")
   }, ignoreInit = FALSE, priority = 50)
@@ -1895,6 +1930,23 @@ function(input, output, session){
     )
   })
 
+  observeEvent(local_environment_upload(), {
+    if (!require_task_stage(1L) || !require_import_type("environment")) return()
+    if (!source_is_selected("environmental", "local")) return()
+    upload <- local_environment_upload()
+    req(local_upload_is_operational(upload))
+    workflow_set_artifact(
+      "environment_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local Environmental CSV",
+      history_summary = sprintf(
+        "Validated %d local Environmental record(s); NGR_10_FIG is converted only at the HE Toolkit boundary.",
+        nrow(upload$data)
+      ),
+      invalidate_downstream = TRUE
+    )
+  })
+
   observeEvent(local_flow_upload(), {
     if (!require_task_stage(1L) || !require_import_type("flow")) return()
     if (!source_is_selected("flow", "local")) return()
@@ -1920,6 +1972,13 @@ function(input, output, session){
     if (!require_task_stage(1L) || !require_import_type("biology")) return()
     if (source_is_selected("biology", "local")) {
       invalidate_biology_derived_state(reset_external = FALSE)
+    }
+  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
+
+  observeEvent(input$local_v2_environmental_csv, {
+    if (!require_task_stage(1L) || !require_import_type("environment")) return()
+    if (source_is_selected("environmental", "local")) {
+      invalidate_environment_derived_state(reset_external = FALSE)
     }
   }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
 
@@ -2171,33 +2230,11 @@ function(input, output, session){
   
   ## Environmental data ----
   ### importing ----
-  observeEvent(input$local_v2_environmental_csv, {
-    if (!require_task_stage(1L) || !require_import_type("environment")) return()
-    if (source_is_selected("environmental", "local")) {
-      workflow_reset_artifact(
-        "environment_input",
-        "The selected Local Environmental file changed.",
-        "Validate the current Local Environmental CSV."
-      )
-    }
-  }, ignoreNULL = FALSE, ignoreInit = FALSE, priority = 200)
-
-  observeEvent(local_environment_upload(), {
-    if (!require_task_stage(1L) || !require_import_type("environment")) return()
-    if (!source_is_selected("environmental", "local")) return()
-    upload <- local_environment_upload()
-    req(local_upload_is_operational(upload))
-    workflow_set_artifact(
-      "environment_input",
-      if (identical(upload$validation$status, "warning")) "warning" else "complete",
-      data_source = "Local Environmental CSV",
-      history_summary = sprintf("Validated %d local Environmental record(s).", nrow(upload$data)),
-      invalidate_downstream = TRUE
-    )
-  })
-
   external_environment_data <- eventReactive(environment_import_request(), {
-    req(!is.null(environment_import_request()))
+    req(
+      !is.null(environment_import_request()),
+      identical(external_environment_requested_revision(), environment_source_revision())
+    )
     biol_sites <- as.character(metadata()$biol_site_id)
     result <- safe_external_import(
       function() {
@@ -2217,8 +2254,14 @@ function(input, output, session){
         message,
         "Check the Biology site IDs, then try the Environmental import again."
       )
+      external_environment_loaded(FALSE)
+      external_environment_retained(NULL)
+      external_environment_revision(NULL)
       validate(need(FALSE, message))
     }
+    external_environment_loaded(TRUE)
+    external_environment_retained(result$data)
+    external_environment_revision(isolate(environment_source_revision()))
     result$data
   })
 
@@ -2235,11 +2278,10 @@ function(input, output, session){
 
   observeEvent(input$environment_source_mode, {
     if (!require_task_stage(1L) || !require_import_type("environment")) return()
-    workflow_reset_artifact(
-      "environment_input",
-      "The Environmental source selection changed.",
-      "Validate or import the selected Environmental source."
-    )
+    invalidate_environment_derived_state(reset_external = FALSE)
+    if (isTRUE(isolate(external_environment_loaded()))) {
+      external_environment_revision(isolate(environment_source_revision()))
+    }
     if (source_is_selected("environmental", "local")) {
       upload <- isolate(local_environment_upload())
       if (local_upload_is_operational(upload)) {
@@ -2251,8 +2293,8 @@ function(input, output, session){
           invalidate_downstream = TRUE
         )
       }
-    } else {
-      imported <- isolate(external_environment_data())
+    } else if (isTRUE(isolate(external_environment_loaded()))) {
+      imported <- isolate(external_environment_retained())
       if (!is.null(imported) && nrow(imported) > 0L) {
         workflow_complete_artifact(
           "environment_input",
@@ -2267,9 +2309,15 @@ function(input, output, session){
     if (source_is_selected("environmental", "local")) {
       upload <- local_environment_upload()
       req(local_upload_is_operational(upload))
-      return(upload$data)
+      return(local_environment_to_hetoolkit_input(upload$data))
     }
-    external_environment_data()
+    req(
+      isTRUE(external_environment_loaded()),
+      identical(external_environment_revision(), environment_source_revision())
+    )
+    retained <- external_environment_retained()
+    req(!is.null(retained), nrow(retained) > 0L)
+    retained
   })
   
   #### warning message for unID'd sites----
@@ -4828,6 +4876,11 @@ function(input, output, session){
       external_biology_loaded = function() external_biology_loaded(),
       external_biology_revision = function() external_biology_revision(),
       external_biology_requested_revision = function() external_biology_requested_revision(),
+      environment_source_revision = function() environment_source_revision(),
+      external_environment_loaded = function() external_environment_loaded(),
+      external_environment_retained = function() external_environment_retained(),
+      external_environment_revision = function() external_environment_revision(),
+      external_environment_requested_revision = function() external_environment_requested_revision(),
       flow_source_revision = function() flow_source_revision(),
       external_flow_loaded = function() external_flow_loaded(),
       external_flow_revision = function() external_flow_revision(),
@@ -4869,6 +4922,7 @@ function(input, output, session){
       wq_contract_summary = function() wq_contract_summary_result(),
       local_biology_input = function() local_biology_upload()$data,
       legacy_local_invertebrate = function() local_inv_upload()$data,
+      local_environment_input = function() local_environment_upload()$data,
       local_flow_input = function() local_flow_upload()$data,
       biology_input = function() biol_data(),
       environment_input = function() env_data(),
