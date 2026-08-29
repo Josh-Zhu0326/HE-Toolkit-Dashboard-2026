@@ -4061,25 +4061,21 @@ function(input, output, session){
   observeEvent(input$join_he, {
     req(!is.null(isolate(join_request())))
     req(identical(isolate(join_request())$request_id, input$join_he))
-    
-    biol_starts <- biol_data() %>% group_by(biol_site_id) %>% summarise(biol_start = min(SAMPLE_DATE))
-    flow_starts <- flow_stats() %>% pluck(1) %>% group_by(flow_site_id) %>% summarise(flow_start = min(start_date))
-    
-    metadata <- metadata()
-    metadata$biol_site_id <- as.character(metadata$biol_site_id)
-    metadata$flow_site_id <- as.character(metadata$flow_site_id)
-    
-    biol_starts <- biol_starts %>% left_join(metadata %>% select(c(biol_site_id, flow_site_id)), by = "biol_site_id")
-    biol_flow_starts <- biol_starts %>% left_join(flow_starts, by = "flow_site_id")
-    
-    biol_precede_sites <- biol_flow_starts %>% filter(biol_start < flow_start) %>% pull(biol_site_id)
-    biol_precede_sites_text <- gsub("c\\(|\\)",'', biol_precede_sites)
-    
-    if(sum(biol_flow_starts$biol_start < biol_flow_starts$flow_start) > 0) {
-      
-      shinyalert(title = paste("One or more biology samples precede the start date of the earliest flow period at site(s) ", paste(biol_precede_sites_text, collapse = ",")),
-                 type = "warning")
-    } 
+
+    start_diagnostics <- biology_flow_start_diagnostics(
+      biology_data = biol_data(),
+      flow_stats = flow_stats() %>% pluck(1),
+      mapping = metadata()
+    )
+    warning_messages <- biology_flow_start_warning_messages(start_diagnostics)
+
+    if (length(warning_messages) > 0L) {
+      shinyalert(
+        title = "Biology–Flow date checks need attention",
+        text = paste(warning_messages, collapse = "\n"),
+        type = "warning"
+      )
+    }
     
   })
   
