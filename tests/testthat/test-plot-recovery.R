@@ -411,7 +411,10 @@ testthat::test_that("RAW-18 WQ reactive retains the contracted downloadable plot
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = mapping,
-      wq_csv = shiny_upload_input(testthat::test_path("..", "fixtures", "wq.csv")),
+      wq_source_mode = "local",
+      local_v2_wq_csv = shiny_upload_input(testthat::test_path(
+        "..", "..", "www", "templates", "local_csv_v2", "wq.csv"
+      )),
       wq_plot_type = "Boxplot",
       wq_determinand_filter = "0180",
       wq_site_filter = "__all__",

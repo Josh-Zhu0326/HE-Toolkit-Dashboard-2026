@@ -61,8 +61,9 @@ the participant is fully stuck.
 ### Task A — Upload data and understand what was removed
 Give the participant an invertebrate CSV that contains a few deliberately bad
 rows (missing site ID, negative abundance, bad date). Ask them to upload it on
-**Data Import → Local File Import** and then explain, in their own words, what
-the exclusion log is telling them.
+**Data Import → Biology Data**, select **Local CSV**, expand the legacy
+taxon-level exclusion-log checkpoint, and then explain, in their own words,
+what the exclusion log is telling them.
 
 *Observe:* Do they notice the exclusion log? Can they say why each row was
 removed without help? Is "excluded_value" / "rule" wording clear?

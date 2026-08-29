@@ -17,12 +17,13 @@ testthat::test_that("Stage 1 exposes one maintainable checkpoint specification p
   )
 })
 
-testthat::test_that("Stage 1 checkpoint panel contains five task-gated uploads and templates", {
-  html <- as.character(local_csv_checkpoint_panel())
+testthat::test_that("Stage 1 source choices contain task-gated uploads and templates", {
   specs <- local_csv_checkpoint_specs()
 
   for (data_type in names(specs)) {
     spec <- specs[[data_type]]
+    html <- as.character(data_source_choice_card(data_type))
+    testthat::expect_match(html, spec$source_input_id, fixed = TRUE)
     testthat::expect_match(html, spec$input_id, fixed = TRUE)
     testthat::expect_match(
       html,
@@ -34,8 +35,10 @@ testthat::test_that("Stage 1 checkpoint panel contains five task-gated uploads a
       paste0('data-task-imports="', spec$workflow_type, '"'),
       fixed = TRUE
     )
+    testthat::expect_match(html, "Data Explorer", fixed = TRUE)
+    testthat::expect_match(html, "Local CSV", fixed = TRUE)
+    testthat::expect_false(grepl("Combined", html, fixed = TRUE))
   }
-  testthat::expect_match(html, "Files are checked independently", fixed = TRUE)
 })
 
 testthat::test_that("checkpoint status markup preserves warning and blocking severity", {
@@ -63,9 +66,10 @@ testthat::test_that("the primary v2 Biology checkpoint stays separate from the l
   testthat::expect_match(ui_text, '"exclusion_log_table"', fixed = TRUE)
   testthat::expect_match(
     ui_text,
-    "It is separate from the Data Contract v2.0 Biology CSV above.",
+    "It remains preview-only and is separate from the Data Contract v2.0 Biology CSV.",
     fixed = TRUE
   )
+  testthat::expect_false(grepl('nav_panel("Local File Import"', ui_text, fixed = TRUE))
 })
 
 testthat::test_that("each checkpoint validates independently and does not mutate another result", {
