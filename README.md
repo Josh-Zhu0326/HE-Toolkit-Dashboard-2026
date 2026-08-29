@@ -52,6 +52,13 @@ Setup, startup-check, and server logs are stored under:
 
 If setup or startup fails, the CMD window displays the relevant log path.
 
+For an intermittent grey screen, persistent loading spinner, suspected memory
+failure, or disappearing R process, close the normal Dashboard server and run
+`03_Run_Dashboard_With_Diagnostics.cmd`. Its visible monitor distinguishes a
+live but busy R process from a confirmed process crash and creates an email-ready
+diagnostic ZIP under `%LOCALAPPDATA%\HE-Toolkit\diagnostics`. See the
+[Windows customer diagnostic guide](docs/operations/windows-customer-crash-diagnostics.md).
+
 - **R installation or detection fails:** review the CMD message and displayed
   log path, and check whether automatic software installation is permitted on
   the machine.
