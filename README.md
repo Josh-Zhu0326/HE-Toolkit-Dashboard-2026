@@ -24,6 +24,9 @@ The same launcher is used for both first-time setup and normal later use:
 - **Later use:** double-click the same file. Dependencies that are already available
   at the verified versions are reused rather than reinstalled unnecessarily.
 
+For normal use, run `02_Setup_R_and_Run_Dashboard.cmd`, then use the Dashboard.
+You do not need to run the stop script after each session.
+
 Windows is the supported platform for this CMD launcher. RStudio is not required,
 and Git is not required for normal Dashboard startup. Internet access may be
 required during initial setup so that R and packages can be obtained from CRAN
@@ -66,8 +69,26 @@ diagnostic ZIP under `%LOCALAPPDATA%\HE-Toolkit\diagnostics`. See the
   firewall or proxy rules allow access to CRAN and GitHub.
 - **Dashboard startup fails:** open the log path displayed by the launcher for
   the detailed startup or server messages.
-- **Port 3838 is already in use:** close the other process using local port 3838,
-  then run the launcher again. The launcher does not select a fallback port.
+
+### If the Dashboard says port 3838 is already in use
+
+If `02_Setup_R_and_Run_Dashboard.cmd` displays:
+
+> `[ERROR] Port 3838 is already in use. Another Dashboard instance or program may already be running.`
+
+this usually means a previous Dashboard server is still running in the
+background. Closing its browser tab or window does not necessarily stop the
+server.
+
+Only in this situation:
+
+1. Run `04_Stop_Dashboard.cmd`. It safely stops only a Dashboard process
+   previously recorded by the HE Toolkit launcher.
+2. Wait for confirmation that the Dashboard has stopped.
+3. Run `02_Setup_R_and_Run_Dashboard.cmd` again.
+
+If `02_Setup_R_and_Run_Dashboard.cmd` starts normally without the port-3838
+error, you do not need to run `04_Stop_Dashboard.cmd`.
 
 ## Repository Layout
 
