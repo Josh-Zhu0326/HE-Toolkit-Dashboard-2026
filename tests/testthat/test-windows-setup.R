@@ -13,7 +13,7 @@ project_file <- function(...) {
   path
 }
 
-stop_launcher_path <- project_file("03_Stop_Dashboard.cmd")
+stop_launcher_path <- project_file("04_Stop_Dashboard.cmd")
 identity_helper_path <- project_file("scripts", "windows", "rscript_process_identity.ps1")
 record_helper_path <- project_file("scripts", "windows", "record_dashboard_process.ps1")
 stop_helper_path <- project_file("scripts", "windows", "stop_dashboard_process.ps1")
@@ -285,9 +285,9 @@ testthat::test_that("occupied-port protection remains intact with stop guidance"
   occupied_path <- paste(launcher_lines[first_guard:(dependency_setup - 1L)], collapse = "\n")
 
   testthat::expect_match(occupied_path, "Port %APP_PORT% is already in use", fixed = TRUE)
-  testthat::expect_match(occupied_path, "run 03_Stop_Dashboard.cmd", fixed = TRUE)
+  testthat::expect_match(occupied_path, "run 04_Stop_Dashboard.cmd", fixed = TRUE)
   testthat::expect_match(occupied_path, "goto :failed", fixed = TRUE)
   testthat::expect_false(grepl("taskkill", tolower(occupied_path), fixed = TRUE))
-  testthat::expect_false(grepl("call 03_stop_dashboard.cmd", tolower(occupied_path), fixed = TRUE))
-  testthat::expect_false(grepl("start 03_stop_dashboard.cmd", tolower(occupied_path), fixed = TRUE))
+  testthat::expect_false(grepl("call 04_stop_dashboard.cmd", tolower(occupied_path), fixed = TRUE))
+  testthat::expect_false(grepl("start 04_stop_dashboard.cmd", tolower(occupied_path), fixed = TRUE))
 })

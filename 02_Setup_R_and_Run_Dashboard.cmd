@@ -43,7 +43,7 @@ if errorlevel 1 (
   echo.
   echo [ERROR] Port %APP_PORT% is already in use. Another Dashboard instance or program may already be running.
   echo Close the existing Dashboard or process, then run this launcher again.
-  echo If it was started by this launcher, run 03_Stop_Dashboard.cmd.
+  echo If it was started by this launcher, run 04_Stop_Dashboard.cmd.
   goto :failed
 )
 
@@ -140,7 +140,7 @@ if errorlevel 1 (
   echo.
   echo [ERROR] Port %APP_PORT% became occupied during setup. Another Dashboard instance or program may now be running.
   echo Close the existing Dashboard or process, then run this launcher again.
-  echo If it was started by this launcher, run 03_Stop_Dashboard.cmd.
+  echo If it was started by this launcher, run 04_Stop_Dashboard.cmd.
   goto :failed
 )
 
@@ -179,7 +179,6 @@ if errorlevel 1 (
 
 start "" "http://127.0.0.1:%APP_PORT%"
 echo The dashboard responded successfully and has been opened in your browser.
-echo To stop it later, run 03_Stop_Dashboard.cmd.
 
 :success
 echo.
