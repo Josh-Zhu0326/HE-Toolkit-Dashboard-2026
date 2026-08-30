@@ -8,35 +8,40 @@ local_csv_checkpoint_specs <- function() {
       workflow_type = "biology",
       title = "Biology CSV",
       description = "Biological sample identifiers, dates and supported index values.",
-      input_id = "local_v2_biology_csv"
+      input_id = "local_v2_biology_csv",
+      source_input_id = "biology_source_mode"
     ),
     environmental = list(
       contract_type = "environmental",
       workflow_type = "environment",
       title = "Site environmental CSV",
       description = "Site characteristics used by the biological prediction workflow.",
-      input_id = "local_v2_environmental_csv"
+      input_id = "local_v2_environmental_csv",
+      source_input_id = "environment_source_mode"
     ),
     flow = list(
       contract_type = "flow",
       workflow_type = "flow",
       title = "Daily Flow CSV",
       description = "Daily Flow records. A valid file remains an operational Flow source.",
-      input_id = "local_flow_csv"
+      input_id = "local_flow_csv",
+      source_input_id = "flow_source_mode"
     ),
     wq = list(
       contract_type = "wq",
       workflow_type = "wq",
       title = "Water Quality CSV",
       description = "Water Quality observations in the contracted long format.",
-      input_id = "local_v2_wq_csv"
+      input_id = "local_v2_wq_csv",
+      source_input_id = "wq_source_mode"
     ),
     rhs = list(
       contract_type = "rhs",
       workflow_type = "rhs",
       title = "RHS CSV",
       description = "River Habitat Survey identifiers and contracted summary values.",
-      input_id = "local_v2_rhs_csv"
+      input_id = "local_v2_rhs_csv",
+      source_input_id = "rhs_source_mode"
     )
   )
 }
@@ -79,18 +84,32 @@ local_csv_checkpoint_card <- function(data_type) {
   )
 }
 
-local_csv_checkpoint_panel <- function() {
-  types <- names(local_csv_checkpoint_specs())
-  cards <- lapply(types, local_csv_checkpoint_card)
+data_source_choice_card <- function(data_type, ...) {
+  spec <- local_csv_checkpoint_specs()[[data_type]]
+  if (is.null(spec)) {
+    stop(sprintf("Unknown data source type: %s", data_type), call. = FALSE)
+  }
+
   shiny::tagList(
-    shiny::h3(class = "section-title", "Local CSV file import"),
-    shiny::p(
-      class = "page-lead",
-      "Download and complete one CSV template for each data type required by the current Task. Files are checked independently before they enter later processing."
+    bslib::card(
+      class = "dashboard-card data-source-choice-card",
+      bslib::card_header("Data source"),
+      shiny::div(
+        class = "hint-text",
+        "Choose which retained source is current for this data type. Local CSV files are validated independently, and switching source does not delete the alternative."
+      ),
+      shiny::radioButtons(
+        spec$source_input_id,
+        label = NULL,
+        choices = c("Data Explorer" = "explorer", "Local CSV" = "local"),
+        selected = "explorer",
+        inline = TRUE
+      )
     ),
-    do.call(
-      bslib::layout_columns,
-      c(list(col_widths = c(6, 6)), cards)
+    shiny::conditionalPanel(
+      condition = sprintf("input.%s === 'local'", spec$source_input_id),
+      local_csv_checkpoint_card(data_type),
+      ...
     )
   )
 }

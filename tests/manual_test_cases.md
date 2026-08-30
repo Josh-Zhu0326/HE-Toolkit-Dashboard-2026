@@ -61,9 +61,9 @@ Expected result:
 ## TC-005 WQ CSV File Validation
 
 Steps:
-1. Go to Data Import > Local File Import.
-2. Expand Legacy WQ workflow upload.
-3. Upload `tests/fixtures/wq.csv`.
+1. Go to Data Import > WQ Data.
+2. Select Local CSV as the data source.
+3. Upload `www/templates/local_csv_v2/wq.csv`.
 
 Expected result:
 - WQ file validates successfully.
@@ -73,9 +73,9 @@ Expected result:
 ## TC-006 RHS CSV File Validation
 
 Steps:
-1. Go to Data Import > Local File Import.
-2. Expand Legacy RHS workflow upload.
-3. Upload `tests/fixtures/rhs.csv`.
+1. Go to Data Import > RHS Data.
+2. Select Local CSV as the data source.
+3. Upload `www/templates/local_csv_v2/rhs.csv`.
 
 Expected result:
 - RHS file validates successfully.
@@ -86,21 +86,22 @@ Expected result:
 
 Steps:
 1. Open the Utilities menu and review the primary navigation.
-2. Go to Data Import > Local File Import.
-3. Confirm the five Data Contract v2.0 CSV checkpoints are available for the current Task.
-4. Confirm any applicable legacy workflow upload is shown only in a collapsed compatibility section.
+2. Visit each applicable data-type page under Data Import.
+3. Confirm each page offers Data Explorer and Local CSV as source choices.
+4. Confirm WQ Data and RHS Data contain only their Data Contract v2.0 Local CSV upload.
 
 Expected result:
 - No File Validation Sandbox page or Utilities link is available.
 - No DC-11 workbook or single-CSV runtime checkpoint is shown.
-- Existing WQ/RHS workflow uploads remain reachable only for Tasks that require those data types.
+- No standalone Local File Import page or Legacy WQ/RHS upload is available.
+- A valid Local CSV becomes current only when Local CSV is selected for that data type.
 - The historical workbook validation helper remains outside the user-facing runtime path.
 
 ## TC-007 WQ Data Plot Controls
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload WQ CSV through the Stage 1 legacy workflow entry, or import WQ using site IDs if network/API access is available.
+2. In WQ Data, select Local CSV and upload the v2 WQ template, or select Data Explorer and import using site IDs.
 3. Go to Data Import > WQ Data.
 4. Try WQ plot types:
    - Time series
@@ -128,7 +129,7 @@ Expected result:
 
 Steps:
 1. Upload the mapping CSV.
-2. Upload RHS CSV through the Stage 1 legacy workflow entry, or import RHS using site IDs if available.
+2. In RHS Data, select Local CSV and upload the v2 RHS template, or select Data Explorer and import using site IDs.
 3. Go to Data Import > RHS Data.
 4. Try RHS plot types:
    - Numeric variable by biological site ID
@@ -155,8 +156,9 @@ Expected result:
 ## TC-011 Local Invertebrate CSV Upload
 
 Steps:
-1. Go to Data Import > Local File Import.
-2. Upload `tests/fixtures/local_invertebrate.csv`.
+1. Go to Data Import > Biology Data and select Local CSV.
+2. Expand Legacy taxon-level Biology exclusion log.
+3. Upload `tests/fixtures/local_invertebrate.csv`.
 
 Expected result:
 - File validates successfully.
@@ -167,7 +169,7 @@ Expected result:
 ## TC-012 Local Flow CSV Upload
 
 Steps:
-1. Go to Data Import > Local File Import.
+1. Go to Data Import > Flow Data and select Local CSV.
 2. Upload `tests/fixtures/local_flow.csv`.
 3. Upload `tests/fixtures/local_flow_extra_columns.csv`.
 
@@ -382,3 +384,17 @@ Expected result:
 - The external importer is not called while the valid local source is active.
 - The invalid replacement makes Biology and its downstream outputs non-current and does not reuse an earlier result.
 - The legacy taxon/abundance upload remains a separate preview and exclusion-log input.
+
+## TC-046 v2 Local Environmental Operational Source
+
+Steps:
+1. Download and upload `www/templates/local_csv_v2/environmental.csv` from the Site environmental CSV card.
+2. Confirm the upload status and preview.
+3. Run RICT predictions with the valid local source selected.
+4. Replace the file with one containing an invalid `NGR_10_FIG`, then with one missing required headers.
+
+Expected result:
+- The valid CSV becomes the current formal Environmental input without calling the external importer.
+- `NGR_10_FIG` remains canonical in the validated upload and is converted explicitly only for the inherited HE Toolkit EDE boundary.
+- RICT predictions accept the converted input; blank alkalinity remains eligible when conductivity is usable.
+- An invalid replacement makes Environmental data and downstream outputs non-current and does not reuse an earlier external or local result.

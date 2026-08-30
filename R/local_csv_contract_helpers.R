@@ -421,6 +421,24 @@ validate_local_csv_v2 <- function(data, data_type) {
     }
 
     if (identical(data_type, "environmental")) {
+      invalid_ngr <- which(
+        local_csv_v2_nonblank(data$NGR_10_FIG) &
+          !grepl("^[A-Za-z]{2}[0-9]{10}$", as.character(data$NGR_10_FIG))
+      )
+      if (length(invalid_ngr) > 0L) {
+        issues <- rbind(issues, local_csv_v2_issue(
+          data_type,
+          "error",
+          "invalid_ngr_10_fig",
+          paste0(
+            "NGR_10_FIG must contain two letters followed by ten digits in row(s): ",
+            paste(utils::head(invalid_ngr, 10L), collapse = ", "),
+            "."
+          ),
+          "NGR_10_FIG"
+        ))
+      }
+
       no_alkalinity_proxy <- !local_csv_v2_nonblank(data$ALKALINITY) &
         !local_csv_v2_nonblank(data$CONDUCTIVITY)
       if (any(no_alkalinity_proxy)) {
@@ -521,6 +539,50 @@ local_biology_to_hetoolkit_input <- function(data) {
     "Year", "Season"
   )
   adapted
+}
+
+local_environment_to_hetoolkit_input <- function(data) {
+  required <- local_csv_v2_contract("environmental")$fields
+  if (!is.data.frame(data) || !all(required %in% names(data))) {
+    stop(
+      "Local Environmental data must pass Data Contract v2.0 normalisation before HE Toolkit processing.",
+      call. = FALSE
+    )
+  }
+
+  ngr <- toupper(trimws(as.character(data$NGR_10_FIG)))
+  if (any(!grepl("^[A-Z]{2}[0-9]{10}$", ngr))) {
+    stop(
+      "Local Environmental NGR_10_FIG values must contain two letters followed by ten digits.",
+      call. = FALSE
+    )
+  }
+
+  data.frame(
+    WATER_BODY = rep(NA_character_, nrow(data)),
+    biol_site_id = as.character(data$biol_site_id),
+    NGR_PREFIX = substr(ngr, 1L, 2L),
+    EASTING = substr(ngr, 3L, 7L),
+    NORTHING = substr(ngr, 8L, 12L),
+    WFD_WATERBODY_ID = rep(NA_character_, nrow(data)),
+    ALTITUDE = data$ALTITUDE,
+    SLOPE = data$SLOPE,
+    DIST_FROM_SOURCE = data$DIST_FROM_SOURCE,
+    DISCHARGE = data$DISCHARGE,
+    WIDTH = data$WIDTH,
+    DEPTH = data$DEPTH,
+    BOULDERS_COBBLES = data$BOULDERS_COBBLES,
+    PEBBLES_GRAVEL = data$PEBBLES_GRAVEL,
+    SAND = data$SAND,
+    SILT_CLAY = data$SILT_CLAY,
+    ALKALINITY = data$ALKALINITY,
+    CONDUCTIVITY = data$CONDUCTIVITY,
+    TOTAL_HARDNESS = rep(NA_real_, nrow(data)),
+    CALCIUM = rep(NA_real_, nrow(data)),
+    NGR_10_FIG = ngr,
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
 }
 
 read_local_csv_v2 <- function(path, data_type, reader = read_character_csv) {

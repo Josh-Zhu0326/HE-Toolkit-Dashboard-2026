@@ -20,6 +20,7 @@ testthat::test_that("valid Local Flow is operational and bypasses the external i
         "292,27091,WQ002,RHS002",
         sep = "\n"
       ),
+      flow_source_mode = "local",
       local_flow_csv = flow_upload_input(local_path),
       date_range_flow = as.Date(c("2024-01-01", "2024-12-31"))
     )
@@ -53,6 +54,7 @@ testthat::test_that("extra Local Flow columns never enter the operational source
     local_path <- testthat::test_path("..", "fixtures", "local_flow_extra_columns.csv")
     set_inputs_ignoring_interrupted_promises(session,
       meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      flow_source_mode = "local",
       local_flow_csv = flow_upload_input(local_path)
     )
     session$flushReact()
@@ -77,6 +79,7 @@ testthat::test_that("Flow-statistics calculation failures become recoverable wor
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      flow_source_mode = "local",
       local_flow_csv = flow_upload_input(local_path)
     )
     session$flushReact()
@@ -216,6 +219,7 @@ testthat::test_that("replacing valid Local Flow with an invalid file removes the
     invalid_path <- testthat::test_path("..", "fixtures", "local_invertebrate.csv")
     set_inputs_ignoring_interrupted_promises(session,
       meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      flow_source_mode = "local",
       local_flow_csv = flow_upload_input(valid_path),
       date_range_flow = as.Date(c("2024-01-01", "2024-12-31"))
     )
@@ -240,7 +244,7 @@ testthat::test_that("replacing valid Local Flow with an invalid file removes the
     testthat::expect_error(flow_data(), class = "shiny.silent.error")
     testthat::expect_identical(importer_calls, 0L)
 
-    session$setInputs(import_flow = 2)
+    session$setInputs(flow_source_mode = "explorer", import_flow = 2)
     session$flushReact()
     testthat::expect_identical(flow_data()$flow, 99)
     testthat::expect_identical(importer_calls, 1L)
@@ -264,6 +268,7 @@ testthat::test_that("replacing Local Flow invalidates Flow statistics and join s
     source_b <- testthat::test_path("..", "fixtures", "local_flow_extra_columns.csv")
     set_inputs_ignoring_interrupted_promises(session,
       meta_paste = "biol_site_id,flow_site_id,wq_site_id,rhs_survey_id\n291,27090,WQ001,RHS001",
+      flow_source_mode = "local",
       local_flow_csv = flow_upload_input(source_a),
       calc_flow_stats = 1
     )
@@ -467,6 +472,7 @@ testthat::test_that("RAW-05 and RAW-06 malformed Local Flow replacement is contr
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = "biol_site_id,flow_site_id\n291,27090",
+      flow_source_mode = "local",
       local_flow_csv = flow_upload_input(valid_path)
     )
     session$flushReact()
@@ -504,7 +510,7 @@ testthat::test_that("RAW-05 and RAW-06 malformed Local Flow replacement is contr
   })
 })
 
-testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but supplied invalid files do not remain current", {
+testthat::test_that("RAW-07 invalid v2 WQ and RHS replacements never fall back to prior uploads", {
   malformed_wq <- tempfile("malformed-wq-", fileext = ".csv")
   invalid_rhs <- tempfile("invalid-rhs-", fileext = ".csv")
   on.exit(unlink(c(malformed_wq, invalid_rhs), force = TRUE), add = TRUE)
@@ -513,16 +519,18 @@ testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but su
 
   shiny::testServer(dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
-    testthat::expect_identical(wq_upload()$validation$status, "info")
-    testthat::expect_identical(rhs_upload()$validation$status, "info")
+    testthat::expect_identical(local_wq_upload()$validation$status, "info")
+    testthat::expect_identical(local_rhs_upload()$validation$status, "info")
     workflow_complete_artifact("joined_core", "test", "Unrelated core join fixture.")
 
-    valid_wq <- testthat::test_path("..", "fixtures", "wq.csv")
-    valid_rhs <- testthat::test_path("..", "fixtures", "rhs.csv")
+    valid_wq <- testthat::test_path("..", "..", "www", "templates", "local_csv_v2", "wq.csv")
+    valid_rhs <- testthat::test_path("..", "..", "www", "templates", "local_csv_v2", "rhs.csv")
     set_inputs_ignoring_interrupted_promises(
       session,
-      wq_csv = flow_upload_input(valid_wq),
-      rhs_csv = flow_upload_input(valid_rhs)
+      wq_source_mode = "local",
+      rhs_source_mode = "local",
+      local_v2_wq_csv = flow_upload_input(valid_wq),
+      local_v2_rhs_csv = flow_upload_input(valid_rhs)
     )
     session$flushReact()
     testthat::expect_true(artifact_is_current(workflow_artifacts()$wq_input))
@@ -531,15 +539,19 @@ testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but su
 
     set_inputs_ignoring_interrupted_promises(
       session,
-      wq_csv = flow_upload_input(malformed_wq),
-      rhs_csv = flow_upload_input(invalid_rhs)
+      local_v2_wq_csv = flow_upload_input(malformed_wq),
+      local_v2_rhs_csv = flow_upload_input(invalid_rhs)
     )
     session$flushReact()
 
-    wq_message <- paste(wq_upload()$validation$messages, collapse = " ")
-    rhs_message <- paste(rhs_upload()$validation$messages, collapse = " ")
-    testthat::expect_identical(wq_upload()$validation$status, "error")
-    testthat::expect_identical(rhs_upload()$validation$status, "error")
+    wq_message <- paste(local_wq_upload()$validation$messages, collapse = " ")
+    rhs_message <- paste(local_rhs_upload()$validation$messages, collapse = " ")
+    testthat::expect_identical(local_wq_upload()$validation$status, "error")
+    testthat::expect_identical(local_rhs_upload()$validation$status, "error")
+    testthat::expect_null(local_wq_upload()$data)
+    testthat::expect_null(local_rhs_upload()$data)
+    testthat::expect_null(mapped_wq_plot_data())
+    testthat::expect_null(mapped_rhs_plot_data())
     testthat::expect_false(artifact_is_current(workflow_artifacts()$wq_input))
     testthat::expect_false(artifact_is_current(workflow_artifacts()$rhs_input))
     testthat::expect_identical(workflow_artifacts()$joined_enriched$status, "stale")
@@ -549,14 +561,14 @@ testthat::test_that("RAW-07 optional WQ and RHS uploads stay non-blocking but su
 
     set_inputs_ignoring_interrupted_promises(
       session,
-      wq_csv = flow_upload_input(valid_wq),
-      rhs_csv = flow_upload_input(valid_rhs)
+      local_v2_wq_csv = flow_upload_input(valid_wq),
+      local_v2_rhs_csv = flow_upload_input(valid_rhs)
     )
     session$flushReact()
 
     testthat::expect_true(artifact_is_current(workflow_artifacts()$wq_input))
     testthat::expect_true(artifact_is_current(workflow_artifacts()$rhs_input))
-    testthat::expect_identical(wq_upload()$validation$status, "success")
-    testthat::expect_identical(rhs_upload()$validation$status, "success")
+    testthat::expect_identical(local_wq_upload()$validation$status, "success")
+    testthat::expect_identical(local_rhs_upload()$validation$status, "success")
   })
 })

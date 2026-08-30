@@ -137,6 +137,7 @@ testthat::test_that("donor failures retain state and successful processing inval
     raw_recovery_set_inputs(
       session,
       meta_paste = "biol_site_id,flow_site_id\nB1,27090",
+      flow_source_mode = "local",
       local_flow_csv = raw_recovery_upload_input(local_flow_path),
       date_range_flow = as.Date(c("2024-01-01", "2024-12-31")),
       win_width_selector = 6,

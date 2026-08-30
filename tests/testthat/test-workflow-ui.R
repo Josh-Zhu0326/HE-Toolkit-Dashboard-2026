@@ -310,7 +310,7 @@ testthat::test_that("legacy hard-coded progress navigation is removed", {
   testthat::expect_false(grepl("Join & Analyse", active_ui_code, fixed = TRUE))
 })
 
-testthat::test_that("standalone validation Sandbox is retired without orphaning workflow uploads", {
+testthat::test_that("standalone validation Sandbox and legacy WQ/RHS uploads are retired", {
   project_root <- normalizePath(testthat::test_path("..", ".."), winslash = "/", mustWork = TRUE)
   ui_code <- paste(readLines(file.path(project_root, "ui.R"), warn = FALSE), collapse = "\n")
   workflow_ui_code <- paste(
@@ -324,10 +324,16 @@ testthat::test_that("standalone validation Sandbox is retired without orphaning 
   testthat::expect_false(grepl("dc11_workbook", paste(ui_code, server_code), fixed = TRUE))
   testthat::expect_false(grepl("dc11_csv", paste(ui_code, server_code), fixed = TRUE))
 
-  testthat::expect_match(ui_code, "Legacy WQ workflow upload", fixed = TRUE)
-  testthat::expect_match(ui_code, "Legacy RHS workflow upload", fixed = TRUE)
-  testthat::expect_match(ui_code, 'fileInput("wq_csv"', fixed = TRUE)
-  testthat::expect_match(ui_code, 'fileInput("rhs_csv"', fixed = TRUE)
+  testthat::expect_false(grepl("Legacy WQ workflow upload", ui_code, fixed = TRUE))
+  testthat::expect_false(grepl("Legacy RHS workflow upload", ui_code, fixed = TRUE))
+  testthat::expect_false(grepl('fileInput("wq_csv"', ui_code, fixed = TRUE))
+  testthat::expect_false(grepl('fileInput("rhs_csv"', ui_code, fixed = TRUE))
+  testthat::expect_match(ui_code, 'data_source_choice_card("wq")', fixed = TRUE)
+  testthat::expect_match(ui_code, 'data_source_choice_card("rhs")', fixed = TRUE)
+  testthat::expect_false(grepl("current_local_wq_upload", server_code, fixed = TRUE))
+  testthat::expect_false(grepl("current_local_rhs_upload", server_code, fixed = TRUE))
+  testthat::expect_false(grepl("validate_wq_upload", server_code, fixed = TRUE))
+  testthat::expect_false(grepl("validate_rhs_upload", server_code, fixed = TRUE))
   testthat::expect_match(ui_code, '`data-task-imports` = "wq"', fixed = TRUE)
   testthat::expect_match(ui_code, '`data-task-imports` = "rhs"', fixed = TRUE)
 })

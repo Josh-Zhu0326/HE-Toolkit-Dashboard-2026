@@ -18,6 +18,7 @@ testthat::test_that("valid v2 Local Biology is operational and bypasses the exte
     set_inputs_ignoring_interrupted_promises(
       session,
       meta_paste = "biol_site_id,flow_site_id\nB001,00123",
+      biology_source_mode = "local",
       local_v2_biology_csv = biology_upload_input(local_path)
     )
     session$flushReact()
@@ -66,6 +67,7 @@ testthat::test_that("invalid Local Biology replacement cannot reuse a previous s
 
     set_inputs_ignoring_interrupted_promises(
       session,
+      biology_source_mode = "local",
       local_v2_biology_csv = biology_upload_input(valid_path)
     )
     session$flushReact()
@@ -74,14 +76,20 @@ testthat::test_that("invalid Local Biology replacement cannot reuse a previous s
 
     set_inputs_ignoring_interrupted_promises(
       session,
+      biology_source_mode = "local",
       local_v2_biology_csv = biology_upload_input(invalid_path)
     )
     session$flushReact()
 
     testthat::expect_identical(local_biology_upload()$validation$status, "error")
     testthat::expect_false(artifact_is_current(workflow_artifacts()$biology_input))
-    testthat::expect_false(isTRUE(external_biology_loaded()))
+    testthat::expect_true(isTRUE(external_biology_loaded()))
     testthat::expect_error(biol_data(), class = "shiny.silent.error")
+
+    session$setInputs(biology_source_mode = "explorer")
+    session$flushReact()
+    testthat::expect_identical(biol_data()$SAMPLE_ID, "EXTERNAL")
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$biology_input))
   })
 })
 
@@ -97,6 +105,7 @@ testthat::test_that("RAW-05 legacy Local Biology remains preview-only", {
       session,
       meta_paste = "biol_site_id,flow_site_id\n291,27090",
       local_inv_csv = biology_upload_input(valid_biology),
+      flow_source_mode = "local",
       local_flow_csv = biology_upload_input(valid_flow)
     )
     session$flushReact()

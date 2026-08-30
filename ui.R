@@ -272,19 +272,28 @@ page_navbar(
               ),
               div(class = "sidebar-section control-stack action-stack",
                 h5("Core HE imports"),
-                div(
-                  `data-task-imports` = "biology",
-                  dateRangeInput("date_range_biol", "Biology sample dates", start="1990-01-01", end=as.character(Sys.Date())),
-                  actionButton("import_inv", "Import biology data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                conditionalPanel(
+                  condition = "input.biology_source_mode === 'explorer'",
+                  div(
+                    `data-task-imports` = "biology",
+                    dateRangeInput("date_range_biol", "Biology sample dates", start="1990-01-01", end=as.character(Sys.Date())),
+                    actionButton("import_inv", "Import biology data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                  )
                 ),
-                div(
-                  `data-task-imports` = "environment",
-                  actionButton("import_env", "Import environmental data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                conditionalPanel(
+                  condition = "input.environment_source_mode === 'explorer'",
+                  div(
+                    `data-task-imports` = "environment",
+                    actionButton("import_env", "Import environmental data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                  )
                 ),
-                div(
-                  `data-task-imports` = "flow",
-                  dateRangeInput("date_range_flow", "Flow data dates", start="1990-01-01", end=as.character(Sys.Date())),
-                  actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                conditionalPanel(
+                  condition = "input.flow_source_mode === 'explorer'",
+                  div(
+                    `data-task-imports` = "flow",
+                    dateRangeInput("date_range_flow", "Flow data dates", start="1990-01-01", end=as.character(Sys.Date())),
+                    actionButton("import_flow", "Import flow data", class = "client-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                  )
                 )
               ),
               div(class = "sidebar-section control-stack action-stack", `data-task-imports` = "flow",
@@ -301,21 +310,27 @@ page_navbar(
               div(class = "sidebar-section control-stack action-stack", `data-task-imports` = "wq,rhs",
                 h5("Optional WQ/RHS inputs"),
                 div(class = "hint-text", "Upload or retrieve supporting data here. WQ/RHS are applied later as optional enrichment and never block the core biology-flow dataset."),
-                div(
-                  `data-task-imports` = "wq",
-                  dateRangeInput(
-                    "date_range_wq",
-                    "WQ data dates",
-                    start = "2020-01-01",
-                    end = as.character(Sys.Date()),
-                    min = "2000-01-01",
-                    max = as.character(Sys.Date())
-                  ),
-                  actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                conditionalPanel(
+                  condition = "input.wq_source_mode === 'explorer'",
+                  div(
+                    `data-task-imports` = "wq",
+                    dateRangeInput(
+                      "date_range_wq",
+                      "WQ data dates",
+                      start = "2020-01-01",
+                      end = as.character(Sys.Date()),
+                      min = "2000-01-01",
+                      max = as.character(Sys.Date())
+                    ),
+                    actionButton("import_wq_site_ids", "Import WQ using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                  )
                 ),
-                div(
-                  `data-task-imports` = "rhs",
-                  actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                conditionalPanel(
+                  condition = "input.rhs_source_mode === 'explorer'",
+                  div(
+                    `data-task-imports` = "rhs",
+                    actionButton("import_rhs_site_ids", "Import RHS using site IDs", class="wq-rhs-action-button", icon = shiny::icon("file-arrow-down", verify_fa = FALSE))
+                  )
                 )
               )
             ),
@@ -323,16 +338,43 @@ page_navbar(
   ## Main body ----
             nav_panel("Biology Data",
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "biology", `data-task-import-panel` = "true",
+                        data_source_choice_card(
+                          "biology",
+                          tags$details(
+                            class = "dashboard-card",
+                            tags$summary(class = "card-header", "Legacy taxon-level Biology exclusion log"),
+                            div(
+                              class = "card-body",
+                              div(
+                                class = "hint-text",
+                                "This compatibility checkpoint uses the existing biol_site_id, date, taxon and abundance format. It remains preview-only and is separate from the Data Contract v2.0 Biology CSV."
+                              ),
+                              fileInput(
+                                "local_inv_csv",
+                                "Choose legacy taxon-level Biology CSV",
+                                accept = c(".csv", "text/csv")
+                              ),
+                              uiOutput("local_inv_status"),
+                              DT::dataTableOutput("local_inv_preview"),
+                              h5("Exclusion log"),
+                              div(class = "hint-text", "Records removed or flagged during the existing filtering workflow, with the reason for each."),
+                              uiOutput("exclusion_log_status"),
+                              DT::dataTableOutput("exclusion_log_table"),
+                              downloadButton("download_exclusion_log", "Download exclusion log as CSV")
+                            )
+                          )
+                        ),
                         card(class = "dashboard-card",
-                          card_header("Imported biology data"),
-                          p(class = "hint-text", "Review the biology records imported for the mapped biology site IDs."),
+                          card_header("Current biology data"),
+                          p(class = "hint-text", "Review the records from the selected Biology source."),
                           tableOutput("biol_table")
                         )
                       )),
             nav_panel("Environmental Data",
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "environment", `data-task-import-panel` = "true",
+                        data_source_choice_card("environmental"),
                         card(class = "dashboard-card",
-                          card_header("Environmental base data"),
+                          card_header("Current environmental base data"),
                           radioButtons(inputId = "env_data_display", "Display:", choices = c("Data", "PCA")),
                           fluidRow(uiOutput(outputId = "env_tab_pca", height = 600))
                         )
@@ -340,9 +382,10 @@ page_navbar(
             ),
             nav_panel("Flow Data",
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "flow", `data-task-import-panel` = "true",
+                        data_source_choice_card("flow"),
                         card(class = "dashboard-card wide-plot-card",
-                          card_header("Imported flow data"),
-                          p(class = "hint-text", "This view refreshes when the main Flow source or additional donor Flow data is imported."),
+                          card_header("Current flow data"),
+                          p(class = "hint-text", "This view uses the selected Flow source and any additional donor Flow data."),
                           radioButtons(inputId = "flow_data_display", "Display:", choices = c("Completeness stats", "Heatmap")),
                           div(class = "wide-plot-scroll", uiOutput(outputId = "flow_heatmap")),
                           conditionalPanel(
@@ -360,6 +403,7 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "wq", `data-task-import-panel` = "true",
                         h3(class = "section-title", "Water Quality supporting data"),
                         p(class = "page-lead", "Mapped WQ source data can be reviewed and downloaded here. Build the processed WQ summary in Stage 2."),
+                        data_source_choice_card("wq"),
                         layout_columns(
                           col_widths = 12,
                           card(class = "dashboard-card", full_screen = TRUE,
@@ -377,6 +421,7 @@ page_navbar(
                       div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "rhs", `data-task-import-panel` = "true",
                         h3(class = "section-title", "River Habitat Survey supporting data"),
                         p(class = "page-lead", "Mapped RHS data can be reviewed and downloaded here. Missing or TBC RHS IDs are handled safely."),
+                        data_source_choice_card("rhs"),
                         layout_columns(
                           col_widths = 12,
                           card(class = "dashboard-card", full_screen = TRUE,
@@ -386,67 +431,6 @@ page_navbar(
                             div(class = "download-row",
                               downloadButton("download_mapped_rhs_csv", "Download mapped RHS data as CSV", class = "wq-rhs-action-button")
                             )
-                          )
-                        )
-                      )
-            ),
-            nav_panel("Local File Import",
-                      div(class = "dashboard-page dashboard-page-wide", `data-task-imports` = "biology,environment,flow,wq,rhs", `data-task-import-panel` = "true",
-                        local_csv_checkpoint_panel(),
-                        tags$details(
-                          class = "dashboard-card",
-                          `data-task-imports` = "biology",
-                          tags$summary(class = "card-header", "Legacy taxon-level Biology exclusion log"),
-                          div(
-                            class = "card-body",
-                            div(
-                              class = "hint-text",
-                              "This compatibility checkpoint uses the existing biol_site_id, date, taxon and abundance format. It is separate from the Data Contract v2.0 Biology CSV above."
-                            ),
-                            fileInput(
-                              "local_inv_csv",
-                              "Choose legacy taxon-level Biology CSV",
-                              accept = c(".csv", "text/csv")
-                            ),
-                            uiOutput("local_inv_status"),
-                            DT::dataTableOutput("local_inv_preview"),
-                            h5("Exclusion log"),
-                            div(class = "hint-text", "Records removed or flagged during the existing filtering workflow, with the reason for each."),
-                            uiOutput("exclusion_log_status"),
-                            DT::dataTableOutput("exclusion_log_table"),
-                            downloadButton("download_exclusion_log", "Download exclusion log as CSV")
-                          )
-                        ),
-                        tags$details(
-                          class = "dashboard-card",
-                          `data-task-imports` = "wq",
-                          tags$summary(class = "card-header", "Legacy WQ workflow upload"),
-                          div(
-                            class = "card-body",
-                            div(
-                              class = "hint-text",
-                              "This temporary compatibility entry keeps the existing mapped WQ workflow available while Data Contract v2.0 ingestion is completed. Use the WQ checkpoint above for the primary upload-time validation result."
-                            ),
-                            fileInput("wq_csv", "Choose legacy workflow WQ CSV", accept = c(".csv", "text/csv")),
-                            uiOutput("wq_validation_status"),
-                            h5("WQ preview"),
-                            DT::dataTableOutput("wq_preview")
-                          )
-                        ),
-                        tags$details(
-                          class = "dashboard-card",
-                          `data-task-imports` = "rhs",
-                          tags$summary(class = "card-header", "Legacy RHS workflow upload"),
-                          div(
-                            class = "card-body",
-                            div(
-                              class = "hint-text",
-                              "This temporary compatibility entry keeps the existing mapped RHS workflow available while Data Contract v2.0 ingestion is completed. Use the RHS checkpoint above for the primary upload-time validation result."
-                            ),
-                            fileInput("rhs_csv", "Choose legacy workflow RHS CSV", accept = c(".csv", "text/csv")),
-                            uiOutput("rhs_validation_status"),
-                            h5("RHS preview"),
-                            DT::dataTableOutput("rhs_preview")
                           )
                         )
                       )
