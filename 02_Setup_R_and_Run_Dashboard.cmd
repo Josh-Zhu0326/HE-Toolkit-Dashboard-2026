@@ -13,6 +13,7 @@ set "R_VERSION="
 set "R_VERSION_KEY="
 set "R_LIBRARY_ROOT=%LOCALAPPDATA%\HE-Toolkit\R-library"
 set "LOG_DIR=%LOCALAPPDATA%\HE-Toolkit\logs"
+set "RUN_DIR=%LOCALAPPDATA%\HE-Toolkit\run"
 set "SETUP_LOG="
 set "SERVER_LOG="
 
@@ -37,9 +38,23 @@ if errorlevel 1 (
   goto :failed
 )
 
+powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %APP_PORT% -State Listen -ErrorAction SilentlyContinue) { exit 10 } else { exit 0 }"
+if errorlevel 1 (
+  echo.
+  echo [ERROR] Port %APP_PORT% is already in use. Another Dashboard instance or program may already be running.
+  echo Close the existing Dashboard or process, then run this launcher again.
+  echo If it was started by this launcher, run 03_Stop_Dashboard.cmd.
+  goto :failed
+)
+
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 if errorlevel 1 (
   echo [ERROR] The dashboard log folder could not be created.
+  goto :failed
+)
+if not exist "%RUN_DIR%" mkdir "%RUN_DIR%"
+if errorlevel 1 (
+  echo [ERROR] The dashboard runtime folder could not be created.
   goto :failed
 )
 for /f "usebackq delims=" %%T in (`powershell -NoProfile -Command "Get-Date -Format 'yyyyMMdd-HHmmss-fff'"`) do set "RUN_STAMP=%%T"
@@ -121,18 +136,12 @@ if errorlevel 1 (
 )
 
 powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %APP_PORT% -State Listen -ErrorAction SilentlyContinue) { exit 10 } else { exit 0 }"
-if "%ERRORLEVEL%"=="10" (
+if errorlevel 1 (
   echo.
-  echo Port %APP_PORT% is already in use. Checking the existing local website...
-  powershell -NoProfile -Command "$r=Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%APP_PORT%' -TimeoutSec 5; if($r.StatusCode -eq 200 -and $r.Content -match 'HE Toolkit|Hydro-Ecology'){exit 0}else{exit 1}"
-  if errorlevel 1 (
-    echo [ERROR] Port %APP_PORT% is being used by another program or an unresponsive website.
-    echo Close that program, then run this file again.
-    goto :failed
-  )
-  start "" "http://127.0.0.1:%APP_PORT%"
-  echo The existing HE Toolkit dashboard responded successfully and was opened.
-  goto :success
+  echo [ERROR] Port %APP_PORT% became occupied during setup. Another Dashboard instance or program may now be running.
+  echo Close the existing Dashboard or process, then run this launcher again.
+  echo If it was started by this launcher, run 03_Stop_Dashboard.cmd.
+  goto :failed
 )
 
 echo.
@@ -144,7 +153,7 @@ echo Keep the new R window open while using the dashboard.
 >>"%SERVER_LOG%" echo R version: %R_VERSION%
 >>"%SERVER_LOG%" echo R library version key: %R_VERSION_KEY%
 >>"%SERVER_LOG%" echo Customer runtime library: %R_LIBS_USER%
-start "HE Toolkit Dashboard Server" /D "%PROJECT_DIR%" "%RSCRIPT_EXE%" --vanilla -e "shiny::runApp('.', port=%APP_PORT%, host='127.0.0.1', launch.browser=FALSE)" 1>>"%SERVER_LOG%" 2>&1
+start "HE Toolkit Dashboard Server" /D "%PROJECT_DIR%" "%ComSpec%" /D /S /C ""%RSCRIPT_EXE%" --vanilla -e "shiny::runApp('.', port=%APP_PORT%, host='127.0.0.1', launch.browser=FALSE)" 1>>"%SERVER_LOG%" 2>&1"
 
 echo Waiting for the dashboard to become ready...
 powershell -NoProfile -Command "$url='http://127.0.0.1:%APP_PORT%'; $deadline=[DateTime]::UtcNow.AddSeconds(180); while([DateTime]::UtcNow -lt $deadline){ $remaining=[int][Math]::Ceiling(($deadline-[DateTime]::UtcNow).TotalSeconds); if($remaining -le 0){break}; try { $r=Invoke-WebRequest -UseBasicParsing -Uri $url -MaximumRedirection 5 -TimeoutSec ([Math]::Min(30,$remaining)); if($r.StatusCode -eq 200 -and $r.Content -match 'shiny' -and $r.Content -match 'HE Toolkit|Hydro-Ecology'){ exit 0 } } catch {}; if([DateTime]::UtcNow -lt $deadline){Start-Sleep -Seconds 1} }; exit 1"
@@ -159,8 +168,18 @@ if errorlevel 1 (
   goto :failed
 )
 
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PROJECT_DIR%\scripts\windows\record_dashboard_process.ps1" -Port %APP_PORT% -RscriptPath "%RSCRIPT_EXE%" -ProjectDirectory "%PROJECT_DIR%" -RuntimeDirectory "%RUN_DIR%" -RunStamp "%RUN_STAMP%" -ServerLog "%SERVER_LOG%"
+if errorlevel 1 (
+  echo.
+  echo [ERROR] The Dashboard started, but its process ownership could not be recorded safely.
+  echo No process was stopped. Please review the server log:
+  echo %SERVER_LOG%
+  goto :untracked
+)
+
 start "" "http://127.0.0.1:%APP_PORT%"
 echo The dashboard responded successfully and has been opened in your browser.
+echo To stop it later, run 03_Stop_Dashboard.cmd.
 
 :success
 echo.
@@ -168,6 +187,15 @@ echo [SUCCESS] Environment check completed.
 echo.
 pause
 exit /b 0
+
+:untracked
+echo.
+echo The Dashboard may still be running, but it could not be registered for safe stopping.
+echo Close the Dashboard server window to stop it before trying again.
+echo No project data was deleted.
+echo.
+pause
+exit /b 1
 
 :find_r
 for /f "delims=" %%R in ('where Rscript.exe 2^>nul') do if not defined RSCRIPT_EXE set "RSCRIPT_EXE=%%R"
