@@ -173,7 +173,7 @@ summarise_hev_provenance <- function(provenance) {
   }
   sprintf(
     "Current HEV source: %s; Flow mode: %s; filter version: %s; site: %s; biology: %s; flow: %s; date range: %s%s.",
-    provenance$source_dataset,
+    joined_dataset_display_label(provenance$source_dataset),
     normalise_hev_flow_mode(provenance$flow_mode),
     provenance$filter_version,
     provenance$site_id,

@@ -1,5 +1,6 @@
 source(testthat::test_path("..", "..", "R", "workflow_config.R"))
 source(testthat::test_path("..", "..", "R", "workflow_state.R"))
+source(testthat::test_path("..", "..", "R", "display_label_helpers.R"))
 source(testthat::test_path("..", "..", "R", "workflow_ui.R"))
 
 render_workflow_html <- function(tag) {
@@ -445,9 +446,44 @@ testthat::test_that("optional reusable artifacts do not affect required Stage st
     "Downloadable Joined HE dataset checkpoint",
     fixed = TRUE
   )
-  testthat::expect_false(grepl("Enriched Joined HE dataset", html, fixed = TRUE))
+  testthat::expect_false(grepl(
+    "Joined HE dataset with optional supporting data",
+    html,
+    fixed = TRUE
+  ))
   testthat::expect_identical(registry$joined_enriched$status, "not_started")
   testthat::expect_identical(workflow_stage_status(task, 3L, registry), "complete")
+})
+
+testthat::test_that("checkpoint data-source enums use joined dataset display labels", {
+  task <- get_he_workflow_task("generate_hev")
+  registry <- new_he_artifact_registry()
+  registry <- set_he_artifact_status(
+    registry,
+    "analysis_dataset",
+    "complete",
+    data_source = "joined_enriched",
+    history_summary = "Current analysis fixture."
+  )
+  registry <- set_he_artifact_status(
+    registry,
+    "hev_result",
+    "complete",
+    data_source = "joined_core",
+    history_summary = "Current HEV fixture."
+  )
+
+  html <- render_workflow_html(workflow_checkpoint_ui(task, 4L, registry))
+
+  testthat::expect_match(
+    html,
+    "Joined HE dataset with optional supporting data",
+    fixed = TRUE
+  )
+  testthat::expect_match(html, "Core Joined HE dataset", fixed = TRUE)
+  testthat::expect_false(grepl("joined_core|joined_enriched", html))
+  testthat::expect_identical(registry$analysis_dataset$data_source, "joined_enriched")
+  testthat::expect_identical(registry$hev_result$data_source, "joined_core")
 })
 
 testthat::test_that("route-only required Stages never present themselves as optional", {
