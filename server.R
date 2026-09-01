@@ -105,7 +105,7 @@ function(input, output, session){
   joined_enriched_result <- reactiveVal(list(
     status = "not_ready",
     joined_enriched = NULL,
-    messages = "Optional enrichment has not been built.",
+    messages = "Optional supporting data have not been built.",
     provenance = empty_enrichment_provenance(character())
   ))
   selected_enrichments <- reactive({
@@ -3374,12 +3374,17 @@ function(input, output, session){
 
     for (enrichment_name in selected) {
       artifact_id <- paste0(enrichment_name, "_enrichment")
+      enrichment_label <- optional_supporting_data_display_labels(enrichment_name)
       if (enrichment_name %in% result$provenance$successful_enrichments) {
         workflow_set_artifact(
           artifact_id,
           "complete",
-          data_source = paste(toupper(enrichment_name), "optional enrichment"),
-          history_summary = paste("Prepared", enrichment_name, "enrichment for the current Core Joined HE dataset."),
+          data_source = paste(enrichment_label, "optional supporting data"),
+          history_summary = paste(
+            "Prepared",
+            enrichment_label,
+            "supporting data for the current Core Joined HE dataset."
+          ),
           invalidate_downstream = TRUE
         )
       } else {
@@ -3403,12 +3408,13 @@ function(input, output, session){
       workflow_set_artifact(
         "joined_enriched",
         if (identical(result$status, "warning")) "warning" else "complete",
-        data_source = "Optional WQ/RHS enrichment",
-        history_summary = sprintf(
-          "Created enriched Joined HE dataset with %d row(s); successful: %s; failed: %s.",
-          nrow(result$joined_enriched),
-          paste(result$provenance$successful_enrichments, collapse = ", "),
-          paste(result$provenance$failed_enrichments, collapse = ", ")
+        data_source = "Optional supporting data",
+        history_summary = paste(
+          sprintf(
+            "Created a Joined HE dataset with optional supporting data containing %d row(s).",
+            nrow(result$joined_enriched)
+          ),
+          paste(result$messages, collapse = " ")
         ),
         invalidate_downstream = TRUE
       )
@@ -3417,8 +3423,11 @@ function(input, output, session){
       workflow_set_artifact(
         "joined_enriched",
         "blocked",
-        blocking_reason = result$messages,
-        next_action = "Select WQ/RHS enrichment with usable mapped summary data, or continue with the core Joined HE dataset.",
+        blocking_reason = paste(result$messages, collapse = " "),
+        next_action = paste(
+          "Select Water Quality or River Habitat Survey supporting data with usable mapped summaries,",
+          "or continue with the Core Joined HE dataset."
+        ),
         invalidate_downstream = TRUE
       )
     }
@@ -3428,31 +3437,38 @@ function(input, output, session){
     } else {
       "warning"
     }
-    showNotification(result$messages, type = notification_type, duration = 8)
+    showNotification(
+      paste(result$messages, collapse = " "),
+      type = notification_type,
+      duration = 8
+    )
   }, ignoreInit = TRUE)
 
   output$joined_enrichment_status <- renderUI({
     result <- joined_enriched_result()
-    messages <- c(
-      result$messages,
-      if (is.null(result$joined_enriched)) {
-        "Core Joined HE dataset remains available."
-      } else {
-        sprintf(
-          "Successful enrichment: %s. Failed enrichment: %s.",
-          paste(result$provenance$successful_enrichments, collapse = ", "),
-          paste(result$provenance$failed_enrichments, collapse = ", ")
+    has_cached_enriched <- !is.null(result$joined_enriched) &&
+      nrow(result$joined_enriched) > 0L
+    if (has_cached_enriched && !workflow_artifact_is_current("joined_enriched")) {
+      return(format_validation_message(list(
+        status = "warning",
+        messages = c(
+          optional_supporting_data_rebuild_message(),
+          "The Core Joined HE dataset remains available."
         )
-      }
-    )
-    format_validation_message(list(status = result$status, messages = messages))
+      )))
+    }
+    format_validation_message(list(
+      status = result$status,
+      messages = result$messages
+    ))
   })
 
   current_joined_source <- reactive({
     derive_analysis_dataset(
       joined_core = join_data(),
       joined_enriched = joined_enriched_result()$joined_enriched,
-      use_enriched = isTRUE(input$use_joined_enriched),
+      use_enriched = isTRUE(input$use_joined_enriched) &&
+        workflow_artifact_is_current("joined_enriched"),
       filter_selection = NULL
     )
   })
@@ -3462,28 +3478,78 @@ function(input, output, session){
     format_validation_message(list(
       status = "info",
       messages = sprintf(
-        "Current analysis source: %s; rows: %d; fingerprint: %s.",
-        source$source_dataset,
-        source$source_rows,
-        substr(source$source_fingerprint, 1L, 18L)
+        "You are currently using the %s (%d rows).",
+        joined_dataset_display_label(source$source_dataset),
+        source$source_rows
       )
     ))
   })
 
   output$joined_enriched_table <- DT::renderDataTable({
     result <- joined_enriched_result()
+    req(workflow_artifact_is_current("joined_enriched"))
     req(!is.null(result$joined_enriched), nrow(result$joined_enriched) > 0)
     result$joined_enriched
   }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
+
+  observeEvent(selected_enrichments(), {
+    result <- isolate(joined_enriched_result())
+    has_cached_enriched <- !is.null(result$joined_enriched) &&
+      nrow(result$joined_enriched) > 0L
+    if (!has_cached_enriched ||
+        enrichment_result_matches_selection(result, selected_enrichments())) {
+      return()
+    }
+
+    artifact <- isolate(workflow_artifacts()$joined_enriched)
+    joined_enriched_result(modifyList(result, list(
+      status = "stale",
+      messages = optional_supporting_data_rebuild_message()
+    )))
+    workflow_set_artifact(
+      "joined_enriched",
+      "stale",
+      data_source = artifact$data_source,
+      history_summary = artifact$history_summary,
+      blocking_reason = optional_supporting_data_rebuild_message(),
+      next_action = "Build the dataset again with the currently selected optional supporting data.",
+      invalidate_downstream = TRUE
+    )
+  }, ignoreInit = TRUE)
+
+  observeEvent(workflow_artifacts()$joined_enriched$status, {
+    result <- isolate(joined_enriched_result())
+    has_cached_enriched <- !is.null(result$joined_enriched) &&
+      nrow(result$joined_enriched) > 0L
+    if (has_cached_enriched &&
+        !workflow_artifact_is_current("joined_enriched")) {
+      updateCheckboxInput(session, "use_joined_enriched", value = FALSE)
+      showNotification(
+        optional_supporting_data_rebuild_message(),
+        type = "warning",
+        duration = 8
+      )
+    }
+  }, ignoreInit = TRUE)
 
   observeEvent(input$use_joined_enriched, {
     req(join_data())
     if (isTRUE(input$use_joined_enriched) &&
         (is.null(joined_enriched_result()$joined_enriched) ||
-         nrow(joined_enriched_result()$joined_enriched) == 0L)) {
+         nrow(joined_enriched_result()$joined_enriched) == 0L ||
+         !workflow_artifact_is_current("joined_enriched"))) {
       updateCheckboxInput(session, "use_joined_enriched", value = FALSE)
+      message <- if (!is.null(joined_enriched_result()$joined_enriched) &&
+          nrow(joined_enriched_result()$joined_enriched) > 0L) {
+        optional_supporting_data_rebuild_message()
+      } else {
+        paste(
+          "No current dataset with optional supporting data is available.",
+          "Continue with the Core Joined HE dataset or build the optional supporting data first."
+        )
+      }
       showNotification(
-        "No current enriched dataset is available. Continue with joined_core or build optional enrichment first.",
+        message,
         type = "warning"
       )
       return()
@@ -3494,7 +3560,10 @@ function(input, output, session){
     workflow_complete_artifact(
       "filter_selection",
       "Default analysis selection",
-      sprintf("Reset analysis selection after switching to %s.", source$source_dataset)
+      sprintf(
+        "Reset the analysis selection after switching to the %s.",
+        joined_dataset_display_label(source$source_dataset)
+      )
     )
     workflow_complete_artifact(
       "exclusion_log",
@@ -3506,7 +3575,7 @@ function(input, output, session){
       source$source_dataset,
       sprintf(
         "Created analysis selection version 0 from %s with %d row(s).",
-        source$source_dataset,
+        joined_dataset_display_label(source$source_dataset),
         source$source_rows
       )
     )
@@ -3929,7 +3998,7 @@ function(input, output, session){
     joined_enriched_result(list(
       status = "not_ready",
       joined_enriched = NULL,
-      messages = "Optional enrichment has not been built for the current core Joined HE dataset.",
+      messages = "Optional supporting data have not been built for the current Core Joined HE dataset.",
       provenance = empty_enrichment_provenance(character())
     ))
     updateCheckboxInput(session, "use_joined_enriched", value = FALSE)
@@ -3970,7 +4039,10 @@ function(input, output, session){
     workflow_complete_artifact(
       "analysis_dataset",
       "Core Joined HE dataset",
-      sprintf("Created analysis selection version 0 from joined_core with %d row(s).", nrow(result))
+      sprintf(
+        "Created analysis selection version 0 from the Core Joined HE dataset with %d row(s).",
+        nrow(result)
+      )
     )
     hev_current_result(list(
       status = "not_ready",

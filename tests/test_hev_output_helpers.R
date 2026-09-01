@@ -1,6 +1,7 @@
 # test_hev_output_helpers.R
 # Expect: "test_hev_output_helpers.R: all checks passed"
 
+source(file.path("R", "display_label_helpers.R"))
 source(file.path("R", "hev_output_helpers.R"))
 source(file.path("R", "hev_threshold_helpers.R"))
 
@@ -79,7 +80,12 @@ stopifnot(identical(provenance$flow_source_revision, 3L))
 stopifnot(identical(provenance$river_type, "chalk"))
 stopifnot(identical(provenance$filter_version, 2L))
 stopifnot(identical(provenance$site_id, "B001"))
-stopifnot(grepl("joined_enriched", summarise_hev_provenance(provenance), fixed = TRUE))
+stopifnot(grepl(
+  "Joined HE dataset with optional supporting data",
+  summarise_hev_provenance(provenance),
+  fixed = TRUE
+))
+stopifnot(!grepl("joined_enriched", summarise_hev_provenance(provenance), fixed = TRUE))
 stopifnot(grepl("Flow mode: flow_statistics", summarise_hev_provenance(provenance), fixed = TRUE))
 stopifnot(grepl("status boundaries: chalk", summarise_hev_provenance(provenance), fixed = TRUE))
 

@@ -2,6 +2,7 @@
 # Expect: "test_joined_dataset_boundary_helpers.R: all checks passed"
 
 source(file.path("R", "analysis_filter_helpers.R"))
+source(file.path("R", "display_label_helpers.R"))
 source(file.path("R", "joined_dataset_boundary_helpers.R"))
 
 joined_core <- data.frame(
@@ -50,6 +51,9 @@ none <- build_joined_enriched(
 stopifnot(identical(none$status, "not_ready"))
 stopifnot(is.null(none$joined_enriched))
 stopifnot(identical(joined_core, core_before))
+stopifnot(grepl("No optional supporting data were selected", none$messages, fixed = TRUE))
+stopifnot(grepl("Core Joined HE dataset", none$messages, fixed = TRUE))
+stopifnot(!grepl("joined_core|joined_enriched", paste(none$messages, collapse = " ")))
 
 # --- 2. Successful WQ enrichment creates a separate joined_enriched ----------
 wq_only <- build_joined_enriched(
@@ -64,6 +68,8 @@ stopifnot(!("orthophosphate_mean" %in% names(joined_core)))
 stopifnot(identical(joined_core, core_before))
 stopifnot(identical(wq_only$provenance$successful_enrichments, "wq"))
 stopifnot(wq_only$provenance$coverage$matched_rows == 2L)
+stopifnot(grepl("Water Quality", paste(wq_only$messages, collapse = " "), fixed = TRUE))
+stopifnot(!grepl("Failed|Could not add", paste(wq_only$messages, collapse = " ")))
 
 # --- 2b. Selection/list names are normalised and value types are preserved ----
 rhs_only <- build_joined_enriched(
@@ -86,6 +92,9 @@ stopifnot("orthophosphate_mean" %in% names(partial$joined_enriched))
 stopifnot(!("HMSRBB" %in% names(partial$joined_enriched)))
 stopifnot(identical(partial$provenance$successful_enrichments, "wq"))
 stopifnot(identical(partial$provenance$failed_enrichments, "rhs"))
+stopifnot(grepl("Added: Water Quality", paste(partial$messages, collapse = " "), fixed = TRUE))
+stopifnot(grepl("Could not add: River Habitat Survey", paste(partial$messages, collapse = " "), fixed = TRUE))
+stopifnot(!grepl("wq|rhs", paste(partial$messages, collapse = " ")))
 
 # --- 4. All selected enrichment failing does not create joined_enriched -------
 all_failed <- build_joined_enriched(
@@ -96,6 +105,8 @@ all_failed <- build_joined_enriched(
 stopifnot(identical(all_failed$status, "warning"))
 stopifnot(is.null(all_failed$joined_enriched))
 stopifnot(identical(joined_core, core_before))
+stopifnot(!grepl("Added:", paste(all_failed$messages, collapse = " "), fixed = TRUE))
+stopifnot(grepl("Could not add: River Habitat Survey", paste(all_failed$messages, collapse = " "), fixed = TRUE))
 
 # --- 5. Duplicate enrichment keys are rejected rather than duplicated ---------
 bad_wq <- rbind(wq_summary, wq_summary[1, , drop = FALSE])
@@ -120,6 +131,17 @@ enriched_analysis <- derive_analysis_dataset(joined_core, wq_only$joined_enriche
 stopifnot(identical(enriched_analysis$source_dataset, "joined_enriched"))
 stopifnot(!identical(enriched_analysis$source_fingerprint, core_analysis$source_fingerprint))
 stopifnot("orthophosphate_mean" %in% names(enriched_analysis$analysis_dataset))
+stopifnot(identical(joined_dataset_display_label("joined_core"), "Core Joined HE dataset"))
+stopifnot(identical(
+  joined_dataset_display_label("joined_enriched"),
+  "Joined HE dataset with optional supporting data"
+))
+stopifnot(identical(
+  optional_supporting_data_display_labels(c("wq", "rhs")),
+  c("Water Quality", "River Habitat Survey")
+))
+stopifnot(enrichment_result_matches_selection(wq_only, "wq"))
+stopifnot(!enrichment_result_matches_selection(wq_only, c("wq", "rhs")))
 
 selection <- exclude_record(new_filter_selection(), record_id = "S002")
 filtered <- derive_analysis_dataset(joined_core, wq_only$joined_enriched, use_enriched = TRUE, filter_selection = selection)

@@ -17,7 +17,7 @@ he_workflow_artifact_labels <- c(
   joined_core = "Core Joined HE dataset",
   wq_enrichment = "Water-quality enrichment",
   rhs_enrichment = "River Habitat Survey enrichment",
-  joined_enriched = "Enriched Joined HE dataset",
+  joined_enriched = "Joined HE dataset with optional supporting data",
   processed_dataset_checkpoint = "Downloadable Joined HE dataset checkpoint",
   filter_selection = "Current record selection",
   exclusion_log = "Exclusion and restore log",
@@ -41,6 +41,14 @@ workflow_present_value <- function(value, fallback) {
   }
   text <- paste(as.character(value), collapse = ", ")
   if (!nzchar(trimws(text))) fallback else text
+}
+
+workflow_present_data_source <- function(value, fallback) {
+  presented <- workflow_present_value(value, fallback)
+  if (identical(presented, fallback)) {
+    return(presented)
+  }
+  paste(joined_dataset_display_label(value), collapse = ", ")
 }
 
 workflow_status_label <- function(status) {
@@ -747,7 +755,7 @@ workflow_checkpoint_ui <- function(task, stage_index, registry) {
             ),
             workflow_checkpoint_row(
               "Data source",
-              workflow_present_value(artifact$data_source, "Not available yet")
+              workflow_present_data_source(artifact$data_source, "Not available yet")
             ),
             workflow_checkpoint_row(
               "Data history",

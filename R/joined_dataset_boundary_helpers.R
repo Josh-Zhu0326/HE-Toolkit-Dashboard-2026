@@ -17,6 +17,16 @@ normalise_named_enrichment_list <- function(values) {
   values
 }
 
+enrichment_result_matches_selection <- function(result, selected_enrichments) {
+  if (is.null(result$provenance$selected_enrichments)) {
+    return(FALSE)
+  }
+  identical(
+    sort(normalise_enrichment_selection(result$provenance$selected_enrichments)),
+    sort(normalise_enrichment_selection(selected_enrichments))
+  )
+}
+
 joined_dataset_fingerprint <- function(data) {
   if (is.null(data) || !is.data.frame(data)) {
     return(NA_character_)
@@ -120,7 +130,7 @@ build_joined_enriched <- function(joined_core,
     return(list(
       status = "not_ready",
       joined_enriched = NULL,
-      messages = "No optional enrichment selected; continue with joined_core.",
+      messages = enrichment_result_messages("not_ready", provenance),
       provenance = provenance
     ))
   }
@@ -156,22 +166,17 @@ build_joined_enriched <- function(joined_core,
     return(list(
       status = "warning",
       joined_enriched = NULL,
-      messages = "Selected optional enrichment did not produce a usable joined_enriched dataset; continue with joined_core.",
+      messages = enrichment_result_messages("warning", provenance),
       provenance = provenance
     ))
   }
 
   status <- if (length(provenance$failed_enrichments) > 0) "warning" else "success"
-  message <- if (identical(status, "warning")) {
-    "Created joined_enriched with successful enrichment only; failed enrichment sources were excluded."
-  } else {
-    "Created joined_enriched from joined_core and selected optional enrichment."
-  }
 
   list(
     status = status,
     joined_enriched = joined_enriched,
-    messages = message,
+    messages = enrichment_result_messages(status, provenance),
     provenance = provenance
   )
 }

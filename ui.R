@@ -666,7 +666,7 @@ page_navbar(
           uiOutput("processed_dataset_checkpoint_status"),
           uiOutput("processed_dataset_checkpoint_download"),
           tags$hr(),
-          h5("Optional enrichment"),
+          h5("Optional supporting data"),
           checkboxGroupInput(
             "selected_enrichments",
             "Add supporting data",
@@ -674,13 +674,13 @@ page_navbar(
           ),
           actionButton(
             "build_joined_enriched",
-            "Build enriched dataset",
+            "Build dataset with optional supporting data",
             class = "client-action-button",
             icon = shiny::icon("layer-group", verify_fa = FALSE)
           ),
           checkboxInput(
             "use_joined_enriched",
-            "Use enriched dataset for analysis",
+            "Use dataset with optional supporting data for analysis",
             value = FALSE
           ),
           uiOutput("joined_enrichment_status"),
@@ -698,7 +698,7 @@ page_navbar(
           ),
           card(
             class = "dashboard-card",
-            card_header("Optional enriched data"),
+            card_header("Joined HE data with optional supporting data"),
             dataTableOutput("joined_enriched_table")
           )
         )
