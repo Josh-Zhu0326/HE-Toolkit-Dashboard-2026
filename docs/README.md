@@ -29,6 +29,7 @@ retained inside the documents and in Git history.
 - [Error and guidance catalogue v2.0](requirements/error-and-guidance-message-catalogue-v2.0.md) ([Week 8 historical baseline](requirements/WK8-09_Complete_Error_List.md))
 - [Gate D technical readiness](project/readiness/gate-d-technical-readiness.md)
 - [Browser verification report](testing/reports/browser-2026-08-09/RAW-01-25_Final_Browser_Manual_Verification_Report.md)
+- [Dissertation final engineering evidence](testing/plans/dissertation-final-evidence.md)
 - [Windows customer crash diagnostics](operations/windows-customer-crash-diagnostics.md)
 
 ## Placement Rules
