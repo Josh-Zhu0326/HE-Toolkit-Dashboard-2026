@@ -1,13 +1,18 @@
-source(testthat::test_path("..", "..", "scripts", "final_evidence_helpers.R"))
+source(testthat::test_path(
+  "..",
+  "..",
+  "scripts",
+  "task_oriented_workflow_evidence_helpers.R"
+))
 
-testthat::test_that("final evidence request enforces SHA, clean state, and external immutable output", {
+testthat::test_that("task workflow evidence request enforces an immutable baseline", {
   fake_repo <- tempfile("final-evidence-repo-")
   dir.create(fake_repo)
   on.exit(unlink(fake_repo, recursive = TRUE, force = TRUE), add = TRUE)
   sha <- paste(rep("a", 40L), collapse = "")
   output <- tempfile("final-evidence-output-")
 
-  validated <- validate_final_evidence_request(
+  validated <- task_workflow_evidence_validate_request(
     sha,
     output,
     fake_repo,
@@ -16,47 +21,50 @@ testthat::test_that("final evidence request enforces SHA, clean state, and exter
     character()
   )
   testthat::expect_identical(validated$expected_sha, sha)
-  testthat::expect_false(final_evidence_path_is_within(validated$output_dir, fake_repo))
+  testthat::expect_false(task_workflow_evidence_path_is_within(
+    validated$output_dir,
+    fake_repo
+  ))
 
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       "abc", output, fake_repo, sha, sha, character()
     ),
     "complete 40-character",
     fixed = TRUE
   )
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       sha, output, fake_repo, paste(rep("b", 40L), collapse = ""), sha,
       character()
     ),
-    "HEAD does not match",
+    "HEAD does not match BASELINE_SHA",
     fixed = TRUE
   )
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       sha, output, fake_repo, sha, paste(rep("b", 40L), collapse = ""),
       character()
     ),
-    "origin/main does not match",
+    "origin/main does not match BASELINE_SHA",
     fixed = TRUE
   )
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       sha, output, fake_repo, sha, sha, "?? local-evidence.txt"
     ),
     "clean worktree",
     fixed = TRUE
   )
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       sha, file.path(fake_repo, "evidence"), fake_repo, sha, sha, character()
     ),
     "outside the repository",
     fixed = TRUE
   )
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       sha, "relative/evidence", fake_repo, sha, sha, character()
     ),
     "absolute path",
@@ -66,7 +74,7 @@ testthat::test_that("final evidence request enforces SHA, clean state, and exter
   dir.create(output)
   on.exit(unlink(output, recursive = TRUE, force = TRUE), add = TRUE)
   testthat::expect_error(
-    validate_final_evidence_request(
+    task_workflow_evidence_validate_request(
       sha, output, fake_repo, sha, sha, character()
     ),
     "attempts are immutable",
@@ -87,7 +95,7 @@ testthat::test_that("testthat evidence summary uses explicit reporting fields", 
     real = c(0.1, 0.2),
     stringsAsFactors = FALSE
   )
-  summary <- summarise_testthat_cases(cases)
+  summary <- task_workflow_evidence_summarise_testthat_cases(cases)
 
   testthat::expect_identical(summary$test_files, 2L)
   testthat::expect_identical(summary$test_cases, 2L)
@@ -101,7 +109,7 @@ testthat::test_that("testthat evidence summary uses explicit reporting fields", 
 })
 
 testthat::test_that("boundary catalogue maps exactly B01 through B07", {
-  catalog <- final_evidence_boundary_catalog()
+  catalog <- task_workflow_evidence_boundary_catalog()
   cases <- data.frame(
     file = rep("test-dissertation-boundary-evidence.R", nrow(catalog)),
     context = "",
@@ -118,7 +126,7 @@ testthat::test_that("boundary catalogue maps exactly B01 through B07", {
     status = "PASS",
     stringsAsFactors = FALSE
   )
-  boundaries <- boundary_result_table(cases, catalog)
+  boundaries <- task_workflow_evidence_boundary_result_table(cases, catalog)
 
   testthat::expect_identical(boundaries$scenario_id, sprintf("B%02d", 1:7))
   testthat::expect_true(all(boundaries$status == "PASS"))
@@ -131,7 +139,7 @@ testthat::test_that("UI templates and warning detection remain auditable", {
   dir.create(output)
   on.exit(unlink(output, recursive = TRUE, force = TRUE), add = TRUE)
   sha <- paste(rep("c", 40L), collapse = "")
-  write_boundary_ui_templates(output, sha)
+  task_workflow_evidence_write_boundary_ui_templates(output, sha)
 
   records <- list.files(
     file.path(output, "ui"),
@@ -145,6 +153,10 @@ testthat::test_that("UI templates and warning detection remain auditable", {
     function(path) any(grepl(sha, readLines(path, warn = FALSE), fixed = TRUE)),
     logical(1)
   )))
-  testthat::expect_true(final_evidence_log_has_warning("Warning message: review me"))
-  testthat::expect_false(final_evidence_log_has_warning("all checks passed"))
+  testthat::expect_true(task_workflow_evidence_log_has_warning(
+    "Warning message: review me"
+  ))
+  testthat::expect_false(task_workflow_evidence_log_has_warning(
+    "all checks passed"
+  ))
 })

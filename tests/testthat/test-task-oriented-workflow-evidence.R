@@ -1,4 +1,5 @@
-boundary_complete_registry <- function(registry = new_he_artifact_registry()) {
+task_workflow_evidence_complete_registry <- function(
+    registry = new_he_artifact_registry()) {
   for (artifact_id in names(registry)) {
     registry <- set_he_artifact_status(
       registry,
@@ -52,7 +53,7 @@ testthat::test_that("[B01] missing Flow Statistics block the downstream joined r
 testthat::test_that("[B02] upstream Flow change stales only dependent descendants", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
-    registry <- boundary_complete_registry(workflow_artifacts())
+    registry <- task_workflow_evidence_complete_registry(workflow_artifacts())
     workflow_artifacts(registry)
     revisions_before <- vapply(
       registry,
@@ -100,7 +101,7 @@ testthat::test_that("[B02] upstream Flow change stales only dependent descendant
 testthat::test_that("[B03] WQ enrichment change preserves joined_core", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
-    registry <- boundary_complete_registry(workflow_artifacts())
+    registry <- task_workflow_evidence_complete_registry(workflow_artifacts())
     workflow_artifacts(registry)
     core_before <- registry$joined_core
 
@@ -135,7 +136,7 @@ testthat::test_that("[B04] filter exclude and restore rebuild analysis non-destr
     stringsAsFactors = FALSE
   )
   joined_before <- joined
-  registry <- boundary_complete_registry()
+  registry <- task_workflow_evidence_complete_registry()
   model_revision <- registry$model_result$output_revision
   hev_revision <- registry$hev_result$output_revision
 
@@ -191,7 +192,7 @@ testthat::test_that("[B04] filter exclude and restore rebuild analysis non-destr
 testthat::test_that("[B05] model specification change stales only the model result", {
   shiny::testServer(workflow_dashboard_server, {
     muffle_interrupted_workflow_promise(session$flushReact())
-    registry <- boundary_complete_registry(workflow_artifacts())
+    registry <- task_workflow_evidence_complete_registry(workflow_artifacts())
     workflow_artifacts(registry)
     model_before <- registry$model_result
     non_model_ids <- setdiff(names(registry), c("model_spec", "model_result"))

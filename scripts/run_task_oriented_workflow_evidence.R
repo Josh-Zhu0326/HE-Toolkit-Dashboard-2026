@@ -1,6 +1,9 @@
 script_argument <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
 if (length(script_argument) != 1L) {
-  stop("Unable to resolve scripts/run_final_evidence.R.", call. = FALSE)
+  stop(
+    "Unable to resolve scripts/run_task_oriented_workflow_evidence.R.",
+    call. = FALSE
+  )
 }
 script_path <- normalizePath(
   sub("^--file=", "", script_argument),
@@ -8,27 +11,38 @@ script_path <- normalizePath(
   mustWork = TRUE
 )
 repo_root_from_script <- dirname(dirname(script_path))
-source(file.path(repo_root_from_script, "scripts", "final_evidence_helpers.R"))
+source(file.path(
+  repo_root_from_script,
+  "scripts",
+  "task_oriented_workflow_evidence_helpers.R"
+))
 
-run_git_evidence_command <- function(arguments, repo_root) {
+task_workflow_evidence_run_git_command <- function(arguments, repo_root) {
   output <- suppressWarnings(system2(
     "git",
     c("-C", shQuote(repo_root), arguments),
     stdout = TRUE,
     stderr = TRUE
   ))
-  status <- attr(output, "status") %||% 0L
+  status <- task_workflow_evidence_or(attr(output, "status"), 0L)
   if (!identical(as.integer(status), 0L)) {
-    stop("Git metadata could not be collected for final evidence.", call. = FALSE)
+    stop(
+      "Git metadata could not be collected for task-oriented workflow evidence.",
+      call. = FALSE
+    )
   }
   output
 }
 
-format_child_environment <- function(values) {
+task_workflow_evidence_format_child_environment <- function(values) {
   paste0(names(values), "=", vapply(values, shQuote, character(1)))
 }
 
-run_logged_command <- function(command, arguments, log_path, env = character()) {
+task_workflow_evidence_run_logged_command <- function(
+    command,
+    arguments,
+    log_path,
+    env = character()) {
   started <- Sys.time()
   raw_log <- tempfile("hetoolkit-command-", fileext = ".log")
   on.exit(unlink(raw_log, force = TRUE), add = TRUE)
@@ -39,7 +53,10 @@ run_logged_command <- function(command, arguments, log_path, env = character()) 
     stderr = raw_log,
     env = env
   ))
-  status <- attr(status, "status") %||% status %||% 0L
+  status <- task_workflow_evidence_or(
+    attr(status, "status"),
+    task_workflow_evidence_or(status, 0L)
+  )
   status <- as.integer(status)
   lines <- if (file.exists(raw_log)) readLines(raw_log, warn = FALSE) else character()
   writeLines(c(
@@ -52,12 +69,12 @@ run_logged_command <- function(command, arguments, log_path, env = character()) 
   list(
     status = status,
     duration_seconds = unname(difftime(Sys.time(), started, units = "secs")),
-    warning_detected = final_evidence_log_has_warning(lines),
+    warning_detected = task_workflow_evidence_log_has_warning(lines),
     log = log_path
   )
 }
 
-write_sha256_manifest <- function(output_dir) {
+task_workflow_evidence_write_sha256_manifest <- function(output_dir) {
   files <- list.files(output_dir, recursive = TRUE, full.names = TRUE)
   files <- files[file.info(files)$isdir %in% FALSE]
   files <- files[basename(files) != "SHA256SUMS"]
@@ -69,7 +86,7 @@ write_sha256_manifest <- function(output_dir) {
       stdout = TRUE,
       stderr = TRUE
     )
-    status <- attr(output, "status") %||% 0L
+    status <- task_workflow_evidence_or(attr(output, "status"), 0L)
     if (!identical(as.integer(status), 0L) || length(output) != 1L) {
       stop(sprintf("Unable to checksum %s.", relative[[index]]), call. = FALSE)
     }
@@ -79,7 +96,9 @@ write_sha256_manifest <- function(output_dir) {
   writeLines(rows, file.path(output_dir, "SHA256SUMS"), useBytes = TRUE)
 }
 
-collect_package_versions <- function(runtime_library, output_path) {
+task_workflow_evidence_collect_package_versions <- function(
+    runtime_library,
+    output_path) {
   setup_environment <- new.env(parent = baseenv())
   sys.source(
     file.path(repo_root_from_script, "scripts", "setup_dashboard_dependencies.R"),
@@ -107,7 +126,7 @@ collect_package_versions <- function(runtime_library, output_path) {
   packages
 }
 
-run_testthat_child <- function(output_dir) {
+task_workflow_evidence_run_testthat_child <- function(output_dir) {
   if (!requireNamespace("testthat", quietly = TRUE)) {
     stop("testthat is required for the evidence test child.", call. = FALSE)
   }
@@ -122,10 +141,10 @@ run_testthat_child <- function(output_dir) {
     stop_on_failure = FALSE
   )
   saveRDS(results, file.path(output_dir, "testthat-results.rds"))
-  cases <- testthat_case_table(results)
-  events <- testthat_event_table(results)
-  summary <- summarise_testthat_cases(cases)
-  boundaries <- boundary_result_table(cases)
+  cases <- task_workflow_evidence_testthat_case_table(results)
+  events <- task_workflow_evidence_testthat_event_table(results)
+  summary <- task_workflow_evidence_summarise_testthat_cases(cases)
+  boundaries <- task_workflow_evidence_boundary_result_table(cases)
   utils::write.csv(cases, file.path(output_dir, "testthat-cases.csv"), row.names = FALSE)
   utils::write.csv(events, file.path(output_dir, "testthat-events.csv"), row.names = FALSE)
   utils::write.csv(
@@ -140,9 +159,9 @@ run_testthat_child <- function(output_dir) {
     pretty = TRUE
   )
   writeLines(
-    render_boundary_markdown(
+    task_workflow_evidence_render_boundary_markdown(
       boundaries,
-      Sys.getenv("HETOOLKIT_FINAL_SHA", unset = "UNKNOWN")
+      Sys.getenv("HETOOLKIT_TASK_WORKFLOW_EVIDENCE_SHA", unset = "UNKNOWN")
     ),
     file.path(output_dir, "boundary-scenarios.md"),
     useBytes = TRUE
@@ -152,12 +171,15 @@ run_testthat_child <- function(output_dir) {
   if (failed) 1L else 0L
 }
 
-run_final_evidence <- function(arguments) {
+task_workflow_evidence_run <- function(arguments) {
   if (length(arguments) != 2L) {
     stop(
       paste(
-        "Usage: Rscript --vanilla scripts/run_final_evidence.R",
-        "<FINAL_SHA> <ABSOLUTE_OUTPUT_DIRECTORY>"
+        paste0(
+          "Usage: Rscript --vanilla ",
+          "scripts/run_task_oriented_workflow_evidence.R"
+        ),
+        "<BASELINE_SHA> <ABSOLUTE_OUTPUT_DIRECTORY>"
       ),
       call. = FALSE
     )
@@ -169,16 +191,19 @@ run_final_evidence <- function(arguments) {
 
   expected_sha <- arguments[[1L]]
   requested_output <- arguments[[2L]]
-  head_sha <- trimws(run_git_evidence_command(c("rev-parse", "HEAD"), repo_root_from_script))
-  origin_main_sha <- trimws(run_git_evidence_command(
+  head_sha <- trimws(task_workflow_evidence_run_git_command(
+    c("rev-parse", "HEAD"),
+    repo_root_from_script
+  ))
+  origin_main_sha <- trimws(task_workflow_evidence_run_git_command(
     c("rev-parse", "origin/main"),
     repo_root_from_script
   ))
-  git_status_before <- run_git_evidence_command(
+  git_status_before <- task_workflow_evidence_run_git_command(
     c("status", "--porcelain=v1", "--untracked-files=all"),
     repo_root_from_script
   )
-  request <- validate_final_evidence_request(
+  request <- task_workflow_evidence_validate_request(
     expected_sha,
     requested_output,
     repo_root_from_script,
@@ -192,20 +217,20 @@ run_final_evidence <- function(arguments) {
   dir.create(file.path(output_dir, "logs", "standalone"), showWarnings = FALSE)
 
   generated_at <- Sys.time()
-  commit_record <- run_git_evidence_command(
+  commit_record <- task_workflow_evidence_run_git_command(
     c("show", "--no-patch", "--format=fuller", head_sha),
     repo_root_from_script
   )
-  remote_url <- trimws(run_git_evidence_command(
+  remote_url <- trimws(task_workflow_evidence_run_git_command(
     c("remote", "get-url", "origin"),
     repo_root_from_script
   ))
-  merge_base <- trimws(run_git_evidence_command(
+  merge_base <- trimws(task_workflow_evidence_run_git_command(
     c("merge-base", "HEAD", "origin/main"),
     repo_root_from_script
   ))
   writeLines(c(
-    sprintf("Final baseline SHA: %s", head_sha),
+    sprintf("Task-oriented workflow baseline SHA: %s", head_sha),
     sprintf("Execution date UTC: %s", format(generated_at, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")),
     sprintf("Execution date local: %s", format(generated_at, "%Y-%m-%d %H:%M:%S %Z")),
     "Source branch: main (detached checkout permitted)",
@@ -215,7 +240,7 @@ run_final_evidence <- function(arguments) {
     "Worktree before run: clean",
     "",
     commit_record
-  ), file.path(output_dir, "final-baseline.txt"), useBytes = TRUE)
+  ), file.path(output_dir, "task-workflow-baseline.txt"), useBytes = TRUE)
 
   runtime_root <- tempfile(paste0("hetoolkit-final-runtime-", substr(head_sha, 1L, 12L), "-"))
   runtime_library <- file.path(runtime_root, "library")
@@ -228,13 +253,13 @@ run_final_evidence <- function(arguments) {
     R_LIBS_SITE = runtime_site,
     R_ENVIRON_USER = "/dev/null",
     R_PROFILE_USER = "/dev/null",
-    HETOOLKIT_FINAL_SHA = head_sha,
+    HETOOLKIT_TASK_WORKFLOW_EVIDENCE_SHA = head_sha,
     TZ = "UTC"
   )
-  child_env <- format_child_environment(child_values)
+  child_env <- task_workflow_evidence_format_child_environment(child_values)
   rscript <- file.path(R.home("bin"), "Rscript")
 
-  setup_result <- run_logged_command(
+  setup_result <- task_workflow_evidence_run_logged_command(
     rscript,
     c("--vanilla", "scripts/setup_dashboard_dependencies.R"),
     file.path(output_dir, "logs", "dependency-install.log"),
@@ -245,7 +270,7 @@ run_final_evidence <- function(arguments) {
       "FAIL: dependency installation did not complete successfully.",
       file.path(output_dir, "run-status.txt")
     )
-    write_sha256_manifest(output_dir)
+    task_workflow_evidence_write_sha256_manifest(output_dir)
     return(1L)
   }
 
@@ -253,7 +278,7 @@ run_final_evidence <- function(arguments) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
     stop("jsonlite was not available after dependency installation.", call. = FALSE)
   }
-  package_versions <- collect_package_versions(
+  package_versions <- task_workflow_evidence_collect_package_versions(
     runtime_library,
     file.path(output_dir, "package-versions.csv")
   )
@@ -262,7 +287,7 @@ run_final_evidence <- function(arguments) {
     child_values,
     HETOOLKIT_SESSION_INFO_PATH = file.path(output_dir, "session-info.txt")
   )
-  session_result <- run_logged_command(
+  session_result <- task_workflow_evidence_run_logged_command(
     rscript,
     c(
       "--vanilla", "-e",
@@ -272,10 +297,10 @@ run_final_evidence <- function(arguments) {
       ))
     ),
     file.path(output_dir, "logs", "session-info-command.log"),
-    env = format_child_environment(session_values)
+    env = task_workflow_evidence_format_child_environment(session_values)
   )
 
-  preflight_result <- run_logged_command(
+  preflight_result <- task_workflow_evidence_run_logged_command(
     rscript,
     c("--vanilla", "scripts/preflight_dashboard_startup.R"),
     file.path(output_dir, "logs", "startup-preflight.log"),
@@ -283,7 +308,7 @@ run_final_evidence <- function(arguments) {
   )
 
   testthat_dir <- file.path(output_dir, "automated-tests")
-  testthat_result <- run_logged_command(
+  testthat_result <- task_workflow_evidence_run_logged_command(
     rscript,
     c(
       "--vanilla", shQuote(script_path), "--testthat-child",
@@ -306,7 +331,7 @@ run_final_evidence <- function(arguments) {
       child_values,
       HETOOLKIT_STANDALONE_SCRIPT = standalone_script
     )
-    result <- run_logged_command(
+    result <- task_workflow_evidence_run_logged_command(
       rscript,
       c(
         "--vanilla", "-e",
@@ -316,7 +341,7 @@ run_final_evidence <- function(arguments) {
         ))
       ),
       file.path(output_dir, "logs", "standalone", paste0(standalone_name, ".log")),
-      env = format_child_environment(standalone_values)
+      env = task_workflow_evidence_format_child_environment(standalone_values)
     )
     data.frame(
       script = file.path("tests", standalone_name),
@@ -334,7 +359,7 @@ run_final_evidence <- function(arguments) {
     row.names = FALSE
   )
 
-  git_status_after <- run_git_evidence_command(
+  git_status_after <- task_workflow_evidence_run_git_command(
     c("status", "--porcelain=v1", "--untracked-files=all"),
     repo_root_from_script
   )
@@ -362,7 +387,7 @@ run_final_evidence <- function(arguments) {
   } else {
     data.frame(status = "MISSING", stringsAsFactors = FALSE)
   }
-  write_boundary_ui_templates(output_dir, head_sha)
+  task_workflow_evidence_write_boundary_ui_templates(output_dir, head_sha)
 
   hard_failures <- c(
     if (session_result$status != 0L) "session-info command failed",
@@ -392,7 +417,7 @@ run_final_evidence <- function(arguments) {
   direct_packages <- package_versions[package_versions$direct_runtime_dependency, , drop = FALSE]
   manifest <- list(
     schema_version = "1.0",
-    evidence_kind = "dissertation-final-engineering-evidence",
+    evidence_kind = "task-oriented-workflow-engineering-evidence",
     generated_at_utc = format(generated_at, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
     baseline = list(
       commit = head_sha,
@@ -445,7 +470,7 @@ run_final_evidence <- function(arguments) {
     if (length(hard_failures) > 0L) paste("Failure:", hard_failures) else "No hard failures.",
     if (length(review_items) > 0L) paste("Review:", review_items) else "No warning/skip review required."
   ), file.path(output_dir, "run-status.txt"), useBytes = TRUE)
-  write_sha256_manifest(output_dir)
+  task_workflow_evidence_write_sha256_manifest(output_dir)
 
   if (identical(overall_status, "FAIL")) 1L else if (
     identical(overall_status, "PASS_REVIEW_REQUIRED")
@@ -460,17 +485,20 @@ if (sys.nframe() == 0L) {
         if (length(arguments) != 2L) {
           stop("--testthat-child requires an output directory.", call. = FALSE)
         }
-        run_testthat_child(arguments[[2L]])
+        task_workflow_evidence_run_testthat_child(arguments[[2L]])
       } else {
-        run_final_evidence(arguments)
+        task_workflow_evidence_run(arguments)
       }
     },
     error = function(error) {
-      message("Final evidence run failed: ", conditionMessage(error))
+      message(
+        "Task-oriented workflow evidence run failed: ",
+        conditionMessage(error)
+      )
       if (length(arguments) >= 1L) {
         output_candidate <- tail(arguments, 1L)
-        if (final_evidence_path_is_absolute(output_candidate)) {
-          output_candidate <- final_evidence_normalise_path(
+        if (task_workflow_evidence_path_is_absolute(output_candidate)) {
+          output_candidate <- task_workflow_evidence_normalise_path(
             output_candidate,
             must_work = FALSE
           )
@@ -480,7 +508,10 @@ if (sys.nframe() == 0L) {
               file.path(output_candidate, "run-status.txt"),
               useBytes = TRUE
             )
-            try(write_sha256_manifest(output_candidate), silent = TRUE)
+            try(
+              task_workflow_evidence_write_sha256_manifest(output_candidate),
+              silent = TRUE
+            )
           }
         }
       }

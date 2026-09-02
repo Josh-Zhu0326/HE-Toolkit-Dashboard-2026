@@ -1,14 +1,14 @@
-`%||%` <- function(value, fallback) {
+task_workflow_evidence_or <- function(value, fallback) {
   if (is.null(value) || length(value) == 0L) fallback else value
 }
 
-final_evidence_is_sha <- function(value) {
+task_workflow_evidence_is_sha <- function(value) {
   length(value) == 1L &&
     !is.na(value) &&
     grepl("^[0-9a-fA-F]{40}$", value)
 }
 
-final_evidence_normalise_path <- function(path, must_work = FALSE) {
+task_workflow_evidence_normalise_path <- function(path, must_work = FALSE) {
   path <- path.expand(path)
   if (must_work || file.exists(path) || dir.exists(path)) {
     return(normalizePath(path, winslash = "/", mustWork = must_work))
@@ -19,50 +19,51 @@ final_evidence_normalise_path <- function(path, must_work = FALSE) {
     return(normalizePath(path, winslash = "/", mustWork = FALSE))
   }
   file.path(
-    final_evidence_normalise_path(parent, must_work = FALSE),
+    task_workflow_evidence_normalise_path(parent, must_work = FALSE),
     basename(path)
   )
 }
 
-final_evidence_path_is_absolute <- function(path) {
+task_workflow_evidence_path_is_absolute <- function(path) {
   grepl("^(/|[A-Za-z]:[/\\\\]|\\\\\\\\)", path.expand(path))
 }
 
-final_evidence_path_is_within <- function(path, parent) {
-  path <- final_evidence_normalise_path(path, must_work = FALSE)
-  parent <- final_evidence_normalise_path(parent, must_work = TRUE)
+task_workflow_evidence_path_is_within <- function(path, parent) {
+  path <- task_workflow_evidence_normalise_path(path, must_work = FALSE)
+  parent <- task_workflow_evidence_normalise_path(parent, must_work = TRUE)
   identical(path, parent) || startsWith(path, paste0(parent, "/"))
 }
 
-validate_final_evidence_request <- function(
+task_workflow_evidence_validate_request <- function(
     expected_sha,
     output_dir,
     repo_root,
     head_sha,
     origin_main_sha,
     git_status) {
-  if (!final_evidence_is_sha(expected_sha)) {
-    stop("FINAL_SHA must be a complete 40-character hexadecimal commit SHA.",
+  if (!task_workflow_evidence_is_sha(expected_sha)) {
+    stop("BASELINE_SHA must be a complete 40-character hexadecimal commit SHA.",
          call. = FALSE)
   }
 
   expected_sha <- tolower(expected_sha)
   if (!identical(tolower(head_sha), expected_sha)) {
-    stop("HEAD does not match FINAL_SHA.", call. = FALSE)
+    stop("HEAD does not match BASELINE_SHA.", call. = FALSE)
   }
   if (!identical(tolower(origin_main_sha), expected_sha)) {
-    stop("origin/main does not match FINAL_SHA.", call. = FALSE)
+    stop("origin/main does not match BASELINE_SHA.", call. = FALSE)
   }
   if (length(git_status) > 0L && any(nzchar(git_status))) {
-    stop("The final evidence run requires a clean worktree.", call. = FALSE)
+    stop("The task-oriented workflow evidence run requires a clean worktree.",
+         call. = FALSE)
   }
 
-  if (!final_evidence_path_is_absolute(output_dir)) {
+  if (!task_workflow_evidence_path_is_absolute(output_dir)) {
     stop("The evidence output directory must be an absolute path.",
          call. = FALSE)
   }
-  output_dir <- final_evidence_normalise_path(output_dir, must_work = FALSE)
-  if (final_evidence_path_is_within(output_dir, repo_root)) {
+  output_dir <- task_workflow_evidence_normalise_path(output_dir, must_work = FALSE)
+  if (task_workflow_evidence_path_is_within(output_dir, repo_root)) {
     stop("The evidence output directory must be outside the repository.",
          call. = FALSE)
   }
@@ -74,11 +75,11 @@ validate_final_evidence_request <- function(
   list(
     expected_sha = expected_sha,
     output_dir = output_dir,
-    repo_root = final_evidence_normalise_path(repo_root, must_work = TRUE)
+    repo_root = task_workflow_evidence_normalise_path(repo_root, must_work = TRUE)
   )
 }
 
-final_evidence_boundary_catalog <- function() {
+task_workflow_evidence_boundary_catalog <- function() {
   data.frame(
     scenario_id = sprintf("B%02d", 1:7),
     claim = c(
@@ -130,7 +131,7 @@ final_evidence_boundary_catalog <- function() {
   )
 }
 
-summarise_testthat_cases <- function(cases) {
+task_workflow_evidence_summarise_testthat_cases <- function(cases) {
   required <- c(
     "file", "test", "nb", "failed", "skipped", "error", "warning",
     "passed", "real"
@@ -156,7 +157,7 @@ summarise_testthat_cases <- function(cases) {
   )
 }
 
-testthat_case_status <- function(case) {
+task_workflow_evidence_testthat_case_status <- function(case) {
   if (isTRUE(case$error)) return("ERROR")
   if (isTRUE(case$failed > 0L)) return("FAIL")
   if (isTRUE(case$warning > 0L)) return("WARNING")
@@ -164,7 +165,7 @@ testthat_case_status <- function(case) {
   "PASS"
 }
 
-testthat_case_table <- function(results) {
+task_workflow_evidence_testthat_case_table <- function(results) {
   cases <- as.data.frame(results)
   keep <- c(
     "file", "context", "test", "nb", "failed", "skipped", "error",
@@ -173,13 +174,15 @@ testthat_case_table <- function(results) {
   cases <- cases[, keep, drop = FALSE]
   cases$status <- vapply(
     seq_len(nrow(cases)),
-    function(index) testthat_case_status(cases[index, , drop = FALSE]),
+    function(index) task_workflow_evidence_testthat_case_status(
+      cases[index, , drop = FALSE]
+    ),
     character(1)
   )
   cases
 }
 
-testthat_expectation_location <- function(expectation) {
+task_workflow_evidence_testthat_expectation_location <- function(expectation) {
   srcref <- expectation$srcref
   if (is.null(srcref)) return(NA_character_)
   filename <- tryCatch(
@@ -191,7 +194,7 @@ testthat_expectation_location <- function(expectation) {
   sprintf("%s:%d", filename, line)
 }
 
-testthat_event_table <- function(results) {
+task_workflow_evidence_testthat_event_table <- function(results) {
   cases <- as.data.frame(results)
   rows <- list()
   for (case_index in seq_len(nrow(cases))) {
@@ -214,8 +217,13 @@ testthat_event_table <- function(results) {
         file = cases$file[[case_index]],
         test = cases$test[[case_index]],
         event = kind,
-        message = as.character(expectation$message %||% ""),
-        location = testthat_expectation_location(expectation),
+        message = as.character(task_workflow_evidence_or(
+          expectation$message,
+          ""
+        )),
+        location = task_workflow_evidence_testthat_expectation_location(
+          expectation
+        ),
         stringsAsFactors = FALSE
       )
     }
@@ -230,7 +238,9 @@ testthat_event_table <- function(results) {
   do.call(rbind, rows)
 }
 
-boundary_result_table <- function(cases, catalog = final_evidence_boundary_catalog()) {
+task_workflow_evidence_boundary_result_table <- function(
+    cases,
+    catalog = task_workflow_evidence_boundary_catalog()) {
   rows <- lapply(seq_len(nrow(catalog)), function(index) {
     scenario <- catalog[index, , drop = FALSE]
     match_index <- which(cases$test == scenario$automated_test)
@@ -261,9 +271,11 @@ boundary_result_table <- function(cases, catalog = final_evidence_boundary_catal
   do.call(rbind, rows)
 }
 
-render_boundary_markdown <- function(boundaries, baseline_sha) {
+task_workflow_evidence_render_boundary_markdown <- function(
+    boundaries,
+    baseline_sha) {
   lines <- c(
-    "# Dissertation Boundary Scenario Summary",
+    "# Task-Oriented Workflow Boundary Scenario Summary",
     "",
     sprintf("Baseline SHA: `%s`", baseline_sha),
     "",
@@ -282,8 +294,10 @@ render_boundary_markdown <- function(boundaries, baseline_sha) {
   c(lines, "")
 }
 
-write_boundary_ui_templates <- function(output_dir, baseline_sha) {
-  catalog <- final_evidence_boundary_catalog()
+task_workflow_evidence_write_boundary_ui_templates <- function(
+    output_dir,
+    baseline_sha) {
+  catalog <- task_workflow_evidence_boundary_catalog()
   for (index in seq_len(nrow(catalog))) {
     scenario <- catalog[index, , drop = FALSE]
     scenario_dir <- file.path(output_dir, "ui", scenario$scenario_id)
@@ -331,7 +345,7 @@ write_boundary_ui_templates <- function(output_dir, baseline_sha) {
   invisible(TRUE)
 }
 
-final_evidence_log_has_warning <- function(lines) {
+task_workflow_evidence_log_has_warning <- function(lines) {
   any(grepl(
     "(^|[[:space:]])Warning( message)?s?:|There were [0-9]+ warnings?",
     lines,
