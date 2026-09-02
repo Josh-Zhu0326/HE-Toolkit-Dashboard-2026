@@ -40,6 +40,113 @@ testthat::test_that("valid Local Flow is operational and bypasses the external i
   })
 })
 
+testthat::test_that("valid retained Local Flow becomes current after metadata replacement", {
+  rlang::local_bindings(
+    calc_flowstats = function(data, ...) {
+      marker <- data$flow[[1]]
+      list(
+        data.frame(
+          flow_site_id = data$flow_site_id[[1]],
+          start_date = data$date[[1]],
+          source_flow = marker
+        ),
+        data.frame(
+          flow_site_id = data$flow_site_id[[1]],
+          source_flow = marker
+        )
+      )
+    },
+    .env = environment(dashboard_server)
+  )
+
+  shiny::testServer(dashboard_server, {
+    local_path <- testthat::test_path("..", "fixtures", "local_flow.csv")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      flow_source_mode = "local",
+      local_flow_csv = flow_upload_input(local_path)
+    )
+    session$flushReact()
+    testthat::expect_identical(local_flow_upload()$validation$status, "success")
+    testthat::expect_identical(flow_data()$flow, c(12.4, 15.2, 9.8))
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = paste(
+        "biol_site_id,flow_site_id,flow_input",
+        "B1,27090,HDE",
+        "B2,27091,NRFA",
+        sep = "\n"
+      )
+    )
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$site_mapping))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(flow_data()$flow, c(12.4, 15.2, 9.8))
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      win_width_selector = 6,
+      win_step_selector = 6,
+      calc_flow_stats = 1
+    )
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    workflow_complete_artifact("joined_core", "test", "Old core join fixture.")
+    workflow_complete_artifact("joined_enriched", "test", "Old enriched join fixture.")
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = paste(
+        "biol_site_id,flow_site_id,flow_input",
+        "B3,27090,NRFA",
+        "B4,27091,HDE",
+        sep = "\n"
+      )
+    )
+    session$flushReact()
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$site_mapping))
+    testthat::expect_identical(metadata()$biol_site_id, c("B3", "B4"))
+    testthat::expect_identical(local_flow_upload()$validation$status, "success")
+    testthat::expect_identical(flow_data()$flow, c(12.4, 15.2, 9.8))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(workflow_artifacts()$flow_input$data_source, "Local Flow file")
+    testthat::expect_identical(workflow_artifacts()$flow_statistics$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$joined_core$status, "stale")
+    testthat::expect_identical(workflow_artifacts()$joined_enriched$status, "stale")
+    testthat::expect_error(flow_stats(), class = "shiny.silent.error")
+
+    set_inputs_ignoring_interrupted_promises(session, calc_flow_stats = 2)
+    session$flushReact()
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$processed_flow))
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$flow_statistics))
+    testthat::expect_identical(flow_stats()[[1]]$source_flow, 12.4)
+
+    workflow_complete_artifact("oe_result", "test", "Current O:E fixture.")
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      choose_lags = 0,
+      choose_join_method = "A",
+      join_he = 1
+    )
+    session$flushReact()
+    testthat::expect_false(identical(workflow_artifacts()$joined_core$status, "blocked"))
+    testthat::expect_identical(join_request()$flow_revision, flow_source_revision())
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      meta_paste = "biol_site_id,flow_input\nB5,HDE"
+    )
+    session$flushReact()
+    testthat::expect_identical(workflow_artifacts()$site_mapping$status, "blocked")
+    testthat::expect_false(artifact_is_current(workflow_artifacts()$flow_input))
+    testthat::expect_identical(local_flow_upload()$validation$status, "success")
+    testthat::expect_identical(flow_data()$flow, c(12.4, 15.2, 9.8))
+  })
+})
+
 testthat::test_that("extra Local Flow columns never enter the operational source", {
   importer_calls <- 0L
   rlang::local_bindings(
