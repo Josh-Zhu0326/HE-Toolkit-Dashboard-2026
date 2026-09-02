@@ -533,6 +533,24 @@ function(input, output, session){
       !is.null(upload$data) && nrow(upload$data) > 0L
   }
 
+  restore_retained_local_flow_input <- function() {
+    if (!source_is_selected("flow", "local")) {
+      return(invisible(FALSE))
+    }
+    upload <- isolate(local_flow_upload())
+    if (!local_upload_is_operational(upload)) {
+      return(invisible(FALSE))
+    }
+    workflow_set_artifact(
+      "flow_input",
+      if (identical(upload$validation$status, "warning")) "warning" else "complete",
+      data_source = "Local Flow file",
+      history_summary = "Restored retained Local Flow data after site metadata validation.",
+      invalidate_downstream = TRUE
+    )
+    invisible(TRUE)
+  }
+
   invalidate_biology_derived_state <- function(reset_external = FALSE) {
     biology_source_revision(isolate(biology_source_revision()) + 1L)
     biology_import_request(NULL)
@@ -1185,6 +1203,7 @@ function(input, output, session){
       history_summary = sprintf("Validated %d site-mapping row(s).", nrow(result$data)),
       invalidate_downstream = TRUE
     )
+    restore_retained_local_flow_input()
     invisible(TRUE)
   }
 
