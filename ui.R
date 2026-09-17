@@ -784,7 +784,8 @@ page_navbar(
           card(
             class = "dashboard-card",
             card_header("Pairwise correlation plots"),
-            plotOutput("corr_plots")
+            p(class = "hint-text", "Shows available biology O:E metrics and standardised Flow statistics, preferring the first lag with both Q95z and Q10z. Variables without variation are omitted."),
+            div(class = "plot-frame", plotOutput("corr_plots", height = "720px", fill = FALSE))
           )
         )
       ),
@@ -795,7 +796,8 @@ page_navbar(
           card(
             class = "dashboard-card",
             card_header("Historical flow and biology coverage"),
-            plotOutput("flow_hull")
+            p(class = "hint-text", "Compares the full Flow history with the currently selected biological samples, using Q95z and Q10z at the first available lag."),
+            div(class = "plot-frame", plotOutput("flow_hull", height = "560px", fill = FALSE))
           )
         )
       )

@@ -4080,22 +4080,13 @@ function(input, output, session){
     req(identical(request$request_id, input$join_he))
     req(workflow_artifact_is_current("oe_result"))
     req(workflow_artifact_is_current("flow_statistics"))
-    all.combinations <- expand.grid(biol_site_id = unique(biol_data()$biol_site_id), 
-                                    Year = min(biol_data()$Year):max(biol_data()$Year), 
-                                    Season = c("Spring", "Autumn"), stringsAsFactors = FALSE)
-    
-    biol_data1 <- all.combinations %>%
-      left_join(biol_all())
-    
     mapping <- metadata()[, c("biol_site_id", "flow_site_id")]
     mapping$biol_site_id <- as.character(mapping$biol_site_id)
     mapping$flow_site_id <- as.character(mapping$flow_site_id)
     
     flowstats_1 <- flow_stats() %>% pluck(1)
     
-    result <- join_he(biol_data = biol_data1, flow_stats = flowstats_1, mapping = mapping,
-                      lags = request$settings$lags, method = request$settings$method, join_type = "add_biol")
-    result
+    build_analysis_coverage_data(biol_all(), flowstats_1, mapping, request$settings)
     
   })
 
@@ -4104,17 +4095,20 @@ function(input, output, session){
     revision <- join_revision()
     req(
       identical(revision, join_request()),
-      identical(revision$flow_revision, flow_source_revision())
+      identical(revision$flow_revision, flow_source_revision()),
+      identical(revision$settings, normalise_join_settings(input$choose_lags, input$choose_join_method))
     )
     result
   })
 
   current_coverage_data <- reactive({
     filtered <- analysis_filter_result()
+    fields <- analysis_plot_fields(current_joined_source()$analysis_dataset)
+    req(length(fields$biology) > 0L)
     apply_selection_to_coverage(
       coverage_data = join_data_addbiol(),
       selection = analysis_filter_selection(),
-      biol_metric = "LIFE_F_OE",
+      biol_metric = fields$biology[[1L]],
       id_col = filtered$id_col
     )
   })
@@ -4195,14 +4189,25 @@ function(input, output, session){
   )
   
   ### plots ----
+  read_analysis_plot_data <- function(operation) {
+    tryCatch(operation(), error = function(error) {
+      record_raw24_condition_diagnostic("Stage 4 plot data", error)
+      validate(need(FALSE, paste(
+        "The current plot data are unavailable. Rebuild the Stage 3 dataset",
+        "and check the Stage 4 sample selection, then try again."
+      )))
+    })
+  }
+
   #### correlations ----
   output$corr_plots <- renderPlot({
+    validate(need(workflow_artifact_is_current("joined_core"),
+      "Build or load a current Joined HE dataset in Stage 3 to view Pairwise Correlations."))
+    data <- read_analysis_plot_data(current_analysis_data)
+    spec <- analysis_correlation_spec(data)
+    validate(need(is.null(spec$message), spec$message))
     safe_server_plot("Analysis correlation", function() {
-      GGally::ggpairs(current_analysis_data(), columns=c("LIFE_F_OE", "WHPT_ASPT_OE", "Q95z_lag0", "Q10z_lag0"),
-                      upper = list(continuous = GGally::wrap("cor")),
-                      diag = list(continuous = "densityDiag"),
-                      lower = list(continuous = GGally::wrap("points")))+
-        theme(text = element_text(size = 14))
+      build_analysis_correlation_plot(data, spec$columns)
     })
     
   })
@@ -4210,12 +4215,28 @@ function(input, output, session){
   #### coverage hull ----
   
   output$flow_hull <- renderPlot({
+    validate(need(workflow_artifact_is_current("joined_core"),
+      "Pair biology and Flow data in Stage 3 to view Historical Coverage."))
+    validate(need(!identical(active_join_source(), "checkpoint"), paste(
+      "This checkpoint contains paired samples, but not the full Flow history.",
+      "Pair biology and Flow data in this session to view Historical Coverage."
+    )))
+    fields <- analysis_plot_fields(read_analysis_plot_data(function() {
+      current_joined_source()$analysis_dataset
+    }))
+    validate(need(length(fields$biology) > 0L,
+      "Historical Coverage needs a numeric biology O:E metric. Rebuild the Stage 3 dataset."))
+    coverage <- read_analysis_plot_data(current_coverage_data)
+    spec <- analysis_coverage_spec(coverage, fields$biology[[1L]])
+    validate(need(is.null(spec$message), spec$message))
     # WK6-07: Historical Coverage tracks the current Stage 4 sample selection.
-    # Everything, including reading the coverage data, runs inside
-    # safe_server_plot so a missing/unmatched identifier becomes a controlled
-    # user message instead of a raw Shiny error.
+    # Data lookup and drawing each have a recovery boundary so invalid sample
+    # identifiers and delayed draw failures cannot expose raw Shiny errors.
     safe_server_plot("Analysis Flow coverage", function() {
-      coverage <- current_coverage_data()
+      coverage <- coverage[
+        is.finite(coverage[[spec$flow[[1L]]]]) & is.finite(coverage[[spec$flow[[2L]]]]),
+        , drop = FALSE
+      ]
       excluded <- length(active_excluded_ids(analysis_filter_selection()))
       subtitle <- if (excluded > 0L) {
         sprintf(
@@ -4225,8 +4246,8 @@ function(input, output, session){
       } else {
         "Showing all samples in the current Joined HE dataset (no Stage 4 exclusions)."
       }
-      plot_rngflows(data = coverage, flow_stats = c("Q95z_lag0", "Q10z_lag0"),
-                    biol_metric = "LIFE_F_OE", wrap_by = NULL, label = "Year") +
+      plot_rngflows(data = coverage, flow_stats = spec$flow,
+                    biol_metric = spec$biology, wrap_by = NULL, label = spec$label) +
         labs(subtitle = subtitle) +
         theme(text = element_text(size = 16))
     })
@@ -4665,6 +4686,7 @@ function(input, output, session){
     }
     if (identical(active_join_source(), "checkpoint")) {
       checkpoint_data <- current_analysis_data()
+      req(!is.null(checkpoint_data), nrow(checkpoint_data) > 0L)
       req("date" %in% names(checkpoint_data))
       return(processed_dataset_checkpoint_hev_data(checkpoint_data))
     }

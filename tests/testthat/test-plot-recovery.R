@@ -445,3 +445,29 @@ testthat::test_that("RAW-18 validation devices are cleaned after success and fai
   testthat::expect_identical(invalid$status, "failed")
   testthat::expect_identical(grDevices::dev.list(), devices_before)
 })
+
+testthat::test_that("plot validation restores the rendering device when other devices are open", {
+  grDevices::pdf(file = NULL)
+  other_device <- grDevices::dev.cur()
+  grDevices::pdf(file = NULL)
+  render_device <- grDevices::dev.cur()
+  on.exit({
+    for (device in c(render_device, other_device)) {
+      if (device %in% grDevices::dev.list()) grDevices::dev.off(device)
+    }
+  }, add = TRUE)
+  devices_before <- grDevices::dev.list()
+
+  success <- safe_server_plot_result(function() grid::rectGrob())
+  testthat::expect_identical(success$status, "success")
+  testthat::expect_identical(grDevices::dev.cur(), render_device)
+  testthat::expect_identical(grDevices::dev.list(), devices_before)
+
+  failure <- safe_server_plot_result(function() {
+    ggplot2::ggplot(data.frame(x = 1), ggplot2::aes(x, missing_y)) +
+      ggplot2::geom_point()
+  })
+  testthat::expect_identical(failure$status, "failed")
+  testthat::expect_identical(grDevices::dev.cur(), render_device)
+  testthat::expect_identical(grDevices::dev.list(), devices_before)
+})
