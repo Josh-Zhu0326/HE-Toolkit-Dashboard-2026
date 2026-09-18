@@ -132,6 +132,7 @@ safe_server_plot_render_result <- function(plot,
 force_plot_result <- function(plot) {
   # Force the complete draw stage without creating an image file or changing
   # the caller's active graphics device after validation completes.
+  caller_device <- grDevices::dev.cur()
   grDevices::pdf(file = NULL)
   validation_device <- grDevices::dev.cur()
   on.exit({
@@ -147,6 +148,12 @@ force_plot_result <- function(plot) {
           }
         }
       )
+    }
+    # dev.off() selects the next open device, which is not necessarily the
+    # Shiny PNG device. Always restore the caller before the final draw.
+    open_devices <- grDevices::dev.list()
+    if (!is.null(open_devices) && caller_device %in% open_devices) {
+      grDevices::dev.set(caller_device)
     }
   }, add = TRUE)
 
