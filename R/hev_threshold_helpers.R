@@ -106,7 +106,7 @@ add_hev_status_layers <- function(plot,
     return(plot)
   }
   threshold <- metric_threshold$threshold[[1L]]
-  if (!is.finite(threshold) || threshold < biol_min || threshold > biol_max) {
+  if (!is.finite(threshold)) {
     return(plot)
   }
 

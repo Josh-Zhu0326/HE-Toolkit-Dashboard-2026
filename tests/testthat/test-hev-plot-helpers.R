@@ -64,6 +64,43 @@ testthat::test_that("each of four HEV metrics owns its secondary-axis transform"
   testthat::expect_s3_class(combined_plot, "ggplot")
 })
 
+testthat::test_that("HEV thresholds outside observations remain visible on the correct axis", {
+  cases <- data.frame(
+    metric = c("LIFE_F_OE", "LIFE_F_OE", "PSI_OE"),
+    river_type = c("non_chalk", "chalk", "non_chalk"),
+    threshold = c(0.94, 1.00, 0.70)
+  )
+
+  for (index in seq_len(nrow(cases))) {
+    case <- cases[index, ]
+    for (offsets in list(c(-0.3, -0.1), c(0.1, 0.3))) {
+      data <- data.frame(
+        date = as.Date("2024-01-01") + 0:1,
+        Q95 = c(10, 20)
+      )
+      data[[case$metric]] <- case$threshold + offsets
+      plot <- build_hev_metric_plot(
+        data = data,
+        date_col = "date",
+        flow_metrics = "Q95",
+        biology_metric = case$metric,
+        show_status = TRUE,
+        river_type = case$river_type
+      )
+      built <- ggplot2::ggplot_build(plot)
+      intercept <- unlist(lapply(built$data, function(layer) layer$yintercept))
+
+      testthat::expect_length(intercept, 1L)
+      if (length(intercept) != 1L) next
+      y_range <- built$layout$panel_params[[1L]]$y.range
+      testthat::expect_gt(intercept, y_range[[1L]])
+      testthat::expect_lt(intercept, y_range[[2L]])
+      secondary_axis <- plot$scales$get_scales("y")$secondary.axis
+      testthat::expect_equal(secondary_axis$trans(intercept), case$threshold)
+    }
+  }
+})
+
 testthat::test_that("HEV plots reject undefined dual-axis ranges", {
   testthat::expect_error(
     hev_axis_transform(c(1, 1), c(0.5, 0.8)),
