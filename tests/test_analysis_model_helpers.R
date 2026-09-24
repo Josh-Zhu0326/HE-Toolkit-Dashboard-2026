@@ -10,7 +10,7 @@ joined <- read.csv(file.path("tests", "fixtures", "analysis_dataset.csv"),
                    stringsAsFactors = FALSE, colClasses = c(sample_id = "character"))
 
 # --- 1. Single-site additive model fits and returns the contract fields -----
-spec <- list(response = "LIFE_F_OE", flow_predictors = c("Q95_lag0", "Q10_lag0"))
+spec <- list(response = "LIFE_F_OE", flow_predictors = c("Q95z_lag0", "Q10_lag0"))
 res <- run_analysis_model(joined, spec)
 stopifnot(identical(res$status, "success"))
 stopifnot(res$model_path == "single_site_additive")
@@ -40,7 +40,7 @@ stopifnot(is.null(res_multi$fixed_effects))           # nothing was fitted
 
 # --- 3. Missing columns -> friendly blocked, not a crash --------------------
 stopifnot(identical(run_analysis_model(joined, list(response = "nope",
-          flow_predictors = "Q95_lag0"))$status, "blocked"))
+          flow_predictors = "Q95z_lag0"))$status, "blocked"))
 
 # --- 4. No predictor selected -> blocked ------------------------------------
 stopifnot(identical(run_analysis_model(joined, list(response = "LIFE_F_OE"))$status, "blocked"))
@@ -48,7 +48,7 @@ stopifnot(identical(run_analysis_model(joined, list(response = "LIFE_F_OE"))$sta
 # --- 5. Too many flow predictors -> blocked (MC-R02) ------------------------
 stopifnot(identical(run_analysis_model(joined,
           list(response = "LIFE_F_OE",
-               flow_predictors = c("Q95_lag0","Q10_lag0","Q10z_lag0")))$status, "blocked"))
+               flow_predictors = c("Q95z_lag0","Q10_lag0","Q10z_lag0")))$status, "blocked"))
 
 # --- 6. Empty data -> blocked, not a crash ----------------------------------
 stopifnot(identical(run_analysis_model(joined[0, ], spec)$status, "blocked"))
@@ -66,7 +66,8 @@ model_choice_data <- transform(
 )
 single_choices <- analysis_model_variable_choices(model_choice_data)
 stopifnot(single_choices$model_path == "single_site_additive")
-stopifnot(all(c("Q95_lag0", "Q95z_lag0") %in% single_choices$flow))
+stopifnot("Q95z_lag0" %in% single_choices$flow)
+stopifnot(!"Q95_lag0" %in% single_choices$flow)
 stopifnot(all(c("Q95z_lag3", "Q10_lag6", "Q10z_lag12") %in% single_choices$flow))
 stopifnot(!"Q95z_lag2" %in% single_choices$flow)
 stopifnot(identical(single_choices$wq, c("orthophosphate_mean", "ammonia_p90")))

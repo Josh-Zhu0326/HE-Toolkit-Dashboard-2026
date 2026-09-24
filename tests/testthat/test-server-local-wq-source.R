@@ -76,7 +76,7 @@ testthat::test_that("WQ controls explain when no valid determinands exist", {
   })
 })
 
-testthat::test_that("Stage 5 controls expose all present supported Flow lags", {
+testthat::test_that("Stage 5 offers Q95z lags and rejects Raw Q95 submissions", {
   checkpoint_path <- tempfile("stage5-flow-lags-", fileext = ".rds")
   on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
   checkpoint_data <- data.frame(
@@ -84,11 +84,12 @@ testthat::test_that("Stage 5 controls expose all present supported Flow lags", {
     sample_id = paste0("S", 1:5),
     date = as.Date(paste0(2020:2024, "-05-01")),
     Year = 2020:2024,
-    LIFE_F_OE = seq(0.8, 1.2, length.out = 5),
+    LIFE_F_OE = c(0.8, 1.1, 1.0, 0.9, 1.2),
     stringsAsFactors = FALSE
   )
   for (lag in SUPPORTED_FLOW_LAGS) {
-    checkpoint_data[[paste0("Q95z_lag", lag)]] <- seq(-1, 1, length.out = 5)
+    checkpoint_data[[paste0("Q95z_lag", lag)]] <- c(-0.3, -0.5, -0.1, -0.6, -0.4)
+    checkpoint_data[[paste0("Q95_lag", lag)]] <- c(10, 9, 11, 8, 12)
   }
   write_processed_dataset_checkpoint(checkpoint_data, checkpoint_path)
 
@@ -115,7 +116,41 @@ testthat::test_that("Stage 5 controls expose all present supported Flow lags", {
     controls <- output$basic_model_controls$html
     for (lag in c(0, 1, 3, 6, 12)) {
       testthat::expect_match(controls, paste0("Q95z_lag", lag), fixed = TRUE)
+      testthat::expect_false(grepl(paste0("Q95_lag", lag), controls, fixed = TRUE))
     }
     testthat::expect_false(grepl("Q10z_lag3", controls, fixed = TRUE))
+
+    set_inputs_ignoring_interrupted_promises(
+      session,
+      basic_model_ecology_var = "LIFE_F_OE",
+      basic_model_flow_var = "Q95z_lag0",
+      basic_model_wq_var = "",
+      basic_model_rhs_var = "",
+      run_basic_model = 1
+    )
+    testthat::expect_identical(basic_model_result()$status, "success")
+    testthat::expect_true(workflow_artifact_is_current("model_result"))
+
+    # Submit a value absent from the selector, as an old or modified client could.
+    set_inputs_ignoring_interrupted_promises(session, basic_model_flow_var = "Q95_lag12")
+    set_inputs_ignoring_interrupted_promises(session, run_basic_model = 2)
+    testthat::expect_identical(basic_model_result()$status, "blocked")
+    testthat::expect_identical(workflow_artifacts()$model_spec$status, "blocked")
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "blocked")
+    testthat::expect_match(output$basic_model_status$html, "Select Q95z", fixed = TRUE)
+    testthat::expect_null(basic_model_result()$export)
+    testthat::expect_null(basic_model_result()$diagnostic_plot)
+    testthat::expect_false(grepl(
+      'id="download_basic_model_', output$basic_model_download_controls$html, fixed = TRUE
+    ))
+    testthat::expect_identical(current_analysis_data(), checkpoint_data)
+
+    set_inputs_ignoring_interrupted_promises(session, basic_model_flow_var = "Q95z_lag12")
+    set_inputs_ignoring_interrupted_promises(session, run_basic_model = 3)
+    testthat::expect_identical(basic_model_result()$status, "success")
+    testthat::expect_true(workflow_artifact_is_current("model_result"))
+    testthat::expect_identical(basic_model_result()$provenance$predictors, "Q95z_lag12")
+    testthat::expect_s3_class(basic_model_result()$export$coefficients, "data.frame")
+    testthat::expect_identical(current_analysis_data(), checkpoint_data)
   })
 })

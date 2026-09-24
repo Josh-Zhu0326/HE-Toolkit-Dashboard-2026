@@ -1,17 +1,18 @@
 # analysis_model_helpers.R
 # This is for WK8-08. It runs the model on the analysis_dataset.
 #
-# This is the formal Stage 5 entry point. It routes one-site analysis data to
-# the additive model and eligible multi-site data to the frozen mixed-effects
-# path. A multi-site failure is never replaced by a pooled lm().
+# This is the formal Stage 5 entry point. It currently routes one-site data to
+# lm() and eligible multi-site data to the legacy mixed-effects implementation.
+# The GAM migration required by docs/contracts/modelling-contract-v2.0.md is
+# pending. A multi-site failure is never replaced by a pooled lm().
 #
 # model_spec is a list, for example:
 #   list(response = "LIFE_F_OE",
-#        flow_predictors = c("Q95_lag0", "Q10_lag0"),   # up to 2
+#        flow_predictors = c("Q95z_lag0", "Q10_lag0"),  # up to 2
 #        wq_predictor = NULL,                            # up to 1
 #        rhs_predictor = NULL)                           # up to 1
 #
-# Things I assumed (please tell me if they should change):
+# Current data and reporting conventions:
 # - site column is "biol_site_id"; Stage 5 prefers "sampling_year" and supports
 #   the current generated-data compatibility field "Year".
 # - the single-site R2 is the normal lm R2.
@@ -42,7 +43,7 @@ run_analysis_model <- function(analysis_dataset, model_spec,
   wq_pred     <- model_spec$wq_predictor
   rhs_pred    <- model_spec$rhs_predictor
   predictors  <- c(flow_preds, wq_pred, rhs_pred)
-  predictors  <- predictors[!is.null(predictors) & nzchar(predictors)]
+  predictors  <- predictors[nzchar(predictors)]
 
   # basic checks. if something is wrong we return a friendly message.
   if (is.null(analysis_dataset) || !is.data.frame(analysis_dataset) || nrow(analysis_dataset) == 0) {
@@ -55,6 +56,15 @@ run_analysis_model <- function(analysis_dataset, model_spec,
   if (length(flow_preds) > 2) return(.model_result("blocked", "At most two flow predictors are allowed."))
   if (length(wq_pred)  > 1)   return(.model_result("blocked", "At most one WQ predictor is allowed."))
   if (length(rhs_pred) > 1)   return(.model_result("blocked", "At most one RHS predictor is allowed."))
+
+  # DEC-46 applies to both model paths, including requests bypassing the UI.
+  raw_q95 <- predictors[grepl("^Q95(_lag[0-9]+)?$", predictors, ignore.case = TRUE)]
+  if (length(raw_q95) > 0L) {
+    return(.model_result("blocked", paste0(
+      "Raw Q95 is not an eligible modelling predictor. Select Q95z. ",
+      "Rejected: ", paste(raw_q95, collapse = ", "), "."
+    ), provenance = c(provenance, list(response = response, predictors = predictors))))
+  }
 
   needed <- c(response, predictors, site_col)
   if (!all(needed %in% names(analysis_dataset))) {
@@ -102,7 +112,7 @@ run_analysis_model <- function(analysis_dataset, model_spec,
       "No valid sites after removing incomplete rows. Check the data or the filter."), base_fields)))
   }
 
-  # two or more sites: route to the mixed-effects model (frozen contract).
+  # two or more sites: route to the legacy mixed-effects implementation.
   # run_mixed_model does its own data-sufficiency gating (needs >= 5 sites) and
   # never falls back to a pooled lm().
   if (site_count >= 2) {
@@ -113,7 +123,7 @@ run_analysis_model <- function(analysis_dataset, model_spec,
 
   # one site: run the normal single-site model.
   # we need enough rows to fit it - at least (number of terms) + 1
-  n_terms <- length(model_vars) - 1 + 1   # predictors (+year) + intercept
+  n_terms <- length(model_vars)   # predictors (+year) + intercept
   if (n_complete < n_terms + 1) {
     return(do.call(.model_result, c(list("blocked",
       paste0("Not enough complete rows to fit the model (have ", n_complete,
@@ -194,7 +204,7 @@ analysis_model_variable_choices <- function(data, site_col = "biol_site_id") {
   flow_pattern <- if (site_count >= 2L) {
     paste0("^Q(10|95)z_lag(", supported_lag_pattern, ")$")
   } else {
-    paste0("^Q(10|95)z?_lag(", supported_lag_pattern, ")$")
+    paste0("^(Q10z?|Q95z)_lag(", supported_lag_pattern, ")$")
   }
   flow <- numeric_columns[grepl(flow_pattern, numeric_columns, ignore.case = TRUE)]
 
@@ -232,12 +242,41 @@ new_analysis_model_ui_result <- function(message = paste(
   "Prepare a current analysis dataset, choose eligible variables,",
   "then fit the model."
 )) {
-  result <- .model_result("info", message)
-  result$summary <- NULL
-  result$plot <- NULL
-  result$diagnostic_plot <- NULL
-  result$export <- NULL
-  result
+  .model_result("info", message)
+}
+
+# Format only the displayed cells: numeric sorting and exports retain the
+# original coefficients, including very small effects and p-values.
+analysis_model_fixed_effects_table <- function(effects) {
+  effects <- effects[, c("term", setdiff(names(effects), "term")), drop = FALSE]
+  numeric_columns <- names(effects)[vapply(effects, is.numeric, logical(1))]
+  p_columns <- intersect(c("Pr(>|t|)", "Pr(>|z|)", "p.value", "p_value"), numeric_columns)
+  column_defs <- if (length(p_columns) > 0L) {
+    list(list(
+      targets = match(p_columns, names(effects)) - 1L,
+      render = DT::JS("function(data, type) {
+        if (type !== 'display' || data === null || data === '') return data;
+        var value = Number(data);
+        if (!Number.isFinite(value)) return data;
+        return value < 0.001 ? '&lt;0.001' : value.toFixed(3);
+      }")
+    ))
+  } else {
+    list()
+  }
+  table <- DT::datatable(
+    effects,
+    rownames = FALSE,
+    options = list(
+      scrollX = TRUE, searching = FALSE, paging = FALSE, dom = "t",
+      order = list(), columnDefs = column_defs
+    )
+  )
+  value_columns <- setdiff(numeric_columns, p_columns)
+  if (length(value_columns) > 0L) {
+    table <- DT::formatSignif(table, columns = value_columns, digits = 3, mark = "")
+  }
+  table
 }
 
 analysis_model_coefficient_plot <- function(result) {

@@ -786,7 +786,6 @@ function(input, output, session){
           conditionMessage(error),
           "Select one or more lags from 0, 1, 3, 6, or 12 and build the Joined HE Dataset again."
         )
-        showNotification(conditionMessage(error), type = "error", duration = 10)
         NULL
       }
     )
@@ -1836,10 +1835,6 @@ function(input, output, session){
       }
     }
 
-    if (all(c("biol_site_id", "rhs_survey_id") %in% names(uploaded))) {
-      return(uploaded)
-    }
-
     # A local RHS source can be inspected before Biology mapping is supplied.
     uploaded
   })
@@ -2106,10 +2101,6 @@ function(input, output, session){
     format_validation_message(local_inv_upload()$validation)
   })
 
-  output$local_flow_status <- renderUI({
-    format_validation_message(local_flow_upload()$validation)
-  })
-
   output$local_inv_preview <- DT::renderDataTable({
     req(local_inv_upload()$data)
     head(local_inv_upload()$data, 20)
@@ -2144,11 +2135,6 @@ function(input, output, session){
     }
   )
 
-  output$local_flow_preview <- DT::renderDataTable({
-    req(local_flow_upload()$data)
-    head(local_flow_upload()$data, 20)
-  }, rownames = FALSE, options = list(scrollX = TRUE, pageLength = 10))
-  
   ### displaying ----
   output$table1 <- function() {
     metadata_data <- metadata()
@@ -3199,12 +3185,8 @@ function(input, output, session){
     result
   }
 
-  flow_stats_result <- reactive({
-    flow_stats_result_state()$result
-  })
-
   flow_stats <- reactive({
-    result <- flow_stats_result()
+    result <- flow_stats_result_state()$result
     req(!is.null(result))
     req(identical(flow_stats_revision(), flow_source_revision()))
     result
@@ -4438,7 +4420,22 @@ function(input, output, session){
     ignoreInit = TRUE
   )
 
+  basic_model_stale_message <- reactive({
+    if (!workflow_artifact_is_current("model_result") &&
+        (analysis_model_result_is_exportable(basic_model_result()) ||
+         identical(workflow_artifacts()$model_result$status, "stale"))) {
+      return("Model results are out of date. Fit the model again.")
+    }
+    NULL
+  })
+
   output$basic_model_status <- renderUI({
+    if (!is.null(basic_model_stale_message())) {
+      return(format_validation_message(list(
+        status = "warning",
+        messages = basic_model_stale_message()
+      )))
+    }
     result <- basic_model_result()
     display_status <- if (identical(result$status, "blocked")) "warning" else result$status
     format_validation_message(list(status = display_status, messages = result$messages))
@@ -4449,17 +4446,40 @@ function(input, output, session){
         !analysis_model_result_is_exportable(basic_model_result())) {
       return(tags$p(
         class = "hint-text",
-        "Model results appear here after the current model has been fitted."
+        if (!is.null(basic_model_stale_message())) basic_model_stale_message() else
+          "Model results appear here after the current model has been fitted."
       ))
     }
     result <- basic_model_result()
+    metric_labels <- c(
+      r_squared = "R²", adj_r_squared = "Adjusted R²",
+      sigma = "Residual standard error", r2_marginal = "Marginal R²",
+      r2_conditional = "Conditional R²", aic = "AIC"
+    )
+    metric_fields <- intersect(names(metric_labels), names(result$fit_metrics))
     tagList(
       tags$p(tags$strong("Model path: "), result$model_path),
       tags$p(tags$strong("Formula: "), tags$code(result$formula)),
-      DT::dataTableOutput("basic_model_summary"),
+      tags$dl(
+        class = "d-flex flex-wrap gap-4",
+        tags$div(tags$dt("Samples used"), tags$dd(sprintf("%d / %d", result$n_complete, result$n_input))),
+        tags$div(tags$dt("Incomplete samples excluded"), tags$dd(result$n_excluded)),
+        tags$div(tags$dt("Sites"), tags$dd(result$site_count)),
+        lapply(metric_fields, function(field) {
+          value <- result$fit_metrics[[field]]
+          tags$div(
+            tags$dt(metric_labels[[field]]),
+            tags$dd(if (is.finite(value)) sprintf("%#.3g", value) else "Unavailable")
+          )
+        })
+      ),
       tags$h4("Fixed effects"),
       DT::dataTableOutput("basic_model_fixed_effects"),
-      if (!is.null(result$plot)) plotOutput("basic_model_plot", height = 420)
+      if (!is.null(result$plot)) plotOutput("basic_model_plot", height = 420),
+      tags$details(
+        tags$summary("Model details and provenance"),
+        DT::dataTableOutput("basic_model_summary")
+      )
     )
   })
 
@@ -4468,7 +4488,8 @@ function(input, output, session){
         !analysis_model_result_is_exportable(basic_model_result())) {
       return(tags$p(
         class = "hint-text",
-        "Residual diagnostics appear here after the current model has been fitted."
+        if (!is.null(basic_model_stale_message())) basic_model_stale_message() else
+          "Residual diagnostics appear here after the current model has been fitted."
       ))
     }
     tagList(
@@ -4487,8 +4508,8 @@ function(input, output, session){
 
   output$basic_model_fixed_effects <- DT::renderDataTable({
     req(basic_model_result()$export$coefficients)
-    basic_model_result()$export$coefficients
-  }, rownames = FALSE, options = list(scrollX = TRUE, searching = FALSE, paging = FALSE))
+    analysis_model_fixed_effects_table(basic_model_result()$export$coefficients)
+  })
 
   output$basic_model_plot <- renderPlot({
     req(basic_model_result()$plot)
@@ -4508,7 +4529,8 @@ function(input, output, session){
         !analysis_model_result_is_exportable(basic_model_result())) {
       return(tags$p(
         class = "hint-text",
-        "Exports become available after the current model and diagnostics are complete."
+        if (!is.null(basic_model_stale_message())) basic_model_stale_message() else
+          "Exports become available after the current model and diagnostics are complete."
       ))
     }
     div(
@@ -4727,8 +4749,7 @@ function(input, output, session){
   
   ### activate initial plot upon site selection
   HEV_go <- reactive({
-    request_id <- hev_request()
-    req(!is.null(request_id))
+    req(!is.null(hev_request()))
     flow_mode <- normalise_hev_flow_mode(isolate(input$hev_flow_data_mode))
     if (identical(flow_mode, "flow_statistics")) {
       req(isolate(workflow_artifact_is_current("joined_core")))
