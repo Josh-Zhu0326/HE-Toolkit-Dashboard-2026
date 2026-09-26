@@ -1025,6 +1025,16 @@ testthat::test_that("RAW-12 to RAW-18 prerequisites and plot failures recover in
     testthat::expect_identical(workflow_artifacts()$model_result$status, "stale")
     testthat::expect_identical(workflow_artifacts()$hev_result$status, "stale")
     testthat::expect_identical(basic_model_result()$status, "info")
+    for (output_id in c(
+      "basic_model_status", "basic_model_result_review",
+      "basic_model_diagnostic_review", "basic_model_download_controls"
+    )) {
+      testthat::expect_match(
+        output[[output_id]]$html,
+        "Model results are out of date. Fit the model again.",
+        fixed = TRUE
+      )
+    }
     exclusion_log_after_exclude <- analysis_exclusion_log()
     testthat::expect_equal(nrow(exclusion_log_after_exclude), 1L)
     testthat::expect_identical(exclusion_log_after_exclude$record_id, record_id)
@@ -1194,7 +1204,7 @@ testthat::test_that("a processed dataset checkpoint restores downstream state in
   })
 })
 
-testthat::test_that("Stage 5 routes multi-site data through the formal mixed model", {
+testthat::test_that("Stage 5 mixed-model displays stay consistent through edits and refitting", {
   checkpoint_path <- tempfile("formal-mixed-model-checkpoint-", fileext = ".rds")
   on.exit(unlink(checkpoint_path, force = TRUE), add = TRUE)
 
@@ -1239,6 +1249,12 @@ testthat::test_that("Stage 5 routes multi-site data through the formal mixed mod
     ))
     muffle_interrupted_workflow_promise(session$flushReact())
 
+    testthat::expect_match(
+      output$basic_model_diagnostic_review$html,
+      "Residual diagnostics appear here after the current model has been fitted.",
+      fixed = TRUE
+    )
+
     muffle_interrupted_workflow_promise(session$setInputs(
       basic_model_flow_var = "Q95z_lag0",
       basic_model_ecology_var = "LIFE_F_OE",
@@ -1262,6 +1278,37 @@ testthat::test_that("Stage 5 routes multi-site data through the formal mixed mod
       'id="download_basic_model_random_effects"',
       fixed = TRUE
     )
+
+    muffle_interrupted_workflow_promise(session$setInputs(basic_model_flow_var = ""))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_identical(basic_model_result(), result)
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "stale")
+    for (output_id in c(
+      "basic_model_status", "basic_model_result_review",
+      "basic_model_diagnostic_review", "basic_model_download_controls"
+    )) {
+      testthat::expect_match(
+        output[[output_id]]$html,
+        "Model results are out of date. Fit the model again.",
+        fixed = TRUE
+      )
+    }
+    testthat::expect_false(grepl("upload-status-success", output$basic_model_status$html))
+    testthat::expect_false(grepl('id="basic_model_diagnostic_plot"', output$basic_model_diagnostic_review$html))
+    testthat::expect_false(grepl('id="download_basic_model_', output$basic_model_download_controls$html))
+
+    muffle_interrupted_workflow_promise(session$setInputs(basic_model_flow_var = "Q95z_lag0"))
+    muffle_interrupted_workflow_promise(session$flushReact())
+    testthat::expect_identical(workflow_artifacts()$model_result$status, "stale")
+    muffle_interrupted_workflow_promise(session$setInputs(run_basic_model = 2))
+    muffle_interrupted_workflow_promise(session$flushReact())
+
+    testthat::expect_true(artifact_is_current(workflow_artifacts()$model_result))
+    testthat::expect_false(grepl("out of date", output$basic_model_status$html))
+    testthat::expect_match(output$basic_model_result_review$html, 'id="basic_model_summary"', fixed = TRUE)
+    testthat::expect_match(output$basic_model_diagnostic_review$html, 'id="basic_model_diagnostic_plot"', fixed = TRUE)
+    testthat::expect_match(output$basic_model_download_controls$html, 'id="download_basic_model_diagnostics"', fixed = TRUE)
   })
 })
 

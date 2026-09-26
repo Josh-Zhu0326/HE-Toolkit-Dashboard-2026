@@ -832,17 +832,17 @@ page_navbar(
       ),
       card(
         class = "dashboard-card",
-        card_header("2. Review model results"),
-        uiOutput("basic_model_result_review")
+        card_header("2. Review the model"),
+        navset_tab(
+          id = "basic_model_review_tabs",
+          selected = "Results",
+          nav_panel("Results", uiOutput("basic_model_result_review")),
+          nav_panel("Diagnostics", uiOutput("basic_model_diagnostic_review"))
+        )
       ),
       card(
         class = "dashboard-card",
-        card_header("3. Review residual diagnostics"),
-        uiOutput("basic_model_diagnostic_review")
-      ),
-      card(
-        class = "dashboard-card",
-        card_header("4. Export the current model"),
+        card_header("3. Export the current model"),
         uiOutput("basic_model_download_controls")
       )
     )

@@ -278,10 +278,10 @@ testthat::test_that("Task 4 and Task 5 pages expose distinct user paths", {
     "eligible single-site or multi-site model",
     fixed = TRUE
   )
-  testthat::expect_match(ui_code, "3. Review residual diagnostics", fixed = TRUE)
-  testthat::expect_match(ui_code, "4. Export the current model", fixed = TRUE)
-  testthat::expect_match(ui_code, 'uiOutput("basic_model_result_review")', fixed = TRUE)
-  testthat::expect_match(ui_code, 'uiOutput("basic_model_diagnostic_review")', fixed = TRUE)
+  testthat::expect_match(ui_code, "2. Review the model", fixed = TRUE)
+  testthat::expect_match(ui_code, "3. Export the current model", fixed = TRUE)
+  testthat::expect_match(ui_code, 'nav_panel("Results", uiOutput("basic_model_result_review"))', fixed = TRUE)
+  testthat::expect_match(ui_code, 'nav_panel("Diagnostics", uiOutput("basic_model_diagnostic_review"))', fixed = TRUE)
   testthat::expect_match(ui_code, 'uiOutput("basic_model_download_controls")', fixed = TRUE)
 })
 
